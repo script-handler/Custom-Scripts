@@ -7,7 +7,7 @@
     // play every move through the same rules; the shooter's settled table is sent alongside,
     // and a tab that disagrees takes it (poolNetResync in pool-game.js).
     //
-    //   poolNetConnect()          ⚙️'s server (wss://, port 7777 by default), with backoff
+    //   poolNetConnect()          ⚙️'s server (wss://, port 7777 by default), with backoff, then gives up
     //   poolNetDisconnect()       and stay off
     //   poolNetChallenge(id, o)   { game, bestOf, reds } → the server's `challenged` at the other end
     //   poolNetAnswer(id, yes)    an invite; yes starts the room (pool-game.js poolNetStart)
@@ -20,13 +20,17 @@
 
     const POOL_NET_PORT = 7777;
     const POOL_NET_BEAT_MS = 15000;
+    // Retries before giving up: a server never reached gets 3, a lost one a minute, or a room's
+    // whole hold (mp-server's holdMs). Each failed WebSocket logs an error the page cannot hide, so
+    // a server that stays off filled the console (the user, 2026-10-13).
+    const POOL_NET_FIRST_TRIES = 3, POOL_NET_LOST_MS = 60000, POOL_NET_HOLD_MS = 3 * 60 * 1000;
     const POOL_NET_AIM_MS = 100;
     const POOL_NET_ID_KEY = 'poolNetId', POOL_NET_SECRET_KEY = 'poolNetKey';
     const POOL_NET_SAY_MAX = 30, POOL_NET_SAY_MS = 4000, POOL_NET_SAY_GAP = 1200;
 
     const poolNet = {
         state: 'off',            // off | connecting | open | down
-        url: '', ws: null, err: '', tries: 0, retryT: null, beat: null, wanted: false, everOpen: false,
+        url: '', ws: null, err: '', tries: 0, retryT: null, beat: null, wanted: false, everOpen: false, downAt: 0,
         id: '', key: '', lobby: [], invites: [], outgoing: null, note: '',
         room: null,              // { id, seed, game, bestOf, seat, names, ids }
         known: 0,                // the room's last move seq this tab has seen or had acked
@@ -72,7 +76,8 @@
 
     function poolNetConnect(raw) {
         const N = poolNet;
-        if (raw !== undefined) N.url = poolNetUrl(raw);
+        // A Connect (or the panel's auto-connect) starts a fresh round of retries.
+        if (raw !== undefined) { N.url = poolNetUrl(raw); N.tries = 0; N.downAt = 0; }
         if (!N.url) { N.state = 'off'; N.err = 'Enter the server address'; poolNetBump(); return; }
         poolNetIdentity();
         N.wanted = true;
@@ -83,7 +88,7 @@
         let sock = null;
         const handlers = {
             open: () => {
-                N.state = 'open'; N.tries = 0; N.everOpen = true; N.err = '';
+                N.state = 'open'; N.tries = 0; N.downAt = 0; N.everOpen = true; N.err = '';
                 // Online play is Plus: the hello carries this browser's Plus proof (its secret).
                 const proof = N.plusProof || (typeof plusProof === 'function' ? plusProof : null);
                 Promise.resolve(proof ? proof() : '').catch(() => '').then(plus =>
@@ -98,7 +103,18 @@
                 N.ws = null; clearInterval(N.beat); N.beat = null;
                 if (!N.wanted) { N.state = 'off'; poolNetBump(); return; }
                 N.state = 'down';
-                if (!N.everOpen) N.err = "Can't reach the server. Open " + poolNetCertPage() + ' once and accept its certificate';
+                if (!N.downAt) N.downAt = Date.now();
+                if (!N.everOpen) N.err = "Can't reach the server. Open " + poolNetCertPage() + ' once and accept its certificate, then Connect';
+                if (!N.everOpen ? N.tries >= POOL_NET_FIRST_TRIES : Date.now() - N.downAt > (N.room ? POOL_NET_HOLD_MS : POOL_NET_LOST_MS)) {
+                    // Give up: off, so the button offers Connect, with the reason. A room the server
+                    // has dropped by now ends as its timeout would.
+                    N.wanted = false; N.state = 'off';
+                    if (N.everOpen) N.err = 'Lost the server. Connect to try again';
+                    const r = N.room;
+                    if (r) { poolNetEnd(); if (N.on.closed) N.on.closed({ reason: 'lost', room: r }); }
+                    poolNetBump();
+                    return;
+                }
                 // Back off: 1, 2, 4, 8 s, then every 10 s.
                 N.retryT = setTimeout(() => poolNetConnect(), Math.min(10000, 1000 * Math.pow(2, N.tries++)));
                 poolNetBump();

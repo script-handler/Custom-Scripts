@@ -206,6 +206,38 @@ ok('…and no tab needed a resync, the quick player included', A.poolS.netResync
         plus.poolNetDisconnect(); free.poolNetDisconnect();
         await ps.close();
     }
+    head('A server that is off');
+    {
+        // Each failed WebSocket logs an error the page cannot hide: the client gives up, not retries forever.
+        const P = L.game({ name: 'Off', store: {}, seed: 9, realDate: true });
+        const closed = [];
+        P.poolNet.on = { closed: info => closed.push(info.reason) };
+        let tries = 0, last = null;
+        P.poolNet.transport = (url, h) => { tries++; last = h; if (!P.poolNet.manual) setTimeout(h.close, 0); return { send() {}, close() {} }; };
+        P.poolNetConnect('ws://127.0.0.1:1');
+        ok('never reached: 4 tries (now, then 1, 2 and 4 s later), then it stops',
+            await until(() => P.poolNet.state === 'off', 10000) && tries === 4 && !P.poolNet.wanted && !P.poolNet.retryT, tries + ' tries, ' + P.poolNet.state);
+        ok('…saying why, and to Connect', /Can't reach the server[\s\S]*then Connect/.test(P.poolNet.err), P.poolNet.err);
+        P.poolNetConnect('ws://127.0.0.1:1');
+        ok('Connect starts a fresh round', await until(() => tries === 5, 1000) && P.poolNet.wanted);
+        P.poolNetDisconnect();
+        // Lost after being in: a minute in the lobby, a room's whole 3-minute hold.
+        P.poolNet.manual = true;
+        const drop = (agoMs, room) => {
+            P.poolNetConnect('ws://127.0.0.1:1');
+            Object.assign(P.poolNet, { everOpen: true, downAt: Date.now() - agoMs, room });
+            last.close();
+        };
+        drop(30000, null);
+        ok('lost in the lobby: retries for a minute', P.poolNet.state === 'down' && !!P.poolNet.retryT && P.poolNet.wanted);
+        drop(61000, null);
+        ok('…then stops: "Lost the server", and the button offers Connect', P.poolNet.state === 'off' && !P.poolNet.wanted && !P.poolNet.retryT && /Lost the server/.test(P.poolNet.err), P.poolNet.err);
+        drop(120000, { id: 'r1' });
+        ok('lost in a match: retries through the server\'s 3-minute hold', P.poolNet.state === 'down' && !!P.poolNet.retryT && P.poolNet.room);
+        drop(181000, { id: 'r1' });
+        ok('…then stops, and the match ends as the hold\'s timeout would', P.poolNet.state === 'off' && !P.poolNet.room && closed.join() === 'lost');
+        P.poolNetDisconnect();
+    }
     await srv.close();
     console.log('\n' + pass + ' passed, ' + fail + ' failed');
     process.exit(fail ? 1 : 0);

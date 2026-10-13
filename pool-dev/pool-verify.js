@@ -87,6 +87,9 @@ ok('⚙️ offers the shot camera: Overhead or Stay 3D', /sel\('poolShotCam', [^
        /data-settings-group="cue"[\s\S]*?Both games[\s\S]*?sel\('poolShotCam'[\s\S]*?attIcon\('g-pool'\)\} 8-Ball Pool[\s\S]*?sel\('poolClock'[\s\S]*?attIcon\('snooker'\)\} Snooker[\s\S]*?sel\('snookerClock'[\s\S]*?data-settings-group="ludo"/.test(fn));
     ok('the cue game is not a ⚙️ setting any more (the header switches it)', opts('poolVariant') === null);
     ok('⚙️ Aim Guide is Full or None: no lengths to pick, so a cue\'s line is the same for everyone', opts('poolGuideLen') === 'full,none');
+    const gameJs = fs.readFileSync(require('path').join(__dirname, 'pool-game.js'), 'utf8');
+    ok('⚙️ Ball Ring: On or Off, on by default; Off leaves the nominated ball unringed, and redraws', opts('snookerRing') === 'on,off' && /snookerRing: 'on',/.test(src) &&
+       /ringPref: 'snookerRing'/.test(gameJs) && /ring: aiming && S\.nom >= 0 && userPreferences\[R\.ringPref\] !== 'off'/.test(gameJs) && /userPreferences\[R\.ringPref\], cue\.id/.test(gameJs));
     ok('⚙️ Shot Clock: the tournament\'s choices for each game', opts('poolClock') === '30,45,0' && opts('snookerClock') === '30,45,60,0');
     ok('…read back as numbers, and the panel follows them', /numericPrefs = \[[^\]]*'poolClock', 'snookerClock'\]/.test(fn) && /\n\s*if \(typeof poolOnPrefChange === 'function'\) poolOnPrefChange\(pref\);/.test(fn));
     ok('userPreferences defaults the clocks and 2 Players\' names', /poolClock: 30,/.test(src) && /snookerClock: 45,/.test(src) && /poolP1Name: '',/.test(src) && /poolP2Name: '',/.test(src));

@@ -150,6 +150,8 @@
             // True scale: aiming is slower, so a longer clock and finer aim steps.
             clock: 45, aimKey: 0.025, aimFine: 0.0125,
             clockPref: 'snookerClock', clocks: [30, 45, 60, 0],
+            // ⚙️ Ball Ring: 'off' hides the nominated ball's ring.
+            ringPref: 'snookerRing',
             rackPref: 'snookerReds',
             aimClear: true,
             world: () => psCreateWorld(),
@@ -915,7 +917,7 @@
         if (S.still === undefined) S.still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
         const cueT = cue.sheen && aiming && !S.still ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
-        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, cue.id, cueT]);
+        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
             pgRender(S.ctx, {
@@ -927,7 +929,7 @@
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
                 zone: S.phase === 'bih' ? S.frame.ballInHand : null,
                 call: aiming && st.callRequired ? { called: S.called } : null,
-                ring: aiming && S.nom >= 0 ? S.nom : null,
+                ring: aiming && S.nom >= 0 && userPreferences[R.ringPref] !== 'off' ? S.nom : null,
                 drops: S.drops,
             });
         }

@@ -25,7 +25,8 @@
     const pgK = cfg => cfg.ballR / 14;
 
     const PG_FELTS = {
-        green:     { felt: ['#2E8F70', '#1D6E55', '#114534'], cushion: '#185F4B', jaw: '#0F4234', nose: '#0E3B2F' },
+        green:     { felt: ['#2E8F70', '#1D6E55', '#114534'], cushion: '#185F4B', jaw: '#0F4234', nose: '#0E3B2F',
+            light: { far: ['#2E8A69', '#1C6A51', '#155842', '#0E4130'], near: ['#4DB28C', '#2A8564', '#22765A', '#185E47'], shade: '#03110C' } },
         red:       { felt: ['#9C3E3B', '#7A2C2B', '#491719'], cushion: '#6B2626', jaw: '#4E1A1B', nose: '#451617' },
         blue:      { felt: ['#3272AB', '#245B8D', '#143659'], cushion: '#1F4F7D', jaw: '#163C5F', nose: '#133453' },
         lightgrey: { felt: ['#A3AEB8', '#86929D', '#59636D'], cushion: '#707C87', jaw: '#56606A', nose: '#4C565F' },
@@ -40,6 +41,25 @@
         const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('').toUpperCase();
         const a = rgb(centre), b = rgb(edge), mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t), mid = mix(a, b, 0.5);
         return { felt: [hex(a), hex(mid), hex(b)], cushion: hex(mix(mid, b, 0.4)), jaw: hex(b.map(v => v * 0.94)), nose: hex(b.map(v => v * 0.85)) };
+    }
+    // The light on the cushions (the design, 2026-10-13): one lamp above the table's top-left, so
+    // the cushions facing it (S, E) are lit and the far ones (N, W) shaded. Each top runs from a
+    // bright nose to a dark rail, and a soft shadow lies on the cloth below its nose, wider and
+    // darker under the far cushions: the edge reads by light and shadow, not by a drawn line.
+    const PG_LIGHT_AT = [0, 0.12, 0.6, 1];
+    const PG_SHADE = { far: { w: 11, stops: [[0, 0.55], [0.35, 0.22], [1, 0]] }, near: { w: 5, stops: [[0, 0.38], [1, 0]] } };
+    // A cloth without its own light takes green's steps on its cushion colour (green's stops over
+    // its cushion, by mean channel), no brighter than 1.31× its centre (green's nose), and a
+    // shadow of its edge colour at a fifth.
+    const PG_LIGHT_K = { far: [1.49, 1.11, 0.9, 0.65], near: [2.04, 1.42, 1.25, 0.97] };
+    function pgLight(mat) {
+        if (mat.light) return mat.light;
+        const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), mean = c => (c[0] + c[1] + c[2]) / 3;
+        const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('').toUpperCase();
+        const c = rgb(mat.cushion), cap = mean(rgb(mat.felt[0])) * 1.31;
+        const step = k => { const s = c.map(v => v * k), m = mean(s); return hex(m > cap ? s.map(v => v * cap / m) : s); };
+        mat.light = { far: PG_LIGHT_K.far.map(step), near: PG_LIGHT_K.near.map(step), shade: hex(rgb(mat.felt[2]).map(v => v * 0.2)) };
+        return mat.light;
     }
     // ⚙️'s custom cloth ({ centre, edge }, each #rrggbb), or green if it is not one.
     function pgFeltCustom(c) {
@@ -191,6 +211,43 @@
         return out;
     }
 
+    // Which rail a cushion lies along (N is −y), and the way into the table from it.
+    const PG_INWARD = { N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0] };
+    function pgCushionSide(cfg, c) {
+        const y = (c.nose[0][1] + c.nose[1][1]) / 2, x = (c.nose[0][0] + c.nose[1][0]) / 2;
+        return Math.abs(y) >= cfg.halfWidth - 1e-6 ? (y < 0 ? 'N' : 'S') : x < 0 ? 'W' : 'E';
+    }
+    // A linear gradient across a band, from the line a–b (world points) to that line moved by
+    // [dx, dy] at height z, its stripes parallel to the line as drawn; null when off screen.
+    function pgBandGradient(ctx, view, a, b, dx, dy, z) {
+        const p = pcProject(view, a), q = pcProject(view, b), f = pcProject(view, [(a[0] + b[0]) / 2 + dx, (a[1] + b[1]) / 2 + dy, z]);
+        if (!p || !q || !f) return null;
+        const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, nx = -(q[1] - p[1]) / l, ny = (q[0] - p[0]) / l;
+        const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, t = (f[0] - mx) * nx + (f[1] - my) * ny;
+        return Math.abs(t) < 1e-3 ? null : ctx.createLinearGradient(mx, my, mx + nx * t, my + ny * t);
+    }
+    // The shadow on the cloth below each cushion's nose.
+    function pgDrawCushionShadows(ctx, view, cfg, cush, light) {
+        cush.forEach(c => {
+            const side = pgCushionSide(cfg, c), v = PG_INWARD[side], sh = PG_SHADE[side === 'N' || side === 'W' ? 'far' : 'near'];
+            const a = [c.nose[0][0], c.nose[0][1], 0], b = [c.nose[1][0], c.nose[1][1], 0];
+            const g = pgBandGradient(ctx, view, a, b, v[0] * sh.w, v[1] * sh.w, 0);
+            if (!g) return;
+            sh.stops.forEach(([at, op]) => g.addColorStop(at, pgRgba(light.shade, op)));
+            pgFill(ctx, [pcPoly(view, [a, b, [b[0] + v[0] * sh.w, b[1] + v[1] * sh.w, 0], [a[0] + v[0] * sh.w, a[1] + v[1] * sh.w, 0]])], g);
+        });
+    }
+    // Cushion tops: each lit across its depth, nose to rail; flat where the gradient can't be had.
+    function pgDrawCushionTops(ctx, view, cfg, cush, mat) {
+        const light = pgLight(mat), T = pgRailZ(cfg), CU = cfg.cushionWidth;
+        cush.forEach(c => {
+            const side = pgCushionSide(cfg, c), v = PG_INWARD[side], stops = light[side === 'N' || side === 'W' ? 'far' : 'near'];
+            const g = pgBandGradient(ctx, view, c.nose[0], c.nose[1], -v[0] * CU, -v[1] * CU, T);
+            if (g) PG_LIGHT_AT.forEach((at, i) => g.addColorStop(at, stops[i]));
+            pgFill(ctx, [pcPoly(view, c.top)], g || mat.cushion);
+        });
+    }
+
     // The table's own markings (snooker), else pool's foot and head spots.
     //   { spots: [{ x, y, r }], lines: [[[x, y], [x, y]]], arcs: [{ x, y, r, a0, a1 }] }
     function pgMarks(table) {
@@ -244,8 +301,9 @@
             ctx.restore();
         }
 
-        // 2. Rail inner faces, jaw faces, nose faces.
+        // 2. The cushions' shadows on the cloth, rail inner faces, jaw faces, nose faces.
         const cush = pgCushions(cfg);
+        pgDrawCushionShadows(ctx, view, cfg, cush, pgLight(mat));
         if (eye) {
             const ri = [];
             if (eye[0] < IX) ri.push(P([[IX, -IY, TZ], [IX, IY, TZ], [IX, IY, 0], [IX, -IY, 0]]));
@@ -260,7 +318,7 @@
         pgFill(ctx, cush.map(c => P([c.nose[0], c.nose[1], [c.nose[1][0], c.nose[1][1], 0], [c.nose[0][0], c.nose[0][1], 0]])), mat.nose);
 
         // 3. Cushion tops, rail wood, lip, diamonds, spots.
-        pgFill(ctx, cush.map(c => P(c.top)), mat.cushion);
+        pgDrawCushionTops(ctx, view, cfg, cush, mat);
         const rails = [
             P([[-OX, OY, TZ], [OX, OY, TZ], [IX, IY, TZ], [-IX, IY, TZ]]),
             P([[OX, OY, TZ], [OX, -OY, TZ], [IX, -IY, TZ], [IX, IY, TZ]]),
@@ -343,7 +401,7 @@
             cush.forEach(c => c.ends.forEach(([p, q]) => jaws.push(P([p, q, [q[0], q[1], 0], [p[0], p[1], 0]]))));
             pgFill(ctx, jaws, mat.jaw);
             pgFill(ctx, cush.map(c => P([c.nose[0], c.nose[1], [c.nose[1][0], c.nose[1][1], 0], [c.nose[0][0], c.nose[0][1], 0]])), mat.nose);
-            pgFill(ctx, cush.map(c => P(c.top)), mat.cushion);
+            pgDrawCushionTops(ctx, view, cfg, cush, mat);
             return;
         }
         table.pockets.forEach(p => {
@@ -617,7 +675,7 @@
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off', illegal,
     //   guideLen: the object ball's line in full mode (default 150; 0 draws no paths),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
-    //   call: { called } | null, ring: the nominated ball's id (snooker) | null,
+    //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
     //   drops: [{ ball, pocket, t }],
     // }
     function pgRender(ctx, scene) {

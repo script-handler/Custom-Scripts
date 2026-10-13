@@ -34,13 +34,16 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // Match again for online play (pool-net.js): poolWinsByMode carries an online count, so storage
 // reads {"cpu":3,"pvp":0,"online":0}; without that field the digest is 4170aabcf64b132d, as
 // before (checked 2026-10-08). Balls, frames, verdicts and XP are untouched.
+// Render again for the cushions' light (the design, 2026-10-13): each top lit nose to rail, a
+// shadow on the cloth below each nose. With those two drawn as the old flat fill and nothing,
+// the digest is 0f1de5d155b56bfa, as before (checked 2026-10-13).
 const POOL_ON_MAIN = {
     table: '1d1012657f807af2',
     breaks: 'ad93085bd4e0dc53',
     fuzz: 'c5cb3113d060a822',
     judge: 'b7dd7e7f76a57efe',
     cpu: '0cdfe55ec4e4a8a7',
-    render: '0f1de5d155b56bfa',
+    render: '6e4b6ccc845b00c5',
     match: '3c7bfff39b137b1b',
 };
 const WHAT = {
