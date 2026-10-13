@@ -13,7 +13,9 @@
 // recovery: set once, changed only with the current proof, out of reach of ordinary syncs; and
 // login (name + password, checked against a private store): enrol, log in, rest, change, reset;
 // and Plus in the cloud: no licensed browser's secret, no leaderboard, password or recovery;
-// and tamper bans: a browser that opened Game Mode with an edited script bans only itself.
+// and tamper bans: a browser that opened Game Mode with an edited script bans only itself;
+// and the admin page's events: replies by rid, browser bans and restores, revokes that hold,
+// and account bans through blocked.json.
 //
 // The bot lives in its own repository, checked out beside this one; without it
 // the suite says so and passes, as there is nothing to test.
@@ -533,6 +535,80 @@ const send = (player, players, opts) => dispatch({ player, build_token: 'tok-now
         ok('…and a key works there again', r.written && !!r.written.gamesUnlock.tags[CRACK_TAG]);
         r = await dispatch({ tag: 'a'.repeat(32), admin_key: 'admin', build_token: 'tok-now' }, [], { event: 'admin-games-unban' });
         ok('unbanning a browser that is not banned writes nothing', r.written === null && r.warnings.some(w => /is not banned/.test(w)));
+    }
+
+    head('Admin: replies, bans, restores, account bans');
+    {
+        const nc = require('crypto');
+        const ARID = '0123456789abcdef', T1 = '1'.repeat(32), T2 = '2'.repeat(32), T3 = '3'.repeat(32), T4 = '4'.repeat(32);
+        const adm = (event, extra, players, opts) => dispatch(Object.assign({ admin_key: 'admin', build_token: 'tok-now', rid: ARID }, extra), players || [stored({})], Object.assign({ event, catch: true }, opts));
+        const reply = r => { try { return JSON.parse(r.files['status-admin.json']); } catch { return null; } };
+        const plusFile = (t, d) => ({ ['plus-' + t + '.json']: JSON.stringify(d) });
+
+        let r = await adm('admin-unflag', { client_id: 'c1', admin_key: 'nope' }, [stored({}, { flagged: true })]);
+        ok('a wrong admin key answers bad_key with the rid, and changes nothing', reply(r) && reply(r).rid === ARID && reply(r).ok === false && reply(r).code === 'bad_key' && r.written === null && /admin_key invalid/.test(r.failed || ''), reply(r));
+        r = await adm('admin-unflag', { client_id: 'c1' }, [stored({}, { flagged: true, flagReason: 'x' })]);
+        ok('a good one answers ok, naming its event', reply(r).ok === true && reply(r).code === 'ok' && reply(r).event === 'admin-unflag' && r.player('c1').flagged === false);
+        r = await adm('admin-unflag', { client_id: 'nobody' });
+        ok('a failure answers error, with why', reply(r).ok === false && reply(r).code === 'error' && /player not found/.test(reply(r).msg));
+        r = await adm('admin-unflag', { client_id: 'c1', rid: undefined }, [stored({}, { flagged: true })]);
+        ok('without a rid it still works, and writes no reply', r.player('c1').flagged === false && !r.files['status-admin.json']);
+        r = await adm('admin-rollback', { client_id: 'c1', overrides: { restricted: null, restrictedAt: null } }, [stored({}, { restricted: 'no_plus', restrictedAt: 'x' })]);
+        ok('a restriction clears through rollback', !r.player('c1').restricted && reply(r).code === 'ok');
+
+        // Revokes hold until restored.
+        const revoked = plusFile(T1, { revoked: true, at: 'x' });
+        r = await dispatch({ tag: T1, key: keyFor(UNLOCK, 0), rid: ARID, build_token: 'tok-now' }, [stored({})], { event: 'games-unlock', files: revoked });
+        ok('a revoked browser cannot redeem a key: refused as revoked, the key unused', r.status(T1) && r.status(T1).code === 'revoked' && !r.patches.some(p => p.includes('keys.json')));
+        const pwOf = (name, password) => nc.pbkdf2Sync(password, 'atc-login:' + name.toLowerCase(), 100000, 32, 'sha256').toString('hex');
+        const PW = pwOf('Hann', 'pool-shark-7'), me = [stored({}, { displayName: 'Hann' })];
+        const enrolled = await dispatch({ client_id: 'c1', name: 'Hann', pw: PW, build_token: 'tok-now' }, me, { event: 'login-enroll', context: true });
+        r = await dispatch({ tag: T1, rid: ARID, name: 'Hann', pw: PW, build_token: 'tok-now' }, me, { event: 'login', context: true, files: Object.assign({}, enrolled.files, revoked), logins: enrolled.logins });
+        ok('…nor log in with the right password', r.status(T1) && r.status(T1).code === 'revoked' && !(r.written && r.written.gamesUnlock.tags[T1]));
+        r = await adm('admin-games-unban', { tag: T1 }, [], { files: revoked });
+        ok('unban (the console\'s) lifts bans only: a revoke stays', !!r.files['plus-' + T1 + '.json'] && reply(r).code === 'already');
+        r = await adm('admin-games-restore', { tag: T1 }, [], { files: revoked });
+        ok('restore lifts it', !r.files['plus-' + T1 + '.json'] && reply(r).code === 'ok');
+        r = await dispatch({ tag: T1, key: keyFor(UNLOCK, 0), build_token: 'tok-now' }, [stored({})], { event: 'games-unlock', files: r.files });
+        ok('…and a key works there again', r.written && !!r.written.gamesUnlock.tags[T1]);
+
+        // An admin ban of one browser.
+        const granted = plusFile(T2, { at: 'x', via: 'login', grant: { clientId: 'c1', at: 'x' } });
+        r = await adm('admin-games-ban', { tag: T2, reason: 'shared key' }, [stored({})], { files: granted });
+        const b = r.written && r.written.gamesUnlock.banned[T2];
+        ok('ban: the browser loses Plus, banned by the admin, with its account and the reason', b && b.banned === 'admin' && b.clientId === 'c1' && b.reason === 'shared key' && b.hadPlus === true && !r.written.gamesUnlock.tags[T2], b);
+        r = await adm('admin-games-ban', { tag: T2 }, [stored({})], { files: r.files });
+        ok('…banning it again changes nothing', reply(r).code === 'already');
+        r = await adm('admin-games-restore', { tag: T2 }, [stored({})], { files: r.files });
+        ok('…and restore lifts a ban too', !r.files['plus-' + T2 + '.json'] && reply(r).code === 'ok');
+
+        // An account ban.
+        const theirs = Object.assign({}, enrolled.files, granted, plusFile(T3, { at: 'x', via: 'key', n: 0, grant: { clientId: 'c1', at: 'x' } }),
+            plusFile(T1, { at: 'x', via: 'login', grant: { clientId: 'c2', at: 'x' } }));
+        r = await adm('admin-account-ban', { client_id: 'c1', reason: 'cheating' }, me, { files: theirs, logins: enrolled.logins });
+        const blocked = JSON.parse(r.files['blocked.json'] || '{}');
+        ok('account ban: blocked.json lists it, with its name and the reason', blocked.c1 && blocked.c1.name === 'Hann' && blocked.c1.reason === 'cheating', blocked);
+        ok('…it leaves the board', r.written && !r.written.players.some(p => p.clientId === 'c1'));
+        ok('…both its browsers are banned; another account\'s is untouched', r.written.gamesUnlock.banned[T2].banned === 'account' && r.written.gamesUnlock.banned[T3].banned === 'account' && !!r.written.gamesUnlock.tags[T1]);
+        ok('…its login is reset', r.logins && !r.logins.logins.hann && JSON.parse(r.files['acct-c1.json']).login === false);
+        ok('…and the reply says what it did', reply(r).code === 'ok' && /2 browser\(s\) banned, login reset/.test(reply(r).msg), reply(r));
+        const after = r.files;
+        r = await dispatch({ player: next({}, 0, { displayName: 'Hann' }), build_token: 'tok-now' }, [], { files: after });
+        ok('a blocked account\'s next sync is refused', r.warnings.some(w => /blocklisted clientId c1/.test(w)) && !(r.written && r.written.players.some(p => p.clientId === 'c1')));
+        r = await dispatch({ tag: T4, rid: ARID, name: 'Hann', pw: PW, build_token: 'tok-now' }, me, { event: 'login', context: true, files: Object.assign({}, enrolled.files, { 'blocked.json': JSON.stringify({ c1: { at: 'x' } }) }), logins: enrolled.logins });
+        ok('…and a blocked account cannot log in, even with its password', r.status(T4) && r.status(T4).code === 'blocked' && !(r.written && r.written.gamesUnlock.tags[T4]));
+        r = await adm('admin-account-unban', { client_id: 'c1' }, [], { files: after });
+        ok('account unban: off blocked.json, and the browser bans it made are lifted', !JSON.parse(r.files['blocked.json']).c1 && !r.files['plus-' + T2 + '.json'] && !r.files['plus-' + T3 + '.json'] && reply(r).code === 'ok');
+        r = await dispatch({ player: next({}, 0, { displayName: 'Hann' }), build_token: 'tok-now' }, [], { files: r.files });
+        ok('…so its next sync is taken again', !!r.player('c1'));
+        r = await adm('admin-account-unban', { client_id: 'c9' }, []);
+        ok('unbanning an account that is not banned writes nothing but the reply', reply(r).code === 'already' && r.patches.every(p => p.every(n => /^status-/.test(n))));
+        r = await adm('admin-ping', {}, []);
+        ok('ping answers ok and writes nothing else', reply(r).code === 'ok' && reply(r).msg === 'pong' && r.patches.length === 1);
+        r = await adm('admin-ping', { build_token: 'stale' }, []);
+        ok('…and with a stale build token it does not answer at all (the page says so)', !r.files['status-admin.json']);
+        r = await adm('admin-games-rotate', {}, []);
+        ok('rotate answers with the new key number', reply(r).code === 'ok' && reply(r).msg === 'key #1');
     }
 
     head('The legacy whole-registry payload');

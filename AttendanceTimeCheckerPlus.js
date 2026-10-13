@@ -1676,7 +1676,9 @@
             no_player: 'Your leaderboard entry is still being saved. Try again in a minute.',
             already: 'You already have a password. Use "Change password" instead.',
             key_rejected: "That license key didn't work. It may be mistyped or already used.",
-            banned: 'Plus is revoked on this computer: Game Mode was opened with a modified script. Ask the admin.',
+            banned: 'Plus is banned on this computer. Ask the admin.',
+            revoked: 'The admin revoked Plus on this computer. Ask the admin to restore it.',
+            blocked: 'This account is blocked. Ask the admin.',
             malformed: 'Something in the request was off. Reload the page and try again.',
         })[r.error] || 'The server had a problem' + (r.msg ? ' (' + r.msg + ')' : '') + '. Please tell the admin.';
     }
