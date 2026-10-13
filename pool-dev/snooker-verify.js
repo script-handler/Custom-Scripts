@@ -395,6 +395,18 @@ head('Snooker rules: the end of the frame');
     const end = judge(miss.next, w, [7], [7]);
     ok('…and the first score ends it', end.frameOver && end.winner === miss.next.turn && P.psText(end, NAMES).sub.endsWith('potted the re-spotted black'));
     ok('…as does the first foul', judge(rb, bl(), [], []).frameOver && judge(rb, bl(), [], []).winner === 3 - rb.turn);
+    {
+        // The leader fouls the last black into a tie: 43–50, seat 2 pots the black and goes in-off.
+        const t = judge(frame({ phase: 'clearance', next: 7, turn: 2, scores: { 1: 43, 2: 50 } }), bl(), [7], [7, 0]);
+        ok('a foul on the last black that levels the scores: 7 to the other player, 50–50, and the black is re-spotted, not the frame over',
+           t.foul === 'inOff' && t.penalty === 7 && t.next.scores[1] === 50 && t.next.scores[2] === 50 && !t.frameOver && t.respotBlack &&
+           t.next.respotBlack && t.next.ballInHand === 'D' && [1, 2].includes(t.next.turn) && !t.next.pending && t.spots.some(s => s.id === 7 && s.x === 409.2));
+        const first = t.next.turn, other = 3 - first;
+        const won = judge(t.next, bl(), [7], [7]);
+        ok('…whoever the lot sends in first wins it by potting the black (57–50)', won.frameOver && won.winner === first && won.next.scores[first] === 57);
+        const lost = judge(t.next, bl(), [7], [7, 0]);
+        ok('…and loses it by fouling (7 to the other: 57–50 the other way)', lost.frameOver && lost.winner === other && lost.next.scores[other] === 57 && lost.next.scores[first] === 50);
+    }
     const c = P.psConcede(frame({ scores: { 1: 12, 2: 70 } }), 1);
     ok('a concession ends the frame for the other player', c.frameOver && c.winner === 2 && c.next.over && c.next.conceded === 1 && P.psText(c, NAMES).sub === '70–12 · you conceded');
 }

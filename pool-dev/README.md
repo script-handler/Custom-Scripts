@@ -149,8 +149,9 @@ the top bar, and `phShy` works in canvas pixels. That is ⚙️ *Max View*'s *Ta
 (`data-bars` on the HUD); its default, *Full table*, keeps the design's 1232 × 672 table and
 puts the overlays on the long cushions between the corner and middle pockets.
 
-⚙️ *Aim Guide* (Long / Medium / Short) sets how far the object ball's line runs (150 / 100 / 60
-u, `scene.guideLen`). **Snooker's call pocket** is a frame rule, `frame.call`: `'off'`,
+⚙️ *Aim Guide* is Full or None (the user, 2026-10-13: no lengths, so a cue's line is the same for
+everyone, online too). Full runs the object ball's line 150 u times the cue's aim, `scene.guideLen`;
+a saved Long, Medium or Short reads as Full. **Snooker's call pocket** is a frame rule, `frame.call`: `'off'`,
 `'colours'` (reds are not called) or `'all'`; a ball on potted with none in the pocket called
 is the foul `wrongPocket`. Each profile's `lockCall(frame, tier)` sets the call rule when the
 tier locks (pool: call every shot at Pro; snooker: a picked Hard calls the colours, Pro every

@@ -1364,6 +1364,11 @@
             .pool-hud .ph-cue-tag { flex-shrink: 0; height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border-radius: var(--pool-radius-sm); font-size: 10px; letter-spacing: 0.12em; color: var(--pool-accent-lite); background: rgba(var(--pool-accent-rgb), 0.12); }
             .pool-hud .ph-cue-tag.is-lock { padding: 0 4px; background: transparent; color: var(--pool-overlay-muted); }
             .pool-hud .ph-cue-new { height: 16px; padding: 0 6px; display: inline-flex; align-items: center; border-radius: 8px; font-size: 8px; letter-spacing: 0.12em; border: 1px solid rgba(var(--pool-accent-rgb), 0.55); color: var(--pool-accent-lite); }
+            /* Rarity in 8 Ball Pool's colours: Common grey, Rare blue, Epic purple, Legendary gold. */
+            .pool-hud .ph-cue-rar { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pool-overlay-muted); }
+            .pool-hud .ph-cue-rar[data-rarity="rare"] { color: #6CB4F5; }
+            .pool-hud .ph-cue-rar[data-rarity="epic"] { color: #C18CF7; }
+            .pool-hud .ph-cue-rar[data-rarity="legendary"] { color: #F5C542; }
             .pool-hud .ph-cue-eq { flex-shrink: 0; height: 44px; min-width: 76px; padding: 0 14px; font-size: 13px; color: var(--pool-overlay-text); background: rgba(255, 255, 255, 0.06); border-color: var(--pool-overlay-line); }
             /* Four 10-step bars: filled to the cue's level, outlined to level 5. */
             .pool-hud .ph-cue-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }

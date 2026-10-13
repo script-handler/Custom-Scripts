@@ -86,11 +86,12 @@
         </fieldset>
         <fieldset><legend>Table</legend>
             <label>During the shot <select id="shotcam"><option value="overhead">Overhead</option><option value="3d">Stay 3D</option></select></label>
-            <label>Guides <select id="guides"><option>full</option><option>short</option><option>off</option></select></label>
-            <label>Felt <select id="felt"><option>green</option><option>red</option><option>blue</option><option>lightgrey</option></select></label>
+            <label>Guideline <select id="guidelen"><option value="full">Full</option><option value="none">None · aim line and ghost ball only</option></select></label>
+            <label>Cloth <select id="felt"><option>green</option><option>red</option><option>blue</option><option>lightgrey</option><option>purple</option><option>teal</option><option>charcoal</option><option value="custom">custom</option></select></label>
+            <label id="feltCustom" hidden>Custom <input id="feltCentre" type="color" title="Centre"> <input id="feltEdge" type="color" title="Edge"></label>
         </fieldset>
         <fieldset><legend>Scenes</legend>
-            <button data-scene="mid">Mid-frame</button><button data-scene="eight">On the 8</button><button data-scene="bih">Ball in hand</button>
+            <button data-scene="mid">Mid-frame</button><button data-scene="eight">On the 8</button><button data-scene="bih">Ball in hand</button><button data-scene="nom" data-snk-only hidden>Pink nominated</button>
         </fieldset>
         <fieldset><legend>Records and XP (this page only)</legend>
             <div id="xplog">No frames finished yet.</div>
@@ -101,6 +102,8 @@
             Press, then pull back or push forward along the shot line for power, and release. Return to the start or press Esc to cancel.
             Spin: drag the red dot on SPIN, or click SPIN for the big picker (letting go confirms).
             Ball in hand: drag the cue ball; Move cue ball picks it up again. When a call is needed, tap a pocket ring (or the call card's map in 3D).
+            Guideline is ⚙️ Guideline (None keeps the aim line and the ghost ball). A tournament's own Guides setting (full, short, off) is ?guides= on the URL.
+            Snooker's Pink nominated: the ring round the pink opens where the ghost ball sits on it.
         </div>
     </div>
 </div>
@@ -120,7 +123,7 @@ var userPreferences = Object.assign({
     // The game the panel plays, as the header's switch sets it in the widget, and snooker's own settings.
     poolVariant: 'pool', snookerReds: 15, snookerDifficulty: 'adaptive',
     // ⚙️ Aim Guide, ⚙️ Max View, ⚙️ Shot Clock (each game's), and 2 Players' names.
-    poolGuideLen: 'long', poolMaxLayout: 'full', poolClock: 30, snookerClock: 45, poolP1Name: '', poolP2Name: '',
+    poolGuideLen: 'full', poolMaxLayout: 'full', poolClock: 30, snookerClock: 45, poolP1Name: '', poolP2Name: '',
 }, (() => { try { return JSON.parse(localStorage.getItem('poolProtoPrefs') || '{}'); } catch (_) { return {}; } })());
 var isPipActive = false, pipWindow = null;
 var currentGame = 'pool', lbDisplayName = 'Ayesha', xpSystemReady = false;
@@ -221,7 +224,9 @@ function toggleGameMaxModal(cfg) {
     else if (still) userPreferences.poolCamera = '3d';
     if (Q.has('lean')) userPreferences.poolLean = +Q.get('lean'); else if (still) userPreferences.poolLean = 35;
     if (Q.has('shotcam')) userPreferences.poolShotCam = Q.get('shotcam'); else if (still) userPreferences.poolShotCam = 'overhead';
-    if (Q.has('felt')) userPreferences.poolTableColor = Q.get('felt'); else if (still) userPreferences.poolTableColor = 'green';
+    // ?felt= sets both games' cloth (⚙️ Table Cloth); ?feltc=rrggbb,rrggbb the custom colours (with ?felt=custom).
+    if (Q.has('felt')) { userPreferences.poolTableColor = Q.get('felt'); userPreferences.snookerTableColor = ''; } else if (still) { userPreferences.poolTableColor = 'green'; userPreferences.snookerTableColor = ''; }
+    if (Q.has('feltc')) { const c = Q.get('feltc').split(','); userPreferences.poolFeltCustom = { centre: '#' + c[0], edge: '#' + (c[1] || c[0]) }; }
     if (Q.has('diff')) userPreferences.poolDifficulty = Q.get('diff'); else if (still) userPreferences.poolDifficulty = 'adaptive';
     // As the host's applyPreferences does, then pool's hook.
     function applyTheme(save) {
@@ -296,7 +301,7 @@ function toggleGameMaxModal(cfg) {
             const view = pcView(st.camera === '2d' || L.bih ? pcOrtho(W, H, cfg) : pcChase([c.x, c.y], st.aim, st.lean, W, H, cfg));
             const aim = L.bih ? null : { angle: st.aim, power: 0 };
             pgRender(ctx, {
-                view, world: w, felt: userPreferences.poolTableColor || 'green', dpr, cache, makeCanvas, theme: phThemeTokens({ el: host }),
+                view, world: w, felt: userPreferences.poolTableColor === 'custom' ? pgFeltCustom(userPreferences.poolFeltCustom) : userPreferences.poolTableColor || 'green', dpr, cache, makeCanvas, theme: phThemeTokens({ el: host }),
                 aim, guide: aim ? pgGuide(w, { angle: st.aim, speed: cfg.maxSpeed * 0.35, tipX: 0, tipY: 0 }) : null, guideMode: 'full',
                 zone: L.bih ? 'D' : null, bih: L.bih ? { x: c.x, y: c.y, valid: !prCanPlace(w, c.x, c.y, 'D') } : null,
                 ring: Q.has('ring') ? +Q.get('ring') : null,
@@ -496,10 +501,10 @@ function toggleGameMaxModal(cfg) {
     }
     if (Q.has('power')) { S.power = +Q.get('power'); S.drag = { kind: 'power', x: 0, y: 0, ax: [0, -1], reach: 140 }; }
     if (Q.has('call')) S.called = +Q.get('call');
-    // ?snkcall=off|colours|all: snooker's call rule for this frame; ?guidelen=short|medium|long
-    // (⚙️ Aim Guide); ?maxlayout=full|bars (⚙️ Max View). Not kept in the page's saved prefs.
+    // ?snkcall=off|colours|all: snooker's call rule for this frame; ?guidelen=full|none
+    // (⚙️ Guideline, else the rig's saved one); ?maxlayout=full|bars (⚙️ Max View). Not saved.
     if (Q.has('snkcall') && S.frame) S.frame.call = Q.get('snkcall');
-    userPreferences.poolGuideLen = Q.get('guidelen') || 'long';
+    if (Q.has('guidelen')) userPreferences.poolGuideLen = Q.get('guidelen');
     userPreferences.poolMaxLayout = Q.get('maxlayout') || 'full';
     // ?spin=i picks a preset, ?tipx=&tipy= any tip, ?spinopen=1 opens the picker.
     if (Q.has('spin')) { const p = PH_SPINS[+Q.get('spin') % PH_SPINS.length]; S.tip = { x: p.x, y: p.y }; }
@@ -622,7 +627,7 @@ function toggleGameMaxModal(cfg) {
     // the frame on the table is parked and the other game's comes back. The CPU select is
     // the game's own difficulty; Reds and Call every shot belong to one game each. The scene
     // buttons show the game's own states.
-    const SNK_BUTTONS = { mid: ['red', 'On a red'], eight: ['colours', 'The colours'], bih: ['respot', 'Re-spotted black'] };
+    const SNK_BUTTONS = { mid: ['red', 'On a red'], eight: ['colours', 'The colours'], bih: ['respot', 'Re-spotted black'], nom: ['nominatePink', 'Pink nominated'] };
     const syncGame = () => {
         $('game').value = S.game;
         $('reds').parentElement.hidden = S.game !== 'snooker';
@@ -631,6 +636,7 @@ function toggleGameMaxModal(cfg) {
         document.querySelectorAll('[data-scene]').forEach(b => {
             if (!b.dataset.pool) b.dataset.pool = b.textContent;
             b.textContent = S.game === 'snooker' ? SNK_BUTTONS[b.dataset.scene][1] : b.dataset.pool;
+            b.hidden = b.hasAttribute('data-snk-only') && S.game !== 'snooker';
         });
     };
     $('game').onchange = e => {
@@ -647,9 +653,26 @@ function toggleGameMaxModal(cfg) {
     $('diff').onchange = e => { const pref = poolRules().diffPref; userPreferences[pref] = e.target.value; savePreferences(); poolOnPrefChange(pref); };
     $('every').checked = S.callEvery; $('every').onchange = e => { S.callEvery = e.target.checked; S.frame.callEvery = S.callEvery; };
     $('shotcam').value = userPreferences.poolShotCam; $('shotcam').onchange = e => { userPreferences.poolShotCam = e.target.value; savePreferences(); };
-    $('guides').value = S.guideMode; $('guides').onchange = e => { S.guideMode = e.target.value; };
-    $('felt').value = userPreferences.poolTableColor; $('felt').onchange = e => { userPreferences.poolTableColor = e.target.value; savePreferences(); };
-    document.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => (S.game === 'snooker' ? snkScene(SNK_BUTTONS[b.dataset.scene][0]) : scene(b.dataset.scene)));
+    $('guidelen').value = userPreferences.poolGuideLen === 'none' ? 'none' : 'full';
+    $('guidelen').onchange = e => { userPreferences.poolGuideLen = e.target.value; savePreferences(); };
+    // The cloth of the game on the table (snooker's own once picked), as ⚙️ Table Cloth sets it.
+    const feltSync = () => {
+        const f = poolRules().felt, U = userPreferences, own = !!U[f[0]] || !f[2], kind = own ? U[f[0]] : U[f[2]], c = (own ? U[f[1]] : U[f[3]]) || {};
+        $('felt').value = kind || 'green';
+        $('feltCustom').hidden = kind !== 'custom';
+        $('feltCentre').value = c.centre || '#2e8f70'; $('feltEdge').value = c.edge || '#114534';
+    };
+    const feltSet = (kind, c) => { const f = poolRules().felt; userPreferences[f[0]] = kind; if (c) userPreferences[f[1]] = c; savePreferences(); feltSync(); };
+    $('felt').onchange = e => feltSet(e.target.value, e.target.value === 'custom' ? { centre: $('feltCentre').value, edge: $('feltEdge').value } : null);
+    ['feltCentre', 'feltEdge'].forEach(id => { $(id).oninput = () => feltSet('custom', { centre: $('feltCentre').value, edge: $('feltEdge').value }); });
+    feltSync();
+    $('game-title').addEventListener('click', () => setTimeout(feltSync, 0));
+    $('game').addEventListener('change', () => setTimeout(feltSync, 0));
+    // A scene is the table in play: no PLAY gate over it.
+    document.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => {
+        if (S.game === 'snooker') snkScene(SNK_BUTTONS[b.dataset.scene][0]); else scene(b.dataset.scene);
+        S.awaitStart = null;
+    });
     // The HUD's Vs CPU button switches the mode too; keep the rig's select in step.
     setInterval(() => { if ($('mode').value !== poolMode) $('mode').value = poolMode; }, 300);
 

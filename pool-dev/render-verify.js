@@ -389,5 +389,32 @@ head('Snooker table');
        P.pgK(scfg) < 0.53 && P.pcChase([0, 0], 0, 0, W, H, scfg).eye[2] - scfg.ballR === P.pcChase([0, 0], 0, 0, W, H, cfg).eye[2] - cfg.ballR);
 }
 
+head("The nominated ball's ring and the ghost ball");
+{
+    // Ring r 20 at the origin, a ghost r 14 (+4) at 22 px to the right: the ring opens there.
+    const cut = P.pgRingGap(0, 0, 20, 22, 0, 18);
+    const onRing = t => [20 * Math.cos(t), 20 * Math.sin(t)];
+    let clear = !!cut;
+    for (let k = 0; k <= 200 && cut; k++) { const p = onRing(cut[0] + (cut[1] - cut[0]) * k / 200); if (Math.hypot(p[0] - 22, p[1]) < 18 - 1e-6) clear = false; }
+    ok('where the ghost ball sits on the ring, the ring is cut: none of what is drawn runs under it', clear && cut[1] - cut[0] > Math.PI && cut[1] - cut[0] < 2 * Math.PI);
+    ok('…and the cut ends where the two meet', !!cut && Math.abs(Math.hypot(onRing(cut[0])[0] - 22, onRing(cut[0])[1]) - 18) < 1e-6);
+    ok('a ghost ball clear of the ring leaves it whole', P.pgRingGap(0, 0, 20, 60, 0, 18) === null && P.pgRingGap(0, 0, 20, 0, 0, 5) === null);
+}
+
+head('Table cloth');
+{
+    const ortho = P.pcView(P.pcOrtho(W, H, cfg));
+    const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), near = (a, b) => rgb(a).every((v, i) => Math.abs(v - rgb(b)[i]) <= 10);
+    const g = P.pgFeltFrom('#2E8F70', '#114534'), hand = P.PG_FELTS.green;
+    ok('a cloth from two colours matches the hand-made green from its own centre and edge', near(g.felt[1], hand.felt[1]) && near(g.cushion, hand.cushion) && near(g.jaw, hand.jaw) && near(g.nose, hand.nose), JSON.stringify(g));
+    ['purple', 'teal', 'charcoal'].forEach(felt => {
+        const f = frame({ view: ortho, world: P.ppCreateWorld(), felt }).px(W / 2 + 60, H / 2 + 40);
+        ok(felt + ' cloth fills the playfield', f[0] + f[1] + f[2] > 30, f.join(','));
+    });
+    const red = frame({ view: ortho, world: P.ppCreateWorld(), felt: P.pgFeltCustom({ centre: '#E03030', edge: '#601010' }) }).px(W / 2 + 60, H / 2 + 40);
+    ok('a custom cloth draws its own colours (red here)', red[0] > red[1] + 60 && red[0] > red[2] + 60, red.join(','));
+    ok('a custom cloth that is not two #rrggbb colours draws green', P.pgFeltCustom({ centre: 'red', edge: '#601010' }) === 'green' && P.pgFeltCustom(null) === 'green');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;

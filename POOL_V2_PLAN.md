@@ -2408,25 +2408,36 @@ Each cue has its bars at level 1 and at level 5. **Every level-up adds at least 
 (the user, 2026-10-07): the cue's gains are dealt out one at a time, round-robin, its biggest
 first, and level n has round(total × (n − 1) / 4) of them. Rounding a straight line between
 levels 1 and 5, as first built, left some level-ups with no gain (Tulipwood moved only at level 3).
-Every cue gains 4–7 points over its four level-ups, so each one shows.
 
-**No cue is best at everything** (the user, 2026-10-05). Every cue except Standard has a
-weakness of 6 or less, and the most any cue totals at level 5 is 32 of the 40. Better cues buy a
-stronger *style*, not a stronger everything. That is why Ember can have a 10 for power with 2 for
-spin. The looks get richer down the list, and the totals climb slowly:
+**Rarity scales a mastered cue, as in 8 Ball Pool** (the user, 2026-10-13). The first balance
+(2026-10-05: every cue had a bar of 6 or less and none passed 32 of 40) left a mastered cue one
+strong bar over near-basic ones; Century Ash maxed at power 5 and spin 5. The reference is 8 Ball
+Pool's Collection tab at level MAX: Excalibur (Legendary) 10/10/10/10, Inferno (Legendary)
+10/10/9/8, Gengis Khan (Epic) 9/8/9/8, Apache (Rare) force 7, aim 8. So every cue has a rarity
+(`PQ_RARITY`), and mastered it lands in that rarity's band:
 
-| Cue | Lv 1 (P/A/S/T) | Lv 5 | Total | Style, and its weakness |
-|---|---|---|---|---|
-| Standard | 4/4/4/4 | 5/5/5/5 | 20 | today's game at level 1; a point a level (the user, 2026-10-07) |
-| Tulipwood | 5/5/4/4 | 6/6/5/5 | 22 | an easy all-rounder |
-| Birdseye | 4/5/5/5 | 4/7/6/6 | 23 | control; soft break |
-| Ember | 7/4/2/4 | 10/6/2/6 | 24 | overpowered break and long pots; almost no spin |
-| Rosewood Six | 3/7/4/6 | 3/9/5/8 | 25 | precision and time; the weakest break |
-| Carbon Fin | 6/4/7/3 | 8/5/10/3 | 26 | spin and power; a short clock |
-| Malachite | 4/7/7/4 | 4/9/9/5 | 27 | finesse, aim and spin; a weak break |
-| Century Ash | 5/8/4/7 | 5/10/5/8 | 28 | snooker: the longest line and time; little spin |
-| Black Crown | 7/7/5/6 | 9/9/6/6 | 30 | power and aim; average spin and time |
-| Collector | 8/7/7/5 | 9/9/8/6 | 32 | the top; the clock is its weakness |
+| Rarity | Total at level 5 | Lowest bar | Gain over the four level-ups |
+|---|---|---|---|
+| Common | 20–24 | 5 | 4–5 |
+| Rare | 28–30 | 6 | 8–9 |
+| Epic | 32–34 | 7 | 10 |
+| Legendary | 36–40 | 8 | 11–12 |
+
+Each rarity's weakest master beats the best of the rarity below, and gains more on the way. A
+cue keeps its character in its best bar; the picker shows the rarity by each name.
+
+| Cue | Rarity | Lv 1 (P/A/S/T) | Lv 5 | Total | Style |
+|---|---|---|---|---|---|
+| Standard | Common | 4/4/4/4 | 5/5/5/5 | 20 | today's game at level 1; a point a level (the user, 2026-10-07) |
+| Tulipwood | Common | 5/5/4/4 | 6/6/6/6 | 24 | an easy all-rounder |
+| Birdseye | Rare | 5/6/5/5 | 7/8/7/7 | 29 | control |
+| Ember | Rare | 7/5/3/5 | 10/7/6/6 | 29 | the break and long pots; the least spin |
+| Rosewood Six | Rare | 4/7/5/6 | 6/10/6/8 | 30 | the line and time; the weakest break |
+| Carbon Fin | Epic | 6/5/7/5 | 9/7/10/7 | 33 | spin and power |
+| Malachite | Epic | 5/7/6/5 | 7/9/9/8 | 33 | finesse, aim and spin |
+| Century Ash | Epic | 5/8/5/6 | 8/10/8/8 | 34 | snooker: the longest line |
+| Black Crown | Legendary | 7/7/6/6 | 10/10/9/8 | 37 | power and aim (Inferno's shape) |
+| Collector | Legendary | 8/7/7/6 | 10/10/10/10 | 40 | the top, best at everything (Excalibur's) |
 
 **Who uses what:**
 - **Every human seat plays its own cue and may change it during the match**, as in 8 Ball Pool
@@ -2883,6 +2894,7 @@ It is still 1,256 under where C0 started. `verify-all` passes 2574; `host-run` 1
 | 2026-10-05 | **Centurion's glyph is a trophy with a Roman "C"** (revision `1791193248-0b3b`), and no UI icon uses a trophy | The user's call: a Roman helmet as a Legendary icon made no sense. The designer drew four trophies (star, band, plain base, "C") and compared them at 20 and 16 px against all 39. The star blurred at 16 px; the "C" was the clearest and the most distinct |
 | 2026-10-05 | **Achievement icons are designed by the user in Claude Design from the prompt in Appendix D**: stroke glyphs in the cue icons' family, with a medallion per XP tier | The user asked for sleek, unique icons like the cue ones. All 39 are still emoji, and three pairs clash: 🎯 Day One and Sharpshooter, 🧱 Wallflower and Block Master, 👑 Veteran and Grand Serpent, plus the Maximum cue's crown |
 | 2026-10-05 | **Snooker: a CPU free ball now explains itself** (reported: "after a foul the CPU played the black, not the blue, and no foul was given") | The rules were right: 569 simulated fouls with blue, pink and black left gave 27 CPU shots off the order, every one a legal free ball (the black nominated, scored as the blue, re-spotted, the blue still on). But the "CPU takes the free ball" notice timed out before the CPU struck, and the pot itself said nothing. The notice now says "Any colour may stand in for the blue" and stays until the strike; a potted free ball says "Free ball · the black counts as the blue · 5 points · the black is re-spotted, the blue is still on" |
+| 2026-10-13 | **Cues get rarity, scaled as 8 Ball Pool's; ⚙️ Aim Guide is Full or None** | The user: a mastered Century Ash (power 5, spin 5) was a small jump, and every cue kept one bar high and the rest basic; the reference shows Legendary masters at 37–40 of 40. Long / Medium / Short let a player shorten or keep a line the cue already stretches, so in cross play two players with one cue saw different lines |
 | 2026-10-05 | **Cues C1–C3 built.** Tournament frames don't level a cue (humans only, as 2 Players). The picker is dark glass over the panel; compact's pill sits in the host's scoreboard, Max's button beside the title. Fingerprints re-recorded once | The plan said tournament frames count, but its own reason (you cannot beat yourself for a level) covers them. Max's action row had no room: a labelled button wrapped "Vs CPU" |
 | 2026-10-05 | **Cues: achievements unlock, wins level, mastering 5 unlocks Collector; four stat bars where Standard 4/4/4/4 is today** | The user asked for 8 Ball Pool-style stats and unlocks by achievement, play, time, wins and collecting. Standard equal to today keeps the CPU, the fingerprint and the balance tests unchanged |
 | 2026-10-05 | **A lean pass (C0) before any cue code** | The user: the file is nearly 30k lines; the reviews found about 1,300 removable lines and 7 bugs |

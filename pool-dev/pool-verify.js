@@ -86,7 +86,7 @@ ok('⚙️ offers the shot camera: Overhead or Stay 3D', /sel\('poolShotCam', [^
     ok('…the cue games\' tab heads its rows: both games, then pool, then snooker',
        /data-settings-group="cue"[\s\S]*?Both games[\s\S]*?sel\('poolShotCam'[\s\S]*?attIcon\('g-pool'\)\} 8-Ball Pool[\s\S]*?sel\('poolClock'[\s\S]*?attIcon\('snooker'\)\} Snooker[\s\S]*?sel\('snookerClock'[\s\S]*?data-settings-group="ludo"/.test(fn));
     ok('the cue game is not a ⚙️ setting any more (the header switches it)', opts('poolVariant') === null);
-    ok('⚙️ Aim Guide offers None', opts('poolGuideLen') === 'long,medium,short,none');
+    ok('⚙️ Aim Guide is Full or None: no lengths to pick, so a cue\'s line is the same for everyone', opts('poolGuideLen') === 'full,none');
     ok('⚙️ Shot Clock: the tournament\'s choices for each game', opts('poolClock') === '30,45,0' && opts('snookerClock') === '30,45,60,0');
     ok('…read back as numbers, and the panel follows them', /numericPrefs = \[[^\]]*'poolClock', 'snookerClock'\]/.test(fn) && /\n\s*if \(typeof poolOnPrefChange === 'function'\) poolOnPrefChange\(pref\);/.test(fn));
     ok('userPreferences defaults the clocks and 2 Players\' names', /poolClock: 30,/.test(src) && /snookerClock: 45,/.test(src) && /poolP1Name: '',/.test(src) && /poolP2Name: '',/.test(src));
@@ -410,8 +410,7 @@ function playFrame(P, maxTicks) {
     P.host.userPreferences.poolGuideLen = 'none';
     const none = P.poolShotPath(v);
     ok('Aim Guide None: guide length 0, and the shot path stops at the contact', P.poolGuideLen() === 0 && none.dots.length === 1 && full.dots.length > 1 && none.segs.length < full.segs.length);
-    P.host.userPreferences.poolGuideLen = 'bogus';
-    ok('an unknown Aim Guide reads as Long', P.poolGuideLen() === 150);
+    ok('an old Long, Medium or Short, or an unknown value, reads as Full', ['long', 'medium', 'short', 'bogus'].every(v => { P.host.userPreferences.poolGuideLen = v; return P.poolGuideLen() === 150; }));
 }
 {
     // The header's 🎱 | 🔴 switch, in place of ⚙️ Cue Game.
@@ -1179,8 +1178,17 @@ head('Cues (pool-cues.js, pool-game.js)');
     const std1 = P.pqStats('standard', 0);
     ok('Standard at level 1 plays the game as it was: every multiplier 1 (the CPU\'s Easy cue)', std1.level === 1 && std1.power === 1 && std1.aim === 1 && std1.spin === 1 && std1.time === 1);
     ok('…and it levels too, to 5/5/5/5', std.level === 5 && std.bars.join('/') === '5/5/5/5');
-    const top = P.PQ_SET.filter(q => q.id !== 'standard').map(q => P.pqStats(q.id, 0, 5));
-    ok('no cue is best at everything: each has a bar of 6 or less at level 5, none totals over 32', top.every(s => Math.min(...s.bars) <= 6 && s.bars.reduce((a, b) => a + b) <= 32) && top.some(s => s.bars[0] === 10 && s.bars[2] <= 2));
+    const total = b => b.reduce((x, y) => x + y, 0), rarities = Object.keys(P.PQ_RARITY);
+    ok('every cue has a rarity, and mastered it sits in that rarity\'s band (8 Ball Pool\'s scale)', P.PQ_SET.every(q => {
+        const r = P.PQ_RARITY[q.rarity], b = P.pqStats(q.id, 0, 5).bars;
+        return r && total(b) >= r[1] && total(b) <= r[2] && Math.min(...b) >= r[3];
+    }));
+    const of = r => P.PQ_SET.filter(q => q.rarity === r), gain = q => total(q.bars[1]) - total(q.bars[0]);
+    ok('a mastered cue of each rarity beats every one below it, and its levels add more', rarities.every((r, i) => !i ||
+        (Math.min(...of(r).map(q => total(q.bars[1]))) > Math.max(...of(rarities[i - 1]).map(q => total(q.bars[1]))) && Math.min(...of(r).map(gain)) > Math.max(...of(rarities[i - 1]).map(gain)))));
+    ok('Legendary masters like the reference: Collector 10/10/10/10, Black Crown 10/10/9/8; Century Ash is Epic at 8/10/8/8',
+       P.pqStats('collector', 0, 5).bars.join('/') === '10/10/10/10' && P.pqStats('crown', 0, 5).bars.join('/') === '10/10/9/8' && P.pqById('centuryash').rarity === 'epic' && P.pqStats('centuryash', 0, 5).bars.join('/') === '8/10/8/8');
+    ok('up the collection rarity never drops', P.PQ_SET.every((q, i, a) => !i || rarities.indexOf(q.rarity) >= rarities.indexOf(a[i - 1].rarity)));
     const steps = id => P.pqSteps(P.pqById(id)).join(), rank = q => P.PQ_TIERS.indexOf(q.need[1]) + (q.need[0] === 'snooker' ? 4 : 0);
     ok('the cheapest cue climbs on 5, +7, +10, +15 Easy pool wins; the dearest on 5, +10, +15, +20 Pro snooker wins',
        steps('standard') === '0,5,12,22,37' && P.pqById('standard').need.slice(0, 2).join() === 'pool,easy' && steps('collector') === '0,5,15,30,50' && P.pqById('collector').need.slice(0, 2).join() === 'snooker,pro');
@@ -1188,16 +1196,16 @@ head('Cues (pool-cues.js, pool-game.js)');
     ok('levels follow the cue\'s own ladder: Standard at 4, 5, 12, 22, 37 wins is level 1–5', [4, 5, 12, 22, 37].map(n => P.pqLevel(n, P.pqById('standard'))).join() === '1,2,3,4,5');
     ok('a pool cue takes wins at its tier or above, snooker\'s too; a snooker cue only snooker\'s', P.pqCounts(P.pqById('ember'), 'snooker', 'normal') && P.pqCounts(P.pqById('ember'), 'pool', 'pro') &&
        !P.pqCounts(P.pqById('ember'), 'pool', 'easy') && !P.pqCounts(P.pqById('crown'), 'pool', 'pro') && !P.pqCounts(P.pqById('crown'), 'snooker', 'hard') && P.pqCounts(P.pqById('crown'), 'snooker', 'pro'));
-    ok('levels 2–4 fall between: Ember at level 3 is 9/5/2/5', P.pqStats('ember', 15).bars.join('/') === '9/5/2/5');
+    ok('levels 2–4 fall between: Ember at level 3 is 9/6/4/6', P.pqStats('ember', 15).bars.join('/') === '9/6/4/6');
     const sum = b => b.reduce((x, y) => x + y, 0);
     ok('every level-up gives every cue at least one bar point, and level 5 is the design\'s',
        P.PQ_SET.every(q => [2, 3, 4, 5].every(l => sum(P.pqStats(q.id, 0, l).bars) > sum(P.pqStats(q.id, 0, l - 1).bars)) &&
            P.pqStats(q.id, 0, 5).bars.join() === q.bars[1].join() && P.pqStats(q.id, 0, 1).bars.join() === q.bars[0].join()));
-    ok('the ghost segments show the next level: Ember at level 2 (8/5/2/4) outlines level 3 (9/5/2/5)', (() => {
+    ok('the ghost segments show the next level: Ember at level 2 (8/5/4/5) outlines level 3 (9/6/4/6)', (() => {
         const G = L.game({ seed: 65, store: { poolCueRecord: JSON.stringify({ ember: 5 }) } });
         G.host.userXP.achievements.push('streak7');
         const c = G.poolCueModel().list.find(x => x.id === 'ember');
-        return c.level === 2 && c.bars.join('/') === '8/5/2/4' && c.top.join('/') === '9/5/2/5';
+        return c.level === 2 && c.bars.join('/') === '8/5/4/5' && c.top.join('/') === '9/6/4/6' && c.rarity === 'rare' && c.rarityName === 'Rare';
     })());
     ok('every cue draws from the design\'s materials', P.PQ_SET.every(q => q.sections.concat(q.rings || []).every(x => P.PQ_MATS[x[2]]) && (q.points || []).every(p => P.PQ_MATS[p.core])));
     // Unlocks.
@@ -1209,17 +1217,17 @@ head('Cues (pool-cues.js, pool-game.js)');
     S.phase = 'aim'; S.tip = { x: 0.6, y: 0 };
     const shot = P.poolHumanShot(100), cfg = S.cfg;
     ok('Power: Ember (7) hits 7.5 % harder at full power, and its cap allows it', near(shot.speed, cfg.maxSpeed * 1.075) && shot.cap === shot.speed);
-    ok('Spin: Ember (2) reaches 10 % less far from the centre', near(shot.tipX, 0.54) && near(shot.tipMax, cfg.maxTip * 0.9));
+    ok('Spin: Ember (3) reaches 5 % less far from the centre', near(shot.tipX, 0.57) && near(shot.tipMax, cfg.maxTip * 0.95));
     const w = P.ppCloneWorld(S.world); w.log = [];
     P.ppStrike(w, Object.assign({}, shot, { speed: 1e6, tipX: 2 }));
-    ok('ppStrike holds the cue\'s cap and reach in place of the table\'s', near(w.log[0].speed, cfg.maxSpeed * 1.075) && near(w.log[0].tipX, cfg.maxTip * 0.9));
+    ok('ppStrike holds the cue\'s cap and reach in place of the table\'s', near(w.log[0].speed, cfg.maxSpeed * 1.075) && near(w.log[0].tipX, cfg.maxTip * 0.95));
     // Aim and time.
     P.host.userXP.achievements.push('level25');
     P.poolCueEquip('rosewood6');
     ok('Aim: Rosewood Six (7) runs the guide 37.5 % longer', P.poolGuideLen() === 206);
     P.host.userPreferences.poolGuideLen = 'none';
     ok('…and None stays none', P.poolGuideLen() === 0);
-    P.host.userPreferences.poolGuideLen = 'long';
+    P.host.userPreferences.poolGuideLen = 'full';
     ok('Time: its 6 gives the turn 10 % more clock; the table\'s own setting stays 30', P.poolTurnClock() === 33 && S.clockTotal === 30);
     // The CPU.
     P.poolCpuTier = 'pro'; S.frame.turn = 2;
@@ -1282,6 +1290,31 @@ head('Cues (pool-cues.js, pool-game.js)');
     G.poolTick(1000);
     ok('the clock keeps running while the collection is open', Math.abs(T.clockLeft - 9) < 1e-9);
     T.cues = false;
+}
+
+head('Table cloth, per game');
+{
+    const P = L.game({ seed: 12 }), U = P.host.userPreferences, keep = JSON.stringify(U), game = P.poolS.game;
+    P.poolS.game = 'pool';
+    U.poolTableColor = 'red';
+    ok('pool draws its own pick', P.poolFelt() === 'red');
+    U.poolTableColor = 'custom'; U.poolFeltCustom = { centre: '#E03030', edge: '#601010' };
+    const c = P.poolFelt();
+    ok('Custom draws the two colours, centre and edge', c && c.felt && c.felt[0] === '#E03030' && c.felt[2] === '#601010');
+    U.poolFeltCustom = { centre: 'nope', edge: '#601010' };
+    ok('…and green if they are not colours', P.poolFelt() === 'green');
+    U.poolTableColor = 'mauve';
+    ok('an unknown pick draws green', P.poolFelt() === 'green');
+    U.poolTableColor = 'teal'; U.snookerTableColor = '';
+    P.poolS.game = 'snooker';
+    ok('snooker follows pool\'s cloth until it has its own', P.poolFelt() === 'teal');
+    U.snookerTableColor = 'charcoal';
+    const snk = P.poolFelt();
+    P.poolS.game = 'pool';
+    ok('…then keeps its own, and pool keeps its', snk === 'charcoal' && P.poolFelt() === 'teal');
+    P.poolS.game = 'snooker'; U.snookerTableColor = 'custom'; U.snookerFeltCustom = { centre: '#3060E0', edge: '#102060' };
+    ok('snooker\'s Custom is its own pair', P.poolFelt().felt[0] === '#3060E0');
+    Object.keys(U).forEach(k => delete U[k]); Object.assign(U, JSON.parse(keep)); P.poolS.game = game;
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

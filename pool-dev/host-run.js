@@ -624,6 +624,18 @@ async function main() {
             const cue = m.querySelector('[data-settings-group="cue"]').getBoundingClientRect(); out.h = Math.round(cue.height);
             return out; })()`);
         ok('⚙️ opens on the Cue Games tab while pool is up, one group at a time; the tabs switch it', tabs.open === 'cue' && tabs.lit === 'cue' && tabs.ludo === 'ludo' && tabs.back === 'cue' && tabs.h > 200, tabs);
+        const cloth = await ev(`(() => { const m = document.getElementById('attendance-settings-modal'), p = window.__probe.prefs, pool = p.poolTableColor;
+            const rows = [...m.querySelectorAll('[data-settings-group="cue"] .pool-color-swatches')].map(g => g.querySelectorAll('.pool-color-swatch').length).join();
+            m.querySelector('.pool-color-swatch[data-felt-game="snooker"][data-felt="custom"]').click();
+            const row = m.querySelector('[data-felt-custom="snooker"]'), out = { rows, shown: getComputedStyle(row).display !== 'none' };
+            const inp = row.querySelector('[data-felt-pick="centre"]'); inp.value = '#aa2244'; inp.dispatchEvent(new Event('input')); inp.dispatchEvent(new Event('change'));
+            Object.assign(out, { snk: p.snookerTableColor, centre: p.snookerFeltCustom && p.snookerFeltCustom.centre, poolKept: p.poolTableColor === pool });
+            m.querySelector('.pool-color-swatch[data-felt-game="snooker"][data-felt="purple"]').click();
+            Object.assign(out, { after: p.snookerTableColor, closed: getComputedStyle(row).display === 'none' });
+            p.snookerTableColor = '';
+            return out; })()`);
+        ok('⚙️ Table Cloth: a row per game (7 presets and Custom); Custom opens its two colours, which set that game\'s cloth only',
+           cloth.rows === '8,8' && cloth.shown && cloth.snk === 'custom' && cloth.centre === '#aa2244' && cloth.poolKept && cloth.after === 'purple' && cloth.closed, cloth);
         await ev('window.__probe.toggleSettingsModal()');
         await settingsClosed();
     } else ok('⚙️ settings modal reachable', false, 'toggleSettingsModal not found');
@@ -635,8 +647,8 @@ async function main() {
         await ev('window.__probe.toggleSettingsModal()'); await sleep(400);
         const opts = await ev(`(() => { const out = {}; ['poolVariant', 'snookerReds', 'snookerDifficulty', 'poolClock', 'snookerClock', 'poolGuideLen'].forEach(p => { const s = document.querySelector('select[data-pref="' + p + '"]'); out[p] = s ? [...s.options].map(o => o.value).join() : null; }); return out; })()`);
         await ev('window.__probe.toggleSettingsModal()'); await settingsClosed(); await sleep(300);
-        ok('⚙️ offers Snooker Reds and CPU, both shot clocks and Aim Guide None, and no Cue Game', opts.poolVariant === null && opts.snookerReds === '15,10,6' && opts.snookerDifficulty === 'adaptive,easy,normal,hard,pro' &&
-           opts.poolClock === '30,45,0' && opts.snookerClock === '30,45,60,0' && opts.poolGuideLen === 'long,medium,short,none', opts);
+        ok('⚙️ offers Snooker Reds and CPU, both shot clocks and Aim Guide Full or None, and no Cue Game', opts.poolVariant === null && opts.snookerReds === '15,10,6' && opts.snookerDifficulty === 'adaptive,easy,normal,hard,pro' &&
+           opts.poolClock === '30,45,0' && opts.snookerClock === '30,45,60,0' && opts.poolGuideLen === 'full,none', opts);
         // The pool frame as it stands, and the switch, in one step (so the CPU cannot move a ball between).
         const sw = await ev(`(() => { const S = window.__probe.S, out = { balls: JSON.stringify(S.world.balls.map(b => [b.id, b.x, b.y, b.state])) };
             const b = document.querySelector('#game-title .pool-cue-switch'); out.found = !!b; out.label = b && b.getAttribute('aria-label'); if (b) b.click(); return out; })()`);

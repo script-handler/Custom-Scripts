@@ -445,8 +445,8 @@
     const phSvg = (d, n, w) => '<svg width="' + n + '" height="' + n + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"></path></svg>';
     const PH_BARS = ['Power', 'Aim', 'Spin', 'Time'];
     // m: poolCueModel(). The equipped cue up top (a close-up of its forearm, then all of it), then
-    // every cue: its look, how it is earned, its four bars (filled to its level, outlined: what
-    // the next level adds).
+    // every cue: its look, its rarity, how it is earned, its four bars (filled to its level,
+    // outlined: what the next level adds).
     function phCuesHTML(m) {
         const eq = m.list.find(c => c.eq) || m.list[0];
         const tick = phSvg(PH_CUE_ICON.standard, 13, 2.4);
@@ -455,11 +455,12 @@
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => '<i' + (k < c.bars[i] ? ' class="on"' : k < c.top[i] ? ' class="up"' : '') + '></i>').join('') +
             '</span><span class="ph-num">' + c.bars[i] + '</span></span>').join('') + '</div>';
         const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>';
-        const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' +
+        const rarity = c => '<span class="ph-cue-rar ph-label" data-rarity="' + c.rarity + '">' + c.rarityName + '</span>';
+        const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' + c.rarityName + ', ' +
             (c.eq ? 'equipped' : c.open ? 'unlocked' : 'locked. ' + c.cond) + '">' +
             '<canvas class="ph-cue-cv" data-cue="' + c.id + '" aria-hidden="true"></canvas>' +
             '<div class="ph-cue-row"><span class="ph-cue-icon">' + phSvg(PH_CUE_ICON[c.id], 17) + '</span>' +
-            '<span class="ph-cue-t"><span class="ph-cue-n">' + c.name + (c.isNew ? '<span class="ph-cue-new ph-label">NEW</span>' : '') + '</span>' +
+            '<span class="ph-cue-t"><span class="ph-cue-n">' + c.name + rarity(c) + (c.isNew ? '<span class="ph-cue-new ph-label">NEW</span>' : '') + '</span>' +
             '<span class="ph-cue-d">' + (c.open ? c.blurb : c.cond) + '</span></span>' +
             (c.eq ? '<span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span>'
                 : c.open ? '<button type="button" class="ph-btn ph-cue-eq" data-ph-equip="' + c.id + '" aria-label="Equip ' + c.name + '">Equip</button>'
@@ -469,7 +470,7 @@
             '<span class="ph-cues-sub">' + (m.who ? m.who + '’s cue for this match · from your ' + m.open + ' unlocked' : m.open + ' of ' + m.list.length + ' unlocked · every shot you play, pool and snooker') + '</span></span>' +
             '<button type="button" class="ph-btn" data-ph-cuesx aria-label="Close the cue collection">' + PH_ICON.close + '</button></div>' +
             '<div class="ph-cues-list" role="list" aria-label="All cues">' +
-            '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + '</span>' +
+            '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + rarity(eq) + '</span>' +
             '<span class="ph-cue-d">' + eq.blurb + '</span></span><span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span></div>' +
             '<div class="ph-cue-show"><canvas class="ph-cue-cv is-detail" data-cue="' + eq.id + '" data-span="0.48,0.77" aria-hidden="true"></canvas>' +
             '<canvas class="ph-cue-cv is-full" data-cue="' + eq.id + '" aria-hidden="true"></canvas></div>' + bars(eq) + level(eq) +

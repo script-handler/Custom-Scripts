@@ -29,7 +29,23 @@
         red:       { felt: ['#9C3E3B', '#7A2C2B', '#491719'], cushion: '#6B2626', jaw: '#4E1A1B', nose: '#451617' },
         blue:      { felt: ['#3272AB', '#245B8D', '#143659'], cushion: '#1F4F7D', jaw: '#163C5F', nose: '#133453' },
         lightgrey: { felt: ['#A3AEB8', '#86929D', '#59636D'], cushion: '#707C87', jaw: '#56606A', nose: '#4C565F' },
+        purple:    pgFeltFrom('#7A55B5', '#2B1847'),
+        teal:      pgFeltFrom('#2A9A98', '#0D4644'),
+        charcoal:  pgFeltFrom('#50565F', '#1B1E23'),
     };
+    // A cloth from two colours, the centre and the edge of its radial gradient: the cushions
+    // sit between the middle and the edge, the jaws and noses darker still (as the presets).
+    function pgFeltFrom(centre, edge) {
+        const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+        const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('').toUpperCase();
+        const a = rgb(centre), b = rgb(edge), mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t), mid = mix(a, b, 0.5);
+        return { felt: [hex(a), hex(mid), hex(b)], cushion: hex(mix(mid, b, 0.4)), jaw: hex(b.map(v => v * 0.94)), nose: hex(b.map(v => v * 0.85)) };
+    }
+    // ⚙️'s custom cloth ({ centre, edge }, each #rrggbb), or green if it is not one.
+    function pgFeltCustom(c) {
+        const ok = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+        return c && ok(c.centre) && ok(c.edge) ? pgFeltFrom(c.centre, c.edge) : 'green';
+    }
     const PG_BALL_COLOURS = { 1: '#E9B825', 2: '#2457C5', 3: '#D2352B', 4: '#6A3FA0', 5: '#EE7A2E', 6: '#1F8A4C', 7: '#8C2A20', 8: '#141516' };
     // Each game's ball looks by id: { cue }, else { colour, stripe, number }. The HUD's
     // dots read it too. Snooker ids: a colour's value (yellow 2 … black 7), reds 8 upward.
@@ -191,9 +207,10 @@
         if (marks.spots && marks.spots.length) pgFill(ctx, marks.spots.map(s => pcPoly(view, pgCirc(s.x, s.y, s.r, 0.1, 10))), PG_IVORY, 0.35);
     }
 
-    function pgDrawTable(ctx, view, cfg, table, feltName) {
+    // cloth: a preset's name, or a cloth (pgFeltFrom).
+    function pgDrawTable(ctx, view, cfg, table, cloth) {
         const P = pts => pcPoly(view, pts);
-        const mat = PG_FELTS[feltName] || PG_FELTS.green;
+        const mat = cloth && typeof cloth === 'object' && Array.isArray(cloth.felt) ? cloth : PG_FELTS[cloth] || PG_FELTS.green;
         const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RL = cfg.railWidth - cfg.cushionWidth;
         const TZ = pgRailZ(cfg), OX = HL + CU + RL, OY = HW + CU + RL, IX = HL + CU, IY = HW + CU;
         const eye = view.eye;
@@ -696,10 +713,12 @@
         });
 
         // 8. Ghost ball, cue, called-pocket rings, ball in hand.
+        let ghost = null;
         if (g && g.contact && !g.pocketed) {
             const s = pcProject(view, [g.contact[0], g.contact[1], R]);
             if (s && s[3] > PC_NEAR + R) {
                 const gr = R * s[2];
+                ghost = [s[0], s[1], gr];
                 ctx.beginPath(); ctx.arc(s[0], s[1], gr, 0, Math.PI * 2);
                 ctx.fillStyle = pgRgba(PG_GUIDE, 0.08); ctx.fill();
                 ctx.setLineDash([3, 2.5]);
@@ -738,7 +757,10 @@
             const s = b && pcProject(view, [b.x, b.y, R]);
             if (s && s[3] > PC_NEAR + R) {
                 const rad = R * s[2], rr = rad + Math.max(3, rad * 0.4);
-                ctx.beginPath(); ctx.arc(s[0], s[1], rr, 0, Math.PI * 2);
+                // It steps aside where the ghost ball sits on it, so the aim stays readable.
+                const cut = ghost ? pgRingGap(s[0], s[1], rr, ghost[0], ghost[1], ghost[2] + 4) : null;
+                ctx.beginPath();
+                if (cut) ctx.arc(s[0], s[1], rr, cut[0], cut[1]); else ctx.arc(s[0], s[1], rr, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)'; ctx.lineWidth = 3; ctx.stroke();
                 ctx.strokeStyle = pgRgba(theme.accent, 0.6); ctx.lineWidth = 1.5; ctx.stroke();
             }
@@ -781,6 +803,15 @@
             }
         }
         ctx.restore();
+    }
+
+    // The part of a ring (centre x, y, radius r) left clear of a circle (gx, gy, gr), as the arc
+    // [from, to] drawn clockwise, or null when they do not meet (the whole ring).
+    function pgRingGap(x, y, r, gx, gy, gr) {
+        const d = Math.hypot(gx - x, gy - y);
+        if (d >= r + gr || d + r <= gr || d + gr <= r) return null;
+        const half = Math.acos(Math.max(-1, Math.min(1, (d * d + r * r - gr * gr) / (2 * d * r)))), a = Math.atan2(gy - y, gx - x);
+        return [a + half, a - half + 2 * Math.PI];
     }
 
     // Pocket screen positions for hit-testing a call; off-screen ones are called from the mini-map.

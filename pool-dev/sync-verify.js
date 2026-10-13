@@ -12,7 +12,8 @@
 // Game Mode's access keys: one use each, rotating, surviving every other write; and progress
 // recovery: set once, changed only with the current proof, out of reach of ordinary syncs; and
 // login (name + password, checked against a private store): enrol, log in, rest, change, reset;
-// and Plus in the cloud: no licensed browser's secret, no leaderboard, password or recovery.
+// and Plus in the cloud: no licensed browser's secret, no leaderboard, password or recovery;
+// and tamper bans: a browser that opened Game Mode with an edited script bans only itself.
 //
 // The bot lives in its own repository, checked out beside this one; without it
 // the suite says so and passes, as there is nothing to test.
@@ -60,16 +61,16 @@ const FILE = 'attendance_widget_registry.json';
 function viewOf(files) {
     const parse = (raw, fb) => { try { return JSON.parse(raw); } catch { return fb; } };
     const reg = parse(files[FILE], { players: [] }), legacy = reg.gamesUnlock || {};
-    const tags = Object.assign({}, legacy.tags || {}), grants = Object.assign({}, legacy.grants || {}), accts = {};
+    const tags = Object.assign({}, legacy.tags || {}), grants = Object.assign({}, legacy.grants || {}), accts = {}, banned = {};
     let n = Number.isInteger(legacy.n) ? legacy.n : 0;
     for (const [name, raw] of Object.entries(files)) {
         let m;
-        if ((m = /^plus-([0-9a-f]{32})\.json$/.exec(name))) { const d = parse(raw, null); if (!d || d.revoked) { delete tags[m[1]]; delete grants[m[1]]; } else { tags[m[1]] = d; if (d.grant) grants[m[1]] = d.grant; } }
+        if ((m = /^plus-([0-9a-f]{32})\.json$/.exec(name))) { const d = parse(raw, null); if (!d || d.revoked) { if (d && d.banned) banned[m[1]] = d; delete tags[m[1]]; delete grants[m[1]]; } else { tags[m[1]] = d; if (d.grant) grants[m[1]] = d.grant; } }
         else if (name === 'keys.json') { const d = parse(raw, {}); if (Number.isInteger(d.n) && d.n > n) n = d.n; }
         else if (/^acct-.+\.json$/.test(name)) { const d = parse(raw, null); if (d && d.clientId) accts[d.clientId] = d; }
     }
     const players = (reg.players || []).map(p => { const x = accts[p.clientId]; return x ? Object.assign({}, p, { login: !!x.login }, x.loginAt ? { loginAt: x.loginAt } : {}, x.name ? { displayName: x.name } : {}) : p; });
-    return Object.assign({}, reg, { players, gamesUnlock: { n, tags, grants } });
+    return Object.assign({}, reg, { players, gamesUnlock: { n, tags, grants, banned } });
 }
 // The private store as one object again: { logins: { lowercase name: entry } } (reset names gone).
 function loginsOf(files) {
@@ -485,6 +486,53 @@ const send = (player, players, opts) => dispatch({ player, build_token: 'tok-now
         ok('a licensed new player joins as before', !!r.player('c-new'));
         r = await dispatch({ client_id: 'c1', recovery: { v: 1, lookup: '1'.repeat(32), salt: '2'.repeat(32), verifier: '3'.repeat(64), it: 100000 }, build_token: 'tok-now' }, [stored({})], { event: 'recovery-set', noPlus: true });
         ok('setting a recovery code needs Plus too', r.written === null && r.warnings.some(w => /no Plus license/.test(w)));
+    }
+
+    head('Tamper bans');
+    {
+        const nc = require('crypto');
+        const tagOf = sec => nc.createHash('sha256').update(sec).digest('hex').slice(0, 32);
+        const CRACK = 'e'.repeat(64), CRACK_TAG = tagOf(CRACK), RID = '0123456789abcdef';
+        const tamper = (extra, opts) => dispatch(Object.assign({ build_token: 'tok-now', plus: CRACK, client_id: 'c1', reason: 'lock-bypass' }, extra), [stored({})], Object.assign({ event: 'games-tamper' }, opts));
+        r = await tamper();
+        const ban = r.written && r.written.gamesUnlock.banned[CRACK_TAG];
+        ok('a tamper report bans the browser whose secret it carries', !!ban && ban.banned === 'tamper' && ban.reason === 'lock-bypass');
+        ok('…in its own file only, never the board', r.patches.length === 1 && r.patches[0].join() === 'plus-' + CRACK_TAG + '.json');
+        ok('…keeps the clientId it claimed for the admin, and masks the secret', ban.clientId === 'c1' && (r.secrets || []).includes(CRACK));
+        ok('…and leaves that player\'s record alone (the clientId is unproven)', r.player('c1').gameSessions === 100 && !r.player('c1').restricted && !r.player('c1').flagged);
+        const banned = r.files;
+        r = await tamper({ tag: 'a'.repeat(32) });
+        ok('a report cannot name another browser: the tag comes from the secret, not the payload', !!r.written.gamesUnlock.banned[CRACK_TAG] && !r.written.gamesUnlock.banned['a'.repeat(32)]);
+        r = await tamper({ plus: undefined }, { noPlus: true });
+        ok('without a secret nothing is banned', r.written === null && r.warnings.some(w => /no browser secret/.test(w)));
+        r = await tamper({ plus: 'nothex' });
+        ok('…nor with a malformed one', r.written === null);
+        r = await tamper({}, { files: banned });
+        ok('a second report changes nothing', r.written === null && r.infos.some(m => /already banned/.test(m)));
+        r = await tamper({ plus: PLUS });
+        ok('a licensed browser that reports itself loses Plus too', r.written && !r.written.gamesUnlock.tags[PLUS_TAG] && r.written.gamesUnlock.banned[PLUS_TAG].hadPlus === true);
+        r = await tamper({ build_token: 'wrong' });
+        ok('the build-token gate applies', r.written === null && r.warnings.some(w => /Build token mismatch/.test(w)));
+
+        r = await dispatch({ tag: CRACK_TAG, key: keyFor(UNLOCK, 0), rid: RID, build_token: 'tok-now' }, [stored({})], { event: 'games-unlock', files: banned });
+        ok('a banned browser cannot activate a key: refused, and told why', r.status(CRACK_TAG) && r.status(CRACK_TAG).code === 'banned' && !r.patches.some(p => p.includes('keys.json')));
+        ok('…and the key stays unused for someone else', r.written === null || r.written.gamesUnlock.n === 0);
+
+        const pwOf = (name, password) => nc.pbkdf2Sync(password, 'atc-login:' + name.toLowerCase(), 100000, 32, 'sha256').toString('hex');
+        const PW = pwOf('Hann', 'pool-shark-7'), me = [stored({}, { displayName: 'Hann' })];
+        const enrolled = await dispatch({ client_id: 'c1', name: 'Hann', pw: PW, build_token: 'tok-now' }, me, { event: 'login-enroll', context: true });
+        r = await dispatch({ tag: CRACK_TAG, rid: RID, name: 'Hann', pw: PW, build_token: 'tok-now' }, me, { event: 'login', context: true, files: Object.assign({}, enrolled.files, banned), logins: enrolled.logins });
+        ok('…nor log in, even with the right password', r.status(CRACK_TAG) && r.status(CRACK_TAG).code === 'banned' && !(r.written && r.written.gamesUnlock.tags[CRACK_TAG]));
+
+        r = await dispatch({ tag: CRACK_TAG, build_token: 'tok-now' }, [], { event: 'admin-games-unban', files: banned });
+        ok('unban needs the admin key', r.written === null && /admin_key invalid/.test(r.failed || ''));
+        r = await dispatch({ tag: CRACK_TAG, admin_key: 'admin', build_token: 'tok-now' }, [], { event: 'admin-games-unban', files: banned });
+        ok('…with it, the ban file goes', r.patches.length === 1 && !r.files['plus-' + CRACK_TAG + '.json']);
+        const lifted = r.files;
+        r = await dispatch({ tag: CRACK_TAG, key: keyFor(UNLOCK, 0), build_token: 'tok-now' }, [stored({})], { event: 'games-unlock', files: lifted });
+        ok('…and a key works there again', r.written && !!r.written.gamesUnlock.tags[CRACK_TAG]);
+        r = await dispatch({ tag: 'a'.repeat(32), admin_key: 'admin', build_token: 'tok-now' }, [], { event: 'admin-games-unban' });
+        ok('unbanning a browser that is not banned writes nothing', r.written === null && r.warnings.some(w => /is not banned/.test(w)));
     }
 
     head('The legacy whole-registry payload');

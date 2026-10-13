@@ -402,7 +402,13 @@
         displayTheme: 'glassmorphic', // 'glassmorphic' | 'retro-futuristic' | 'business' (Just Business)
         gameModeHidden: true, // true = Game Mode ON (panels visible); false = Game Mode OFF (panels hidden, widget shrinks)
         shiftDuration: '8h', // '4h' = short leave, '8h' = standard, '9h' = overtime, up to '15h' (SHIFT_DURATIONS)
-        poolTableColor: 'green', // 'green', 'red', 'blue', 'lightgrey'
+        // ⚙️ Table Cloth: a preset ('green', 'red', 'blue', 'lightgrey', 'purple', 'teal', 'charcoal') or
+        // 'custom', which draws the two colours below (centre and edge of the gradient). Snooker's
+        // own pick is '' until made, and follows pool's until then.
+        poolTableColor: 'green',
+        poolFeltCustom: { centre: '#2E8F70', edge: '#114534' },
+        snookerTableColor: '',
+        snookerFeltCustom: { centre: '#2E8F70', edge: '#114534' },
         poolCamera: '3d',        // pool's aim camera: '3d' (behind the cue ball) or '2d' (top-down)
         poolLean: 35,            // 0–100: the 3D camera's lean, low and close to high and far
         // While the balls run: 'overhead' eases up to the broadcast view; '3d' stands up
@@ -415,9 +421,9 @@
         // Snooker), set by the switch in the panel's header. Snooker's reds (15, 10 or 6) apply
         // from a fresh rack; its CPU is picked like pool's, adaptive by default.
         poolVariant: 'pool',
-        // ⚙️ Aim Guide: the object ball's line, 'short' | 'medium' | 'long', or 'none' (the aim
-        // line and the ghost ball only)
-        poolGuideLen: 'long',
+        // ⚙️ Aim Guide: 'full' (the object ball's line, as far as the cue's aim runs it) or 'none'
+        // (the aim line and the ghost ball only). The old 'long' | 'medium' | 'short' read as 'full'.
+        poolGuideLen: 'full',
         poolMaxLayout: 'full',   // ⚙️ Max View: 'full' (the table, overlays on it) or 'bars' (the table between bars)
         // ⚙️ Shot Clock for quick frames, in seconds; 0 is off. A tournament sets its own.
         poolClock: 30,           // 30 | 45 | 0
@@ -777,18 +783,18 @@
         const reg = parse(files[REGISTRY_GIST_FILE] && files[REGISTRY_GIST_FILE].content) || { lastUpdated: null, players: [] };
         if (!Array.isArray(reg.players)) reg.players = [];
         const legacy = reg.gamesUnlock && typeof reg.gamesUnlock === 'object' ? reg.gamesUnlock : {};
-        const tags = Object.assign({}, legacy.tags || {}), grants = Object.assign({}, legacy.grants || {}), accts = {}, status = {};
+        const tags = Object.assign({}, legacy.tags || {}), grants = Object.assign({}, legacy.grants || {}), accts = {}, status = {}, banned = {};
         let n = Number.isInteger(legacy.n) && legacy.n >= 0 ? legacy.n : 0;
         Object.keys(files).forEach(name => {
             let m;
             const d = () => parse(files[name] && files[name].content);
-            if ((m = /^plus-([0-9a-f]{32})\.json$/.exec(name))) { const v = d(); if (!v || v.revoked) { delete tags[m[1]]; delete grants[m[1]]; } else { tags[m[1]] = v; if (v.grant && v.grant.clientId) grants[m[1]] = v.grant; } }
+            if ((m = /^plus-([0-9a-f]{32})\.json$/.exec(name))) { const v = d(); if (!v || v.revoked) { if (v && v.banned) banned[m[1]] = v; delete tags[m[1]]; delete grants[m[1]]; } else { tags[m[1]] = v; if (v.grant && v.grant.clientId) grants[m[1]] = v.grant; } }
             else if (name === 'keys.json') { const v = d(); if (v && Number.isInteger(v.n) && v.n > n) n = v.n; }
             else if (/^acct-.+\.json$/.test(name)) { const v = d(); if (v && typeof v.clientId === 'string') accts[v.clientId] = v; }
             else if ((m = /^status-([0-9a-f]{32})\.json$/.exec(name))) { const v = d(); if (v) status[m[1]] = v; }
         });
         reg.players = reg.players.map(p => { const a = p && accts[p.clientId]; return a ? Object.assign({}, p, { login: !!a.login }, a.loginAt ? { loginAt: a.loginAt } : {}, a.name ? { displayName: a.name } : {}) : p; });
-        reg.gamesUnlock = { n, tags, grants };
+        reg.gamesUnlock = { n, tags, grants, banned };
         reg.status = status;
         return reg;
     }
@@ -975,7 +981,7 @@
     async function syncMyScore() {
         if (!lbRegistered || lbFetching) return;
         // The leaderboard is Plus: the bot ignores syncs without a licensed browser's proof.
-        if (!gamesUnlocked) { console.warn('[Sync] The leaderboard is part of Plus. Click the face at the top to activate it.'); return; }
+        if (!gamesOpen()) { console.warn('[Sync] The leaderboard is part of Plus. Click the face at the top to activate it.'); return; }
         if (isBlocked(lbClientId)) {
             console.warn('[Leaderboard] Sync denied — clientId is on the blocklist.');
             return;
@@ -1430,6 +1436,7 @@
     //   await atcGamesTag()                                this browser's tag, for a revoke
     //   await atcAdminGamesKey('<UNLOCK_SECRET>')          admin: the current key and the next two
     //   atcAdminGamesRevoke(tag) / atcAdminGamesRotate()   admin, after atcAdminLogin
+    //   await atcAdminGamesBans() / atcAdminGamesUnban(tag) admin: browsers banned for an edited lock
     // The lock runs in this browser: it stops ordinary use, not someone editing the script.
     const GAMES_SECRET_KEY = 'atc_games_secret', GAMES_OK_KEY = 'atc_games_ok';
     const GAMES_OK_MS = 7 * 86400000;
@@ -1438,7 +1445,9 @@
     // A browser unlocked within the week shows the games at once; the gist then confirms it.
     let gamesUnlocked = false;
     try { gamesUnlocked = (parseInt(localStorage.getItem(GAMES_OK_KEY), 10) || 0) > Date.now() && !!localStorage.getItem(GAMES_SECRET_KEY); } catch (_) {}
-    let gamesTagValue = null, gamesLastTry = 0;
+    // Set only beside gamesUnlocked, here and in gamesSet: open without it, the lock was edited out.
+    let gamesGranted = gamesUnlocked;
+    let gamesTagValue = null, gamesLastTry = 0, gamesTamperSent = false;
 
     const gamesHex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
     async function gamesTag() {
@@ -1477,9 +1486,23 @@
     }
     function gamesSet(on) {
         const was = gamesUnlocked;
-        gamesUnlocked = !!on;
+        gamesUnlocked = gamesGranted = !!on;
         try { if (on) localStorage.setItem(GAMES_OK_KEY, String(Date.now() + GAMES_OK_MS)); else localStorage.removeItem(GAMES_OK_KEY); } catch (_) {}
         if (was !== gamesUnlocked) applyGameMode();
+    }
+    // Game Mode is open but neither the stored grant nor the gist opened it: the script was edited
+    // to skip the lock. Close it, and have the bot ban this browser (games-tamper): no key or login
+    // opens it again until the admin lifts the ban. Every Game Mode entry point asks this first.
+    function gamesOpen() {
+        if (gamesUnlocked && !gamesGranted) gamesTampered('lock-bypass');
+        return gamesUnlocked;
+    }
+    function gamesTampered(reason) {
+        gamesSet(false);
+        showXPNotification('Game Mode was opened with a modified script. Plus is revoked on this computer.', 'game', 'block');
+        if (gamesTamperSent) return;
+        gamesTamperSent = true;
+        botDispatch('games-tamper', { client_id: lbClientId || null, reason }).catch(() => {});
     }
     // Is this browser's tag in the gist? Without the gist (offline, a rate limit) the last answer stands.
     async function checkGamesUnlock() {
@@ -1535,11 +1558,30 @@
         if (r?.ok) console.log('[Admin] ✓ Rotate queued: the current key dies, the next one becomes current (~30s)');
         return !!r?.ok;
     }
+    // Browsers banned for opening Game Mode with an edited script. The clientId is what the browser
+    // claimed, not proven: check it on the board before acting on it (atcAdminBlocklist).
+    async function atcAdminGamesBans() {
+        const reg = await fetchRegistry();
+        if (!reg) { console.error('[Admin] Could not read the gist.'); return null; }
+        const name = id => ((reg.players || []).find(p => p.clientId === id) || {}).displayName || '';
+        const rows = Object.entries(reg.gamesUnlock.banned).map(([tag, b]) => ({ tag, at: b.at, reason: b.reason, clientId: b.clientId, name: name(b.clientId), hadPlus: !!b.hadPlus }));
+        console.log('[Admin] Banned browsers: ' + rows.length);
+        if (rows.length && console.table) console.table(rows);
+        return rows;
+    }
+    async function atcAdminGamesUnban(tag) {
+        if (!/^[0-9a-f]{32}$/.test(String(tag || ''))) { console.error('[Admin] usage: atcAdminGamesUnban("<32-hex tag from atcAdminGamesBans()>")'); return false; }
+        const r = await _adminDispatch('admin-games-unban', { tag });
+        if (r?.ok) console.log('[Admin] ✓ Unban queued for ' + tag + ' (gist updates in ~30s)');
+        return !!r?.ok;
+    }
     window.atcUnlockGames = atcUnlockGames;
     window.atcGamesTag = gamesTag;
     window.atcAdminGamesKey = atcAdminGamesKey;
     window.atcAdminGamesRevoke = atcAdminGamesRevoke;
     window.atcAdminGamesRotate = atcAdminGamesRotate;
+    window.atcAdminGamesBans = atcAdminGamesBans;
+    window.atcAdminGamesUnban = atcAdminGamesUnban;
 
     // ─── Accounts: leaderboard name + password ──────────────────────
     // A Plus license key unlocks one browser for a newcomer. Once in, they join the leaderboard and set
@@ -1633,6 +1675,7 @@
             no_player: 'Your leaderboard entry is still being saved. Try again in a minute.',
             already: 'You already have a password. Use "Change password" instead.',
             key_rejected: "That license key didn't work. It may be mistyped or already used.",
+            banned: 'Plus is revoked on this computer: Game Mode was opened with a modified script. Ask the admin.',
             malformed: 'Something in the request was off. Reload the page and try again.',
         })[r.error] || 'The server had a problem' + (r.msg ? ' (' + r.msg + ')' : '') + '. Please tell the admin.';
     }
@@ -5054,46 +5097,51 @@
         [51.5, 72, fore], [72, 90, wrap], [90, 99, butt], [99, 100, 'rubber']];
     // Points and splices point at the tip, edged by veneers (outside in, [colour, mm]).
     const pqPts = (n, apex, core, veneers, o) => Object.assign({ n, apex, base: 71.5, rot: 0, w: n > 4 ? 0.82 : 0.85, core, veneers }, o);
-    // bars: [power, aim, spin, time] at level 1 and at level 5. No cue is best at everything:
-    // each has a bar of 6 or less, and none totals more than 32 of 40 (the user, 2026-10-05).
+    // bars: [power, aim, spin, time] at level 1 and at level 5. Rarity sets how strong a mastered
+    // cue is, scaled as 8 Ball Pool's are (the user, 2026-10-13): see PQ_RARITY. A cue keeps its
+    // character in its best bar, and the rarer it is, the more its levels add.
     // need: [game, tier, wins for levels 2, 3, 4 and 5]: the better the cue, the harder its wins
     // and the longer its climb (the user, 2026-10-05). See pqCounts.
     const PQ_SET = [
-        { id: 'standard', name: 'Standard', cond: 'Always yours · the house cue', blurb: 'Maple shaft · black linen wrap', bars: [[4, 4, 4, 4], [5, 5, 5, 5]], need: ['pool', 'easy', [5, 7, 10, 15]],
+        { id: 'standard', name: 'Standard', cond: 'Always yours · the house cue', blurb: 'Maple shaft · black linen wrap', rarity: 'common', bars: [[4, 4, 4, 4], [5, 5, 5, 5]], need: ['pool', 'easy', [5, 7, 10, 15]],
             sections: pqStd('maple', 'brass', 'lacquer', 'linenBlack', 'walnut') },
-        { id: 'tulipwood', name: 'Tulipwood', cond: 'Team Player · join the leaderboard', ach: 'teamPlayer', blurb: 'Tulipwood forearm · navy linen', bars: [[5, 5, 4, 4], [6, 6, 5, 5]], need: ['pool', 'easy', [5, 7, 11, 16]],
+        { id: 'tulipwood', name: 'Tulipwood', cond: 'Team Player · join the leaderboard', ach: 'teamPlayer', blurb: 'Tulipwood forearm · navy linen', rarity: 'common', bars: [[5, 5, 4, 4], [6, 6, 6, 6]], need: ['pool', 'easy', [5, 7, 11, 16]],
             sections: pqStd('maple', 'silver', 'tulipwood', 'linenNavy', 'tulipwood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']] },
-        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pebble leather', bars: [[4, 5, 5, 5], [4, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 11, 16]],
+        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pebble leather', rarity: 'rare', bars: [[5, 6, 5, 5], [7, 8, 7, 7]], need: ['pool', 'normal', [5, 8, 11, 16]],
             sections: pqStd('maple', 'ebony', 'birdseye', 'pebble', 'birdseye'), rings: [[51.5, 0.8, 'brass'], [72, 0.8, 'brass'], [90, 0.8, 'brass']] },
-        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Flame maple · 4 points · lizard', bars: [[7, 4, 2, 4], [10, 6, 2, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
+        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Flame maple · 4 points · lizard', rarity: 'rare', bars: [[7, 5, 3, 5], [10, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
             sections: pqStd('maple', 'brass', 'flame', 'lizardRed', 'cocobolo'), rings: [[72, 1, 'brass'], [90, 1, 'brass']],
             points: [pqPts(4, 54, 'cocobolo', [['#121212', 0.5], ['#F2EEE4', 0.5], ['#A3262A', 0.6]])] },
-        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: 'Maple · 6 rosewood points', bars: [[3, 7, 4, 6], [3, 9, 5, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
+        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: 'Maple · 6 rosewood points', rarity: 'rare', bars: [[4, 7, 5, 6], [6, 10, 6, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
             sections: pqStd('maple', 'silver', 'maple', 'stitchBlk', 'rosewood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
             points: [pqPts(6, 53, 'rosewood', [['#121212', 0.5], ['#2C6E49', 0.5], ['#F2EEE4', 0.5]])] },
-        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon shaft · stacked leather', bars: [[6, 4, 7, 3], [8, 5, 10, 3]], need: ['pool', 'hard', [5, 9, 13, 18]],
+        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon shaft · stacked leather', rarity: 'epic', bars: [[6, 5, 7, 5], [9, 7, 10, 7]], need: ['pool', 'hard', [5, 9, 13, 18]],
             sections: pqStd('carbon', 'silver', 'ebony', 'stack', 'flake'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
             points: [pqPts(4, 55, 'zebrano', [['#F2EEE4', 0.6], ['#121212', 0.5]])] },
-        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite points · black lizard', bars: [[4, 7, 7, 4], [4, 9, 9, 5]], need: ['pool', 'pro', [5, 9, 13, 18]],
+        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite points · black lizard', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
             sections: pqStd('maple', 'silver', 'ebony', 'lizardBlk', 'ebony'), rings: [[72, 0.8, 'silver'], [89.05, 0.8, 'silver'], [89.45, 3, 'malachite'], [89.85, 0.8, 'silver']],
             points: [pqPts(4, 53, 'malachite', [['#C9CDD2', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'turquoise', size: 7, at: 0.45 } })],
             inlays: [{ at: 94.5, n: 4, shape: 'diamond', size: 7, mat: 'malachite', rot: 45 }] },
-        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash shaft · 4 ebony splices', bars: [[5, 8, 4, 7], [5, 10, 5, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
+        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash shaft · 4 ebony splices', rarity: 'epic', bars: [[5, 8, 5, 6], [8, 10, 8, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
             sections: [[0, 0.9, 'tipBrown'], [0.9, 2.5, 'brassFerr'], [2.5, 70, 'ash'], [70, 99, 'ebony'], [99, 100, 'rubber']],
             rings: [[70, 2, 'pearl'], [76, 1, 'brass'], [98.5, 1, 'brass']],
             points: [pqPts(4, 40, 'ebony', [['#EFE3C6', 0.6], ['#121212', 0.4]], { base: 70, w: 0.92 }), pqPts(4, 62, 'ebony', [['#EFE3C6', 0.6]], { base: 70, rot: 45, w: 0.6 })],
             inlays: [{ at: 95, n: 4, shape: 'dot', size: 4, mat: 'abalone', rot: 0 }] },
-        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Ebony · 6 abalone points', bars: [[7, 7, 5, 6], [9, 9, 6, 6]], need: ['snooker', 'pro', [5, 10, 14, 19]], sheen: 1,
+        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Ebony · 6 abalone points', rarity: 'legendary', bars: [[7, 7, 6, 6], [10, 10, 9, 8]], need: ['snooker', 'pro', [5, 10, 14, 19]], sheen: 1,
             sections: pqStd('maple', 'gold', 'ebony', 'stitchGold', 'ebony'), rings: [[51.5, 1, 'pearl'], [72, 1, 'gold'], [90, 1, 'gold'], [98.5, 1, 'gold']],
             points: [pqPts(6, 53, 'abalone', [['#D4AF37', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'jasper', size: 6, at: 0.42 } })],
             inlays: [{ at: 94.5, n: 6, shape: 'diamond', size: 6, mat: 'pearl', rot: 0 }] },
         // Not in the design: the design's own vocabulary, for mastering five cues.
-        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Ebony · pearl and abalone points · lizard', bars: [[8, 7, 7, 5], [9, 9, 8, 6]], need: ['snooker', 'pro', [5, 10, 15, 20]], sheen: 1,
+        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Ebony · pearl and abalone points · lizard', rarity: 'legendary', bars: [[8, 7, 7, 6], [10, 10, 10, 10]], need: ['snooker', 'pro', [5, 10, 15, 20]], sheen: 1,
             sections: pqStd('maple', 'gold', 'ebony', 'lizardRed', 'ebony'), rings: [[51.5, 1, 'abalone'], [71.4, 0.8, 'gold'], [72.4, 1.2, 'pearl'], [89.6, 1.2, 'pearl'], [90.6, 0.8, 'gold'], [98.5, 1, 'gold']],
             points: [pqPts(4, 52, 'pearl', [['#D4AF37', 0.5], ['#121212', 0.5], ['#3FB5A9', 0.4]], { inlay: { shape: 'diamond', mat: 'gold', size: 5, at: 0.4 } }),
                 pqPts(4, 63, 'abalone', [['#D4AF37', 0.4], ['#121212', 0.4]], { rot: 45, w: 0.55 })],
             inlays: [{ at: 94.5, n: 4, shape: 'dot', size: 4, mat: 'pearl', rot: 0 }, { at: 94.5, n: 4, shape: 'diamond', size: 5, mat: 'abalone', rot: 45 }] },
     ];
+    // Rarity, as 8 Ball Pool's collection shows it: [label, the fewest and most bar points a
+    // mastered cue totals, the lowest bar it keeps]. Its Legendary cues max at 37–40 of 40 (Inferno
+    // 10/10/9/8, Excalibur 10/10/10/10), Epic at about 34 (Gengis Khan 9/8/9/8), Rare at about 30.
+    const PQ_RARITY = { common: ['Common', 20, 24, 5], rare: ['Rare', 28, 30, 6], epic: ['Epic', 32, 34, 7], legendary: ['Legendary', 36, 40, 8] };
     const pqById = id => PQ_SET.find(q => q.id === id) || PQ_SET[0];
     // [length, tip, butt] in ball diameters, and the ball in mm.
     const PQ_GAME = { pool: [25.7, 0.23, 0.52, 57], snooker: [27.6, 0.19, 0.55, 52.5] };
@@ -5382,7 +5430,23 @@
         red:       { felt: ['#9C3E3B', '#7A2C2B', '#491719'], cushion: '#6B2626', jaw: '#4E1A1B', nose: '#451617' },
         blue:      { felt: ['#3272AB', '#245B8D', '#143659'], cushion: '#1F4F7D', jaw: '#163C5F', nose: '#133453' },
         lightgrey: { felt: ['#A3AEB8', '#86929D', '#59636D'], cushion: '#707C87', jaw: '#56606A', nose: '#4C565F' },
+        purple:    pgFeltFrom('#7A55B5', '#2B1847'),
+        teal:      pgFeltFrom('#2A9A98', '#0D4644'),
+        charcoal:  pgFeltFrom('#50565F', '#1B1E23'),
     };
+    // A cloth from two colours, the centre and the edge of its radial gradient: the cushions
+    // sit between the middle and the edge, the jaws and noses darker still (as the presets).
+    function pgFeltFrom(centre, edge) {
+        const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+        const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('').toUpperCase();
+        const a = rgb(centre), b = rgb(edge), mix = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t), mid = mix(a, b, 0.5);
+        return { felt: [hex(a), hex(mid), hex(b)], cushion: hex(mix(mid, b, 0.4)), jaw: hex(b.map(v => v * 0.94)), nose: hex(b.map(v => v * 0.85)) };
+    }
+    // ⚙️'s custom cloth ({ centre, edge }, each #rrggbb), or green if it is not one.
+    function pgFeltCustom(c) {
+        const ok = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+        return c && ok(c.centre) && ok(c.edge) ? pgFeltFrom(c.centre, c.edge) : 'green';
+    }
     const PG_BALL_COLOURS = { 1: '#E9B825', 2: '#2457C5', 3: '#D2352B', 4: '#6A3FA0', 5: '#EE7A2E', 6: '#1F8A4C', 7: '#8C2A20', 8: '#141516' };
     // Each game's ball looks by id: { cue }, else { colour, stripe, number }. The HUD's
     // dots read it too. Snooker ids: a colour's value (yellow 2 … black 7), reds 8 upward.
@@ -5544,9 +5608,10 @@
         if (marks.spots && marks.spots.length) pgFill(ctx, marks.spots.map(s => pcPoly(view, pgCirc(s.x, s.y, s.r, 0.1, 10))), PG_IVORY, 0.35);
     }
 
-    function pgDrawTable(ctx, view, cfg, table, feltName) {
+    // cloth: a preset's name, or a cloth (pgFeltFrom).
+    function pgDrawTable(ctx, view, cfg, table, cloth) {
         const P = pts => pcPoly(view, pts);
-        const mat = PG_FELTS[feltName] || PG_FELTS.green;
+        const mat = cloth && typeof cloth === 'object' && Array.isArray(cloth.felt) ? cloth : PG_FELTS[cloth] || PG_FELTS.green;
         const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RL = cfg.railWidth - cfg.cushionWidth;
         const TZ = pgRailZ(cfg), OX = HL + CU + RL, OY = HW + CU + RL, IX = HL + CU, IY = HW + CU;
         const eye = view.eye;
@@ -6049,10 +6114,12 @@
         });
 
         // 8. Ghost ball, cue, called-pocket rings, ball in hand.
+        let ghost = null;
         if (g && g.contact && !g.pocketed) {
             const s = pcProject(view, [g.contact[0], g.contact[1], R]);
             if (s && s[3] > PC_NEAR + R) {
                 const gr = R * s[2];
+                ghost = [s[0], s[1], gr];
                 ctx.beginPath(); ctx.arc(s[0], s[1], gr, 0, Math.PI * 2);
                 ctx.fillStyle = pgRgba(PG_GUIDE, 0.08); ctx.fill();
                 ctx.setLineDash([3, 2.5]);
@@ -6091,7 +6158,10 @@
             const s = b && pcProject(view, [b.x, b.y, R]);
             if (s && s[3] > PC_NEAR + R) {
                 const rad = R * s[2], rr = rad + Math.max(3, rad * 0.4);
-                ctx.beginPath(); ctx.arc(s[0], s[1], rr, 0, Math.PI * 2);
+                // It steps aside where the ghost ball sits on it, so the aim stays readable.
+                const cut = ghost ? pgRingGap(s[0], s[1], rr, ghost[0], ghost[1], ghost[2] + 4) : null;
+                ctx.beginPath();
+                if (cut) ctx.arc(s[0], s[1], rr, cut[0], cut[1]); else ctx.arc(s[0], s[1], rr, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.22)'; ctx.lineWidth = 3; ctx.stroke();
                 ctx.strokeStyle = pgRgba(theme.accent, 0.6); ctx.lineWidth = 1.5; ctx.stroke();
             }
@@ -6134,6 +6204,15 @@
             }
         }
         ctx.restore();
+    }
+
+    // The part of a ring (centre x, y, radius r) left clear of a circle (gx, gy, gr), as the arc
+    // [from, to] drawn clockwise, or null when they do not meet (the whole ring).
+    function pgRingGap(x, y, r, gx, gy, gr) {
+        const d = Math.hypot(gx - x, gy - y);
+        if (d >= r + gr || d + r <= gr || d + gr <= r) return null;
+        const half = Math.acos(Math.max(-1, Math.min(1, (d * d + r * r - gr * gr) / (2 * d * r)))), a = Math.atan2(gy - y, gx - x);
+        return [a + half, a - half + 2 * Math.PI];
     }
 
     // Pocket screen positions for hit-testing a call; off-screen ones are called from the mini-map.
@@ -6593,8 +6672,8 @@
     const phSvg = (d, n, w) => '<svg width="' + n + '" height="' + n + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"></path></svg>';
     const PH_BARS = ['Power', 'Aim', 'Spin', 'Time'];
     // m: poolCueModel(). The equipped cue up top (a close-up of its forearm, then all of it), then
-    // every cue: its look, how it is earned, its four bars (filled to its level, outlined: what
-    // the next level adds).
+    // every cue: its look, its rarity, how it is earned, its four bars (filled to its level,
+    // outlined: what the next level adds).
     function phCuesHTML(m) {
         const eq = m.list.find(c => c.eq) || m.list[0];
         const tick = phSvg(PH_CUE_ICON.standard, 13, 2.4);
@@ -6603,11 +6682,12 @@
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => '<i' + (k < c.bars[i] ? ' class="on"' : k < c.top[i] ? ' class="up"' : '') + '></i>').join('') +
             '</span><span class="ph-num">' + c.bars[i] + '</span></span>').join('') + '</div>';
         const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>';
-        const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' +
+        const rarity = c => '<span class="ph-cue-rar ph-label" data-rarity="' + c.rarity + '">' + c.rarityName + '</span>';
+        const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' + c.rarityName + ', ' +
             (c.eq ? 'equipped' : c.open ? 'unlocked' : 'locked. ' + c.cond) + '">' +
             '<canvas class="ph-cue-cv" data-cue="' + c.id + '" aria-hidden="true"></canvas>' +
             '<div class="ph-cue-row"><span class="ph-cue-icon">' + phSvg(PH_CUE_ICON[c.id], 17) + '</span>' +
-            '<span class="ph-cue-t"><span class="ph-cue-n">' + c.name + (c.isNew ? '<span class="ph-cue-new ph-label">NEW</span>' : '') + '</span>' +
+            '<span class="ph-cue-t"><span class="ph-cue-n">' + c.name + rarity(c) + (c.isNew ? '<span class="ph-cue-new ph-label">NEW</span>' : '') + '</span>' +
             '<span class="ph-cue-d">' + (c.open ? c.blurb : c.cond) + '</span></span>' +
             (c.eq ? '<span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span>'
                 : c.open ? '<button type="button" class="ph-btn ph-cue-eq" data-ph-equip="' + c.id + '" aria-label="Equip ' + c.name + '">Equip</button>'
@@ -6617,7 +6697,7 @@
             '<span class="ph-cues-sub">' + (m.who ? m.who + '’s cue for this match · from your ' + m.open + ' unlocked' : m.open + ' of ' + m.list.length + ' unlocked · every shot you play, pool and snooker') + '</span></span>' +
             '<button type="button" class="ph-btn" data-ph-cuesx aria-label="Close the cue collection">' + PH_ICON.close + '</button></div>' +
             '<div class="ph-cues-list" role="list" aria-label="All cues">' +
-            '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + '</span>' +
+            '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + rarity(eq) + '</span>' +
             '<span class="ph-cue-d">' + eq.blurb + '</span></span><span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span></div>' +
             '<div class="ph-cue-show"><canvas class="ph-cue-cv is-detail" data-cue="' + eq.id + '" data-span="0.48,0.77" aria-hidden="true"></canvas>' +
             '<canvas class="ph-cue-cv is-full" data-cue="' + eq.id + '" aria-hidden="true"></canvas></div>' + bars(eq) + level(eq) +
@@ -9057,6 +9137,8 @@
     const POOL_GAMES = {
         pool: {
             id: 'pool', title: '8-Ball Pool', icon: 'g-pool', lb: 'pool', xpType: 'pool', diffPref: 'poolDifficulty', diffs: PH_DIFFS,
+            // ⚙️ Table Cloth: [its pick, its custom colours].
+            felt: ['poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'poolCpuRecord', byTier: 'poolWinsByTier', tour: 'poolTournament', cab: 'poolTrophyCabinet' },
             clock: POOL_CLOCK_S,
             // ⚙️ Shot Clock choices for a quick frame (0 is off).
@@ -9137,6 +9219,8 @@
         // choice after a foul, and a quick frame that survives a reload.
         snooker: {
             id: 'snooker', title: 'Snooker', icon: 'snooker', lb: 'snooker', xpType: 'snooker', diffPref: 'snookerDifficulty', diffs: PH_SNK_DIFFS,
+            // Its own cloth once picked; until then pool's.
+            felt: ['snookerTableColor', 'snookerFeltCustom', 'poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'snookerCpuRecord', byTier: 'snookerWinsByTier', tour: 'snookerTournament', cab: 'snookerTrophyCabinet', frame: 'snookerFrame' },
             // True scale: aiming is slower, so a longer clock and finer aim steps.
             clock: 45, aimKey: 0.025, aimFine: 0.0125,
@@ -9480,7 +9564,7 @@
             const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q);
             const cond = q.id === 'collector' ? q.cond + ' · ' + Math.min(5, pqMastered(rec)) + ' of 5' : q.cond;
             // Progress within the level: "4 of 7 Hard+ wins to level 3".
-            return { id: q.id, name: q.name, blurb: q.blurb, cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
+            return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
                 have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
         });
         return { eq, who, just: S.cueJust, game: S.game, open: list.filter(c => c.open).length, list };
@@ -9873,11 +9957,19 @@
         return true;
     }
 
-    // ⚙️ Aim Guide: how far the object ball's line runs, in table units. None (0) draws no
-    // object-ball or cue-ball path: the aim line to the contact and the ghost ball there.
-    const POOL_GUIDE_LEN = { none: 0, short: 60, medium: 100, long: 150 };
-    // Your cue's aim stretches it.
-    const poolGuideLen = () => Math.round((POOL_GUIDE_LEN.hasOwnProperty(userPreferences.poolGuideLen) ? POOL_GUIDE_LEN[userPreferences.poolGuideLen] : POOL_GUIDE_LEN.long) * poolHumanStats().aim);
+    // The cloth for the game on the table (⚙️ Table Cloth): a preset's name, or the custom cloth.
+    function poolFelt() {
+        const f = poolRules().felt, U = userPreferences, own = !!U[f[0]] || !f[2];
+        const kind = own ? U[f[0]] : U[f[2]], custom = own ? U[f[1]] : U[f[3]];
+        return kind === 'custom' ? pgFeltCustom(custom) : PG_FELTS[kind] ? kind : 'green';
+    }
+
+    // ⚙️ Aim Guide: Full or None, no lengths to pick (the user, 2026-10-13), so a cue's line is the
+    // same for everyone who plays it, online too. Full runs the object ball's line 150 table units,
+    // stretched by the cue's aim; None (0) draws no object-ball or cue-ball path: the aim line to
+    // the contact and the ghost ball there. The old Long, Medium and Short read as Full.
+    const POOL_GUIDE_FULL = 150;
+    const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * poolHumanStats().aim));
     function poolDraw(dt) {
         const S = poolS, R = poolRules();
         if (!poolFit()) return;
@@ -9890,7 +9982,7 @@
         const gap = S.phase === 'strike' ? pull + (1 - pull) * Math.min(1, S.strikeT / POOL_STRIKE_MS) : pull;
         const c = poolCueBall();
         const bihBad = S.phase === 'bih' ? R.canPlace(S.world, c.x, c.y, S.frame.ballInHand) : null;
-        const felt = userPreferences.poolTableColor || 'green';
+        const felt = poolFelt();
         const theme = phThemeTokens(S.hud);
         // The shooter's cue; Black Crown's and Collector's sheen moves unless motion is reduced.
         const cue = pqById(poolRemoteTurn() ? poolSeatCueId(S.frame.turn) : poolCueStats().id);
@@ -21922,6 +22014,11 @@
             .pool-hud .ph-cue-tag { flex-shrink: 0; height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border-radius: var(--pool-radius-sm); font-size: 10px; letter-spacing: 0.12em; color: var(--pool-accent-lite); background: rgba(var(--pool-accent-rgb), 0.12); }
             .pool-hud .ph-cue-tag.is-lock { padding: 0 4px; background: transparent; color: var(--pool-overlay-muted); }
             .pool-hud .ph-cue-new { height: 16px; padding: 0 6px; display: inline-flex; align-items: center; border-radius: 8px; font-size: 8px; letter-spacing: 0.12em; border: 1px solid rgba(var(--pool-accent-rgb), 0.55); color: var(--pool-accent-lite); }
+            /* Rarity in 8 Ball Pool's colours: Common grey, Rare blue, Epic purple, Legendary gold. */
+            .pool-hud .ph-cue-rar { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pool-overlay-muted); }
+            .pool-hud .ph-cue-rar[data-rarity="rare"] { color: #6CB4F5; }
+            .pool-hud .ph-cue-rar[data-rarity="epic"] { color: #C18CF7; }
+            .pool-hud .ph-cue-rar[data-rarity="legendary"] { color: #F5C542; }
             .pool-hud .ph-cue-eq { flex-shrink: 0; height: 44px; min-width: 76px; padding: 0 14px; font-size: 13px; color: var(--pool-overlay-text); background: rgba(255, 255, 255, 0.06); border-color: var(--pool-overlay-line); }
             /* Four 10-step bars: filled to the cue's level, outlined to level 5. */
             .pool-hud .ph-cue-bars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
@@ -23421,7 +23518,25 @@
                 align-items: center;
             }
 
+            .pool-color-swatches { flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+            /* Custom: a dashed ring and a pencil, over the cloth it draws. */
+            .pool-color-swatch.is-custom { position: relative; border-style: dashed; }
+            .pool-color-swatch.is-custom::after {
+                content: '✎'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                color: #fff; font: 700 14px/1 system-ui, sans-serif; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+            }
+            /* The settings modal is on <body>, so a light page needs its own ring: white disappears there. */
+            body:has(.attendance-summary.biz-theme) .settings-modal .pool-color-swatch { border-color: rgba(0, 0, 0, 0.18); }
+            body:has(.attendance-summary.biz-theme) .settings-modal .pool-color-swatch.active { border-color: #1E88E5; box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.3); }
+            @media (prefers-color-scheme: light) {
+                body:not(:has(.attendance-summary.retro-theme)) .settings-modal .pool-color-swatch { border-color: rgba(0, 0, 0, 0.18); }
+                body:not(:has(.attendance-summary.retro-theme)) .settings-modal .pool-color-swatch:hover { border-color: rgba(0, 0, 0, 0.4); }
+                body:not(:has(.attendance-summary.retro-theme)) .settings-modal .pool-color-swatch.active { border-color: #2d2d3a; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.45); }
+            }
+            .pool-color-swatch:focus-visible { outline: 2px solid var(--aurora-1, #667eea); outline-offset: 2px; }
             .pool-color-swatch {
+                padding: 0;
+                flex-shrink: 0;
                 width: 28px;
                 height: 28px;
                 border-radius: 50%;
@@ -24202,6 +24317,34 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 </div>`;
     }
 
+    // ⚙️ Table Cloth, per game: the presets as the gradient they draw, then Custom, whose two
+    // colours (centre and edge) open below it. Snooker shows pool's cloth until it has its own.
+    const FELT_PRESETS = [['green', 'Green'], ['red', 'Red'], ['blue', 'Blue'], ['lightgrey', 'Light Grey'], ['purple', 'Purple'], ['teal', 'Teal'], ['charcoal', 'Charcoal']];
+    const FELT_PREFS = { pool: ['poolTableColor', 'poolFeltCustom'], snooker: ['snookerTableColor', 'snookerFeltCustom'] };
+    const feltHex = v => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : null);
+    // The cloth a game shows now: [preset or 'custom', { centre, edge }].
+    function feltPick(game) {
+        const [pick, cust] = FELT_PREFS[game], own = game === 'pool' || !!userPreferences[pick];
+        const kind = own ? userPreferences[pick] : userPreferences.poolTableColor, c = (own ? userPreferences[cust] : userPreferences.poolFeltCustom) || {};
+        return [kind === 'custom' || PG_FELTS[kind] ? kind : 'green', { centre: feltHex(c.centre) || '#2E8F70', edge: feltHex(c.edge) || '#114534' }];
+    }
+    const feltSwatchBg = m => `radial-gradient(circle at 50% 46%, ${m.felt[0]} 0%, ${m.felt[1]} 60%, ${m.felt[2]} 100%)`;
+    function feltRows(game, icon) {
+        const [kind, c] = feltPick(game);
+        const swatch = (id, label, m) => `<button type="button" class="pool-color-swatch${id === 'custom' ? ' is-custom' : ''}${kind === id ? ' active' : ''}" data-felt-game="${game}" data-felt="${id}" title="${label}" aria-label="${label} cloth" aria-pressed="${kind === id}" style="background: ${feltSwatchBg(m)};"></button>`;
+        return `<div class="settings-option">
+                    <span class="settings-option-label">${attIcon(icon)} Table Cloth</span>
+                    <div class="pool-color-swatches" role="group" aria-label="${game === 'pool' ? 'Pool' : 'Snooker'} table cloth">${FELT_PRESETS.map(([id, label]) => swatch(id, label, PG_FELTS[id])).join('')}${swatch('custom', 'Custom', pgFeltFrom(c.centre, c.edge))}</div>
+                </div>
+                <div class="settings-option pool-felt-custom" data-felt-custom="${game}" style="${kind === 'custom' ? '' : 'display:none;'}">
+                    <span class="settings-option-label">${attIcon('f-skins')} Custom Cloth</span>
+                    <div class="cyber-color-pickers">
+                        <label title="The middle of the cloth"><input type="color" data-felt-game="${game}" data-felt-pick="centre" value="${c.centre}"><span>Centre</span></label>
+                        <label title="The cloth by the cushions"><input type="color" data-felt-game="${game}" data-felt-pick="edge" value="${c.edge}"><span>Edge</span></label>
+                    </div>
+                </div>`;
+    }
+
     function createSettingsModal() {
         const overlay = document.createElement('div');
         overlay.id = 'settings-modal-overlay';
@@ -24326,22 +24469,15 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             </div>
             <div class="settings-group" role="tabpanel" data-settings-group="cue" hidden>
                 <div class="settings-subhead">Both games</div>
-                <div class="settings-option">
-                    <span class="settings-option-label">${attIcon('g-pool')} Table Color</span>
-                    <div class="pool-color-swatches" id="pool-color-swatches">
-                        <div class="pool-color-swatch ${userPreferences.poolTableColor === 'green' ? 'active' : ''}" data-pool-color="green" style="background: linear-gradient(135deg, #2d8a4e, #1a5c32);" title="Green"></div>
-                        <div class="pool-color-swatch ${userPreferences.poolTableColor === 'red' ? 'active' : ''}" data-pool-color="red" style="background: linear-gradient(135deg, #8b3a3a, #5c1a1a);" title="Red"></div>
-                        <div class="pool-color-swatch ${userPreferences.poolTableColor === 'blue' ? 'active' : ''}" data-pool-color="blue" style="background: linear-gradient(135deg, #2a5a8a, #1a3a5c);" title="Blue"></div>
-                        <div class="pool-color-swatch ${userPreferences.poolTableColor === 'lightgrey' ? 'active' : ''}" data-pool-color="lightgrey" style="background: linear-gradient(135deg, #a8b0b8, #c8cfd6);" title="Light Grey"></div>
-                    </div>
-                </div>
                 ${sel('poolShotCam', 'Shot Camera', [['overhead', 'Overhead — rise to the top view'], ['3d', 'Stay 3D — stand up, whole table']], { icon: 'g-pool' })}
-                ${sel('poolGuideLen', 'Guideline', [['long', 'Long — the object ball\'s line in full'], ['medium', 'Medium'], ['short', 'Short — a hint of the line'], ['none', 'None — the aim line and ghost ball only']], { icon: 'pro' })}
+                ${sel('poolGuideLen', 'Guideline', [['full', 'Full — the object ball\'s line, as far as your cue\'s aim runs it'], ['none', 'None — the aim line and ghost ball only']], { icon: 'pro' })}
                 ${sel('poolMaxLayout', 'Max View', [['full', 'Full table — controls on it, between the pockets'], ['bars', 'Table between bars — nothing over the table']], { icon: 'g-pool' })}
                 <div class="settings-subhead">${attIcon('g-pool')} 8-Ball Pool</div>
+                ${feltRows('pool', 'g-pool')}
                 ${sel('poolDifficulty', 'CPU', [['adaptive', 'Adaptive — matches your form'], ['easy', 'Easy — simple pots, misses often'], ['normal', 'Normal — solid, little position'], ['hard', 'Hard — plays position'], ['pro', 'Pro — hardly misses, call every shot']], { icon: 'g-pool' })}
                 ${sel('poolClock', 'Shot Clock', [['30', '30s — the default'], ['45', '45s'], ['0', 'Off — no clock']], { icon: 'f-shifts' })}
                 <div class="settings-subhead">${attIcon('snooker')} Snooker</div>
+                ${feltRows('snooker', 'snooker')}
                 ${sel('snookerReds', 'Reds', [['15', '15 — the full frame'], ['10', '10'], ['6', '6 — quick']], { icon: 'snooker' })}
                 ${sel('snookerDifficulty', 'CPU', [['adaptive', 'Adaptive — matches your form'], ['easy', 'Easy — pots the simple ones'], ['normal', 'Normal — small breaks, some safety'], ['hard', 'Hard — position and safety, call the colours'], ['pro', 'Pro — hardly misses, call every ball']], { icon: 'snooker' })}
                 ${sel('snookerClock', 'Shot Clock', [['30', '30s'], ['45', '45s — the default'], ['60', '60s'], ['0', 'Off — no clock']], { def: '45', icon: 'f-shifts' })}
@@ -24550,14 +24686,37 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
 
         modal.querySelector('.close-modal-button').addEventListener('click', toggleSettingsModal);
 
-        modal.querySelectorAll('.pool-color-swatch').forEach(swatch => {
-            swatch.addEventListener('click', function() {
-                const color = this.dataset.poolColor;
-                userPreferences.poolTableColor = color;
-                savePreferences();
-                modal.querySelectorAll('.pool-color-swatch').forEach(s => s.classList.remove('active'));
-                this.classList.add('active');
+        // ⚙️ Table Cloth: a swatch picks the game's cloth; Custom opens its two colours, and moving
+        // either of them makes the cloth Custom. The table redraws as it changes.
+        const feltShow = (game, kind) => {
+            modal.querySelectorAll(`.pool-color-swatch[data-felt-game="${game}"]`).forEach(sw => {
+                const on = sw.dataset.felt === kind;
+                sw.classList.toggle('active', on); sw.setAttribute('aria-pressed', on ? 'true' : 'false');
             });
+            const row = modal.querySelector(`[data-felt-custom="${game}"]`);
+            if (row) row.style.display = kind === 'custom' ? '' : 'none';
+        };
+        modal.querySelectorAll('.pool-color-swatch[data-felt]').forEach(swatch => {
+            swatch.addEventListener('click', function() {
+                const game = this.dataset.feltGame, [pick, cust] = FELT_PREFS[game];
+                if (this.dataset.felt === 'custom') userPreferences[cust] = feltPick(game)[1];
+                userPreferences[pick] = this.dataset.felt;
+                savePreferences();
+                feltShow(game, this.dataset.felt);
+            });
+        });
+        modal.querySelectorAll('input[type="color"][data-felt-pick]').forEach(input => {
+            const apply = save => {
+                const game = input.dataset.feltGame, [pick, cust] = FELT_PREFS[game];
+                userPreferences[cust] = Object.assign({}, feltPick(game)[1], { [input.dataset.feltPick]: input.value });
+                userPreferences[pick] = 'custom';
+                const sw = modal.querySelector(`.pool-color-swatch.is-custom[data-felt-game="${game}"]`);
+                if (sw) sw.style.background = feltSwatchBg(pgFeltFrom(userPreferences[cust].centre, userPreferences[cust].edge));
+                feltShow(game, 'custom');
+                if (save) savePreferences();
+            };
+            input.addEventListener('input', () => apply(false));
+            input.addEventListener('change', () => apply(true));
         });
     }
 
@@ -24940,7 +25099,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         const container = document.getElementById('total-time-summary');
         if (!container) return;
         // Locked (no access key redeemed on this browser) reads as OFF; the preference is kept.
-        const gameModeOn = userPreferences.gameModeHidden && gamesUnlocked; // true = ON
+        const gameModeOn = userPreferences.gameModeHidden && gamesOpen(); // true = ON
         const leftPanel  = container.querySelector('.left-panel');
         const rightPanel = container.querySelector('.right-panel');
 
@@ -25828,7 +25987,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         const _emojiToggle = totalTimeDiv.querySelector('#game-mode-emoji-toggle');
         if (_emojiToggle) {
             _emojiToggle.addEventListener('click', () => {
-                if (!gamesUnlocked) { atcAccountDialog('login'); return; }
+                if (!gamesOpen()) { atcAccountDialog('login'); return; }
                 userPreferences.gameModeHidden = !userPreferences.gameModeHidden;
                 savePreferences();
                 applyGameMode();
@@ -25861,6 +26020,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 initDesk();
                 initLeaderboard();
                 checkGamesUnlock();
+                setInterval(gamesOpen, 5000);
                 flappyHighScore = loadFlappyHighScore();
                 tetrisHighScore = loadTetrisHighScore();
 
@@ -25869,7 +26029,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
 
                 document.addEventListener('keydown', (e) => {
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-                    if (!gamesUnlocked) return;
+                    if (!gamesOpen()) return;
 
                     switch(e.key) {
                         case '1': window.switchGame('snake'); break;
@@ -25990,7 +26150,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             'startFlappyGameBtn', 'resetFlappyGameBtn', 'startTetrisGameBtn', 'resetTetrisGameBtn', 'startBreakoutGameBtn', 'resetBreakoutGameBtn',
             'startLudoGameBtn', 'resetLudoGameBtn', 'cycleLudoModeBtn', 'toggleLudoMaximizeBtn', 'prayerIncrementBtn', 'prayerResetBtn'].forEach(name => {
             const fn = window[name];
-            if (typeof fn === 'function') window[name] = (...args) => (gamesUnlocked ? fn(...args) : gamesLockedNotice());
+            if (typeof fn === 'function') window[name] = (...args) => (gamesOpen() ? fn(...args) : gamesLockedNotice());
         });
 
         // This player's board row from local state, ahead of the API's cached copy.
@@ -26001,7 +26161,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             gameBests: collectGameBests(), gameModeBests: collectGameModeBests()
         });
         window.lbRegister = async () => {
-            if (!gamesUnlocked) { showXPNotification('The leaderboard is part of Plus. Click the face at the top to activate it.', 'hourly', 'block'); return; }
+            if (!gamesOpen()) { showXPNotification('The leaderboard is part of Plus. Click the face at the top to activate it.', 'hourly', 'block'); return; }
             const input = document.getElementById('lb-name-input');
             const name = (input ? input.value : '').trim();
             if (!name || name.length < 2) {

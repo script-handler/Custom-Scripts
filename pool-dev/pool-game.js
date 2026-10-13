@@ -62,6 +62,8 @@
     const POOL_GAMES = {
         pool: {
             id: 'pool', title: '8-Ball Pool', icon: 'g-pool', lb: 'pool', xpType: 'pool', diffPref: 'poolDifficulty', diffs: PH_DIFFS,
+            // ⚙️ Table Cloth: [its pick, its custom colours].
+            felt: ['poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'poolCpuRecord', byTier: 'poolWinsByTier', tour: 'poolTournament', cab: 'poolTrophyCabinet' },
             clock: POOL_CLOCK_S,
             // ⚙️ Shot Clock choices for a quick frame (0 is off).
@@ -142,6 +144,8 @@
         // choice after a foul, and a quick frame that survives a reload.
         snooker: {
             id: 'snooker', title: 'Snooker', icon: 'snooker', lb: 'snooker', xpType: 'snooker', diffPref: 'snookerDifficulty', diffs: PH_SNK_DIFFS,
+            // Its own cloth once picked; until then pool's.
+            felt: ['snookerTableColor', 'snookerFeltCustom', 'poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'snookerCpuRecord', byTier: 'snookerWinsByTier', tour: 'snookerTournament', cab: 'snookerTrophyCabinet', frame: 'snookerFrame' },
             // True scale: aiming is slower, so a longer clock and finer aim steps.
             clock: 45, aimKey: 0.025, aimFine: 0.0125,
@@ -485,7 +489,7 @@
             const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q);
             const cond = q.id === 'collector' ? q.cond + ' · ' + Math.min(5, pqMastered(rec)) + ' of 5' : q.cond;
             // Progress within the level: "4 of 7 Hard+ wins to level 3".
-            return { id: q.id, name: q.name, blurb: q.blurb, cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
+            return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
                 have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
         });
         return { eq, who, just: S.cueJust, game: S.game, open: list.filter(c => c.open).length, list };
@@ -878,11 +882,19 @@
         return true;
     }
 
-    // ⚙️ Aim Guide: how far the object ball's line runs, in table units. None (0) draws no
-    // object-ball or cue-ball path: the aim line to the contact and the ghost ball there.
-    const POOL_GUIDE_LEN = { none: 0, short: 60, medium: 100, long: 150 };
-    // Your cue's aim stretches it.
-    const poolGuideLen = () => Math.round((POOL_GUIDE_LEN.hasOwnProperty(userPreferences.poolGuideLen) ? POOL_GUIDE_LEN[userPreferences.poolGuideLen] : POOL_GUIDE_LEN.long) * poolHumanStats().aim);
+    // The cloth for the game on the table (⚙️ Table Cloth): a preset's name, or the custom cloth.
+    function poolFelt() {
+        const f = poolRules().felt, U = userPreferences, own = !!U[f[0]] || !f[2];
+        const kind = own ? U[f[0]] : U[f[2]], custom = own ? U[f[1]] : U[f[3]];
+        return kind === 'custom' ? pgFeltCustom(custom) : PG_FELTS[kind] ? kind : 'green';
+    }
+
+    // ⚙️ Aim Guide: Full or None, no lengths to pick (the user, 2026-10-13), so a cue's line is the
+    // same for everyone who plays it, online too. Full runs the object ball's line 150 table units,
+    // stretched by the cue's aim; None (0) draws no object-ball or cue-ball path: the aim line to
+    // the contact and the ghost ball there. The old Long, Medium and Short read as Full.
+    const POOL_GUIDE_FULL = 150;
+    const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * poolHumanStats().aim));
     function poolDraw(dt) {
         const S = poolS, R = poolRules();
         if (!poolFit()) return;
@@ -895,7 +907,7 @@
         const gap = S.phase === 'strike' ? pull + (1 - pull) * Math.min(1, S.strikeT / POOL_STRIKE_MS) : pull;
         const c = poolCueBall();
         const bihBad = S.phase === 'bih' ? R.canPlace(S.world, c.x, c.y, S.frame.ballInHand) : null;
-        const felt = userPreferences.poolTableColor || 'green';
+        const felt = poolFelt();
         const theme = phThemeTokens(S.hud);
         // The shooter's cue; Black Crown's and Collector's sheen moves unless motion is reduced.
         const cue = pqById(poolRemoteTurn() ? poolSeatCueId(S.frame.turn) : poolCueStats().id);

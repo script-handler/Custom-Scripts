@@ -41,46 +41,51 @@
         [51.5, 72, fore], [72, 90, wrap], [90, 99, butt], [99, 100, 'rubber']];
     // Points and splices point at the tip, edged by veneers (outside in, [colour, mm]).
     const pqPts = (n, apex, core, veneers, o) => Object.assign({ n, apex, base: 71.5, rot: 0, w: n > 4 ? 0.82 : 0.85, core, veneers }, o);
-    // bars: [power, aim, spin, time] at level 1 and at level 5. No cue is best at everything:
-    // each has a bar of 6 or less, and none totals more than 32 of 40 (the user, 2026-10-05).
+    // bars: [power, aim, spin, time] at level 1 and at level 5. Rarity sets how strong a mastered
+    // cue is, scaled as 8 Ball Pool's are (the user, 2026-10-13): see PQ_RARITY. A cue keeps its
+    // character in its best bar, and the rarer it is, the more its levels add.
     // need: [game, tier, wins for levels 2, 3, 4 and 5]: the better the cue, the harder its wins
     // and the longer its climb (the user, 2026-10-05). See pqCounts.
     const PQ_SET = [
-        { id: 'standard', name: 'Standard', cond: 'Always yours · the house cue', blurb: 'Maple shaft · black linen wrap', bars: [[4, 4, 4, 4], [5, 5, 5, 5]], need: ['pool', 'easy', [5, 7, 10, 15]],
+        { id: 'standard', name: 'Standard', cond: 'Always yours · the house cue', blurb: 'Maple shaft · black linen wrap', rarity: 'common', bars: [[4, 4, 4, 4], [5, 5, 5, 5]], need: ['pool', 'easy', [5, 7, 10, 15]],
             sections: pqStd('maple', 'brass', 'lacquer', 'linenBlack', 'walnut') },
-        { id: 'tulipwood', name: 'Tulipwood', cond: 'Team Player · join the leaderboard', ach: 'teamPlayer', blurb: 'Tulipwood forearm · navy linen', bars: [[5, 5, 4, 4], [6, 6, 5, 5]], need: ['pool', 'easy', [5, 7, 11, 16]],
+        { id: 'tulipwood', name: 'Tulipwood', cond: 'Team Player · join the leaderboard', ach: 'teamPlayer', blurb: 'Tulipwood forearm · navy linen', rarity: 'common', bars: [[5, 5, 4, 4], [6, 6, 6, 6]], need: ['pool', 'easy', [5, 7, 11, 16]],
             sections: pqStd('maple', 'silver', 'tulipwood', 'linenNavy', 'tulipwood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']] },
-        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pebble leather', bars: [[4, 5, 5, 5], [4, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 11, 16]],
+        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pebble leather', rarity: 'rare', bars: [[5, 6, 5, 5], [7, 8, 7, 7]], need: ['pool', 'normal', [5, 8, 11, 16]],
             sections: pqStd('maple', 'ebony', 'birdseye', 'pebble', 'birdseye'), rings: [[51.5, 0.8, 'brass'], [72, 0.8, 'brass'], [90, 0.8, 'brass']] },
-        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Flame maple · 4 points · lizard', bars: [[7, 4, 2, 4], [10, 6, 2, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
+        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Flame maple · 4 points · lizard', rarity: 'rare', bars: [[7, 5, 3, 5], [10, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
             sections: pqStd('maple', 'brass', 'flame', 'lizardRed', 'cocobolo'), rings: [[72, 1, 'brass'], [90, 1, 'brass']],
             points: [pqPts(4, 54, 'cocobolo', [['#121212', 0.5], ['#F2EEE4', 0.5], ['#A3262A', 0.6]])] },
-        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: 'Maple · 6 rosewood points', bars: [[3, 7, 4, 6], [3, 9, 5, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
+        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: 'Maple · 6 rosewood points', rarity: 'rare', bars: [[4, 7, 5, 6], [6, 10, 6, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
             sections: pqStd('maple', 'silver', 'maple', 'stitchBlk', 'rosewood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
             points: [pqPts(6, 53, 'rosewood', [['#121212', 0.5], ['#2C6E49', 0.5], ['#F2EEE4', 0.5]])] },
-        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon shaft · stacked leather', bars: [[6, 4, 7, 3], [8, 5, 10, 3]], need: ['pool', 'hard', [5, 9, 13, 18]],
+        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon shaft · stacked leather', rarity: 'epic', bars: [[6, 5, 7, 5], [9, 7, 10, 7]], need: ['pool', 'hard', [5, 9, 13, 18]],
             sections: pqStd('carbon', 'silver', 'ebony', 'stack', 'flake'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
             points: [pqPts(4, 55, 'zebrano', [['#F2EEE4', 0.6], ['#121212', 0.5]])] },
-        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite points · black lizard', bars: [[4, 7, 7, 4], [4, 9, 9, 5]], need: ['pool', 'pro', [5, 9, 13, 18]],
+        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite points · black lizard', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
             sections: pqStd('maple', 'silver', 'ebony', 'lizardBlk', 'ebony'), rings: [[72, 0.8, 'silver'], [89.05, 0.8, 'silver'], [89.45, 3, 'malachite'], [89.85, 0.8, 'silver']],
             points: [pqPts(4, 53, 'malachite', [['#C9CDD2', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'turquoise', size: 7, at: 0.45 } })],
             inlays: [{ at: 94.5, n: 4, shape: 'diamond', size: 7, mat: 'malachite', rot: 45 }] },
-        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash shaft · 4 ebony splices', bars: [[5, 8, 4, 7], [5, 10, 5, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
+        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash shaft · 4 ebony splices', rarity: 'epic', bars: [[5, 8, 5, 6], [8, 10, 8, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
             sections: [[0, 0.9, 'tipBrown'], [0.9, 2.5, 'brassFerr'], [2.5, 70, 'ash'], [70, 99, 'ebony'], [99, 100, 'rubber']],
             rings: [[70, 2, 'pearl'], [76, 1, 'brass'], [98.5, 1, 'brass']],
             points: [pqPts(4, 40, 'ebony', [['#EFE3C6', 0.6], ['#121212', 0.4]], { base: 70, w: 0.92 }), pqPts(4, 62, 'ebony', [['#EFE3C6', 0.6]], { base: 70, rot: 45, w: 0.6 })],
             inlays: [{ at: 95, n: 4, shape: 'dot', size: 4, mat: 'abalone', rot: 0 }] },
-        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Ebony · 6 abalone points', bars: [[7, 7, 5, 6], [9, 9, 6, 6]], need: ['snooker', 'pro', [5, 10, 14, 19]], sheen: 1,
+        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Ebony · 6 abalone points', rarity: 'legendary', bars: [[7, 7, 6, 6], [10, 10, 9, 8]], need: ['snooker', 'pro', [5, 10, 14, 19]], sheen: 1,
             sections: pqStd('maple', 'gold', 'ebony', 'stitchGold', 'ebony'), rings: [[51.5, 1, 'pearl'], [72, 1, 'gold'], [90, 1, 'gold'], [98.5, 1, 'gold']],
             points: [pqPts(6, 53, 'abalone', [['#D4AF37', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'jasper', size: 6, at: 0.42 } })],
             inlays: [{ at: 94.5, n: 6, shape: 'diamond', size: 6, mat: 'pearl', rot: 0 }] },
         // Not in the design: the design's own vocabulary, for mastering five cues.
-        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Ebony · pearl and abalone points · lizard', bars: [[8, 7, 7, 5], [9, 9, 8, 6]], need: ['snooker', 'pro', [5, 10, 15, 20]], sheen: 1,
+        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Ebony · pearl and abalone points · lizard', rarity: 'legendary', bars: [[8, 7, 7, 6], [10, 10, 10, 10]], need: ['snooker', 'pro', [5, 10, 15, 20]], sheen: 1,
             sections: pqStd('maple', 'gold', 'ebony', 'lizardRed', 'ebony'), rings: [[51.5, 1, 'abalone'], [71.4, 0.8, 'gold'], [72.4, 1.2, 'pearl'], [89.6, 1.2, 'pearl'], [90.6, 0.8, 'gold'], [98.5, 1, 'gold']],
             points: [pqPts(4, 52, 'pearl', [['#D4AF37', 0.5], ['#121212', 0.5], ['#3FB5A9', 0.4]], { inlay: { shape: 'diamond', mat: 'gold', size: 5, at: 0.4 } }),
                 pqPts(4, 63, 'abalone', [['#D4AF37', 0.4], ['#121212', 0.4]], { rot: 45, w: 0.55 })],
             inlays: [{ at: 94.5, n: 4, shape: 'dot', size: 4, mat: 'pearl', rot: 0 }, { at: 94.5, n: 4, shape: 'diamond', size: 5, mat: 'abalone', rot: 45 }] },
     ];
+    // Rarity, as 8 Ball Pool's collection shows it: [label, the fewest and most bar points a
+    // mastered cue totals, the lowest bar it keeps]. Its Legendary cues max at 37–40 of 40 (Inferno
+    // 10/10/9/8, Excalibur 10/10/10/10), Epic at about 34 (Gengis Khan 9/8/9/8), Rare at about 30.
+    const PQ_RARITY = { common: ['Common', 20, 24, 5], rare: ['Rare', 28, 30, 6], epic: ['Epic', 32, 34, 7], legendary: ['Legendary', 36, 40, 8] };
     const pqById = id => PQ_SET.find(q => q.id === id) || PQ_SET[0];
     // [length, tip, butt] in ball diameters, and the ball in mm.
     const PQ_GAME = { pool: [25.7, 0.23, 0.52, 57], snooker: [27.6, 0.19, 0.55, 52.5] };
