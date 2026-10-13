@@ -611,6 +611,33 @@ const send = (player, players, opts) => dispatch({ player, build_token: 'tok-now
         ok('rotate answers with the new key number', reply(r).code === 'ok' && reply(r).msg === 'key #1');
     }
 
+    head('Owners: the account a key-redeemed browser syncs');
+    {
+        const owners = r => { try { return JSON.parse(r.files['owners.json']); } catch { return null; } };
+        const ownersFile = o => ({ 'owners.json': JSON.stringify(o) });
+        r = await send(next({}, 1), [stored({})]);
+        ok('a licensed sync records its browser\'s owner in owners.json', owners(r) && owners(r)[PLUS_TAG] && owners(r)[PLUS_TAG].clientId === 'c1', owners(r));
+        r = await send(next({}, 1), [stored({})], { files: r.files });
+        ok('…once: the next sync from it writes owners.json no more', !r.patches.some(p => p.includes('owners.json')));
+        r = await send(next({}, 0, { clientId: 'c2', displayName: 'Bilal' }), [stored({})], { files: r.files });
+        ok('…and another account syncing there moves it', owners(r)[PLUS_TAG].clientId === 'c2');
+        r = await dispatch({ player: next({}, 0), build_token: 'tok-now' }, [stored({})], { noPlus: true });
+        ok('an unlicensed sync records nothing', !r.files['owners.json']);
+        r = await send(next({}, 0), [stored({})], { files: { 'blocked.json': JSON.stringify({ c1: { at: 'x' } }) } });
+        ok('…nor does a blocked account\'s', !r.files['owners.json']);
+
+        const T5 = '5'.repeat(32), T6 = '6'.repeat(32), ARID = '0123456789abcdef';
+        const adm = (event, extra, players, opts) => dispatch(Object.assign({ admin_key: 'admin', build_token: 'tok-now', rid: ARID }, extra), players || [stored({})], Object.assign({ event, catch: true }, opts));
+        const keyed = Object.assign({ ['plus-' + T5 + '.json']: JSON.stringify({ at: 'x', via: 'key', n: 3 }), ['plus-' + T6 + '.json']: JSON.stringify({ at: 'x', via: 'key', n: 4 }) },
+            ownersFile({ [T5]: { clientId: 'c1', at: 'x' }, [T6]: { clientId: 'c2', at: 'x' } }));
+        r = await adm('admin-games-ban', { tag: T5 }, [stored({})], { files: keyed });
+        ok('a browser ban names the owner of a key-redeemed browser', r.written.gamesUnlock.banned[T5].clientId === 'c1');
+        r = await adm('admin-account-ban', { client_id: 'c1' }, [stored({})], { files: keyed });
+        ok('an account ban bans the key-redeemed browsers it owns, and no one else\'s', r.written.gamesUnlock.banned[T5] && r.written.gamesUnlock.banned[T5].banned === 'account' && !!r.written.gamesUnlock.tags[T6]);
+        r = await adm('admin-account-unban', { client_id: 'c1' }, [], { files: r.files });
+        ok('…and the unban lifts them', !r.files['plus-' + T5 + '.json']);
+    }
+
     head('The legacy whole-registry payload');
     r = await dispatch({ registry: { players: [next({ 'pool:easy': 1 }, 1)] }, build_token: 'tok-now' }, [stored({ 'pool:hard': 5 })]);
     ok('it merges gameModeBests the same way', r.player('c1').gameModeBests['pool:hard'] === 5 && r.player('c1').gameModeBests['pool:easy'] === 1);

@@ -6,7 +6,7 @@
 // answered as the bot would (status-admin.json with its rid), or not answered, to try the resend
 // and the give-up. It checks what the page shows (the attention list, the tables, player names
 // as text), what each button sends (event, payload, a build token equal to the userscript's), the
-// waits, that secrets are never stored, and the layout at 1280 and 390 px. Screenshots go to dir.
+// waits, that secrets are stored only when Remember is ticked, and the layout at 1280 and 390 px. Screenshots go to dir.
 // Without github-actions-bot/ beside this repo there is nothing to test, and it says so.
 const { spawn } = require('child_process');
 const fs = require('fs'), path = require('path'), os = require('os');
@@ -155,6 +155,20 @@ window.__ADMIN_TIMING = { poll: 40, resend: 500, giveUp: 1800, refresh: 600000, 
     ok('…its XP signature and level curve too', (await ev(`window.__admin.xpHash(${JSON.stringify(PAT)}, 5000, 6, 40, 30)`)) === hostXpHash(5000, 6, 40, 30) &&
         JSON.stringify(await ev('window.__admin.deriveLevel(5000)')) === JSON.stringify(hostLevel(5000)));
 
+    head('Owners of key-redeemed browsers');
+    const owned = await ev(`(() => {
+        const t = c => c.repeat(32), f = {
+            'attendance_widget_registry.json': JSON.stringify({ players: [{ clientId: 'k1', displayName: 'Keyed' }] }),
+            ['plus-' + t('e') + '.json']: JSON.stringify({ at: 'x', via: 'key', n: 1 }),
+            ['plus-' + t('f') + '.json']: JSON.stringify({ at: 'x', via: 'key', n: 2 }),
+            ['plus-' + t('0') + '.json']: JSON.stringify({ revoked: true, at: 'x' }),
+            'owners.json': JSON.stringify({ [t('e')]: { clientId: 'k1', at: 'y' }, [t('0')]: { clientId: 'k1', at: 'y' } }),
+        }, m = window.__admin.buildModel(f), b = x => m.browsers.find(v => v.tag === t(x));
+        return { active: m.byId.get('k1').active, e: b('e').clientId + '/' + b('e').name + '/' + b('e').seenAt, f: b('f').clientId, z: b('0').clientId };
+    })()`);
+    ok('a key-redeemed browser counts for the account that syncs from it (owners.json)', owned.active === 1 && owned.e === 'k1/Keyed/y', owned);
+    ok('…one nobody has synced from stays unlinked, and a revoked one is not counted', owned.f === null && owned.z === null, owned);
+
     head('Connect');
     await ev(`document.getElementById('admin-key').value = ${JSON.stringify(ADMIN)}; document.getElementById('pat').value = ${JSON.stringify(PAT)}`);
     await click('#connect-btn');
@@ -289,6 +303,30 @@ window.__ADMIN_TIMING = { poll: 40, resend: 500, giveUp: 1800, refresh: 600000, 
     await sleep(200);
     ok('View only: actions send nothing and say why', (await dispatches()).length === n1 && /Connect with the admin key/.test(await ev("document.getElementById('queue').textContent")));
 
+    head('Remember on this device');
+    const login = () => ev(`document.getElementById('admin-key').value = ${JSON.stringify(ADMIN)}; document.getElementById('pat').value = ${JSON.stringify(PAT)}; document.getElementById('remember').checked = true`);
+    const saved = () => ev("localStorage.getItem('atcAdminLogin')");
+    await click('#lock-btn');
+    ok('the Forget button is hidden while nothing is saved', await ev("document.getElementById('forget-btn').hidden"));
+    await login();
+    await click('#connect-btn');
+    await until("!document.getElementById('app').hidden");
+    ok('ticked, Connect keeps the key and the token in localStorage', JSON.stringify(JSON.parse(await saved() || 'null')) === JSON.stringify({ key: ADMIN, pat: PAT }), await saved());
+    await click('#lock-btn');
+    ok('Lock puts them back in the form, ticked, with Forget showing', await ev(`document.getElementById('admin-key').value === ${JSON.stringify(ADMIN)} && document.getElementById('pat').value === ${JSON.stringify(PAT)} && document.getElementById('remember').checked && !document.getElementById('forget-btn').hidden`));
+    await click('#forget-btn');
+    ok('Forget clears localStorage and the form', await saved() === null && await ev("document.getElementById('admin-key').value === '' && document.getElementById('pat').value === '' && !document.getElementById('remember').checked && document.getElementById('forget-btn').hidden"));
+    await login();
+    await click('#connect-btn');
+    await until("!document.getElementById('app').hidden");
+    await cdp('Page.reload', {});
+    await sleep(300);
+    await until('!!window.__admin', 8000);
+    ok('saved, the page connects by itself when opened and pings with them', await until("!document.getElementById('app').hidden && window.__T.dispatches.length === 1", 4000) && await (async () => {
+        const d = await last();
+        return d.event === 'admin-ping' && d.p.admin_key === ADMIN && d.auth === 'Bearer ' + PAT;
+    })(), await last());
+
     head('Layout');
     for (const [w, h, name] of [[1280, 900, 'wide'], [390, 844, 'phone']]) {
         await cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 500 });
@@ -306,6 +344,7 @@ window.__ADMIN_TIMING = { poll: 40, resend: 500, giveUp: 1800, refresh: 600000, 
     ok('the light theme has its own background', await ev("getComputedStyle(document.body).backgroundColor") === 'rgb(246, 247, 249)');
     await shot('admin-light');
     ok('no page errors', errors.length === 0, errors);
+    await ev("localStorage.removeItem('atcAdminLogin')");
 
     clearTimeout(bail);
     ws.close(); proc.kill(); await sleep(400);
