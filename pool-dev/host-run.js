@@ -388,6 +388,22 @@ async function main() {
     const after = await ev('(() => { const S = window.__probe.S; return { phase: S.phase, turn: S.frame.turn, isBreak: S.frame.isBreak, toast: S.toast && S.toast.title }; })()');
     ok('the break settles and is judged', settled && after.isBreak === false, after);
 
+    // The portal reloads mid-frame: the 8-ball frame comes back, behind RESUME (as snooker's). The
+    // object balls as they lay; a cue ball in hand goes back in hand (placing it is not a shot).
+    const rlBalls = 'JSON.stringify(S.world.balls.filter(b => b.id !== 0 || !S.frame.ballInHand).map(b => [b.id, Math.round(b.x * 100), Math.round(b.y * 100), b.state]))';
+    const preRl = await ev('(() => { const S = window.__probe.S; return { shots: S.frame.shots, turn: S.frame.turn, bih: S.frame.ballInHand, balls: ' + rlBalls + ', saved: !!localStorage.getItem("poolFrame") }; })()');
+    await send('Page.reload');
+    await waitFor('!!document.getElementById("total-time-summary") && !!window.switchGame && !!window.__probe', 15000);
+    await sleep(800);
+    await ev("window.switchGame('pool')");
+    await sleep(700);
+    const postRl = await ev('(() => { const S = window.__probe.S; return { shots: S.frame.shots, turn: S.frame.turn, bih: S.frame.ballInHand, phase: S.phase, balls: ' + rlBalls + ', gate: S.awaitStart }; })()');
+    ok('after a reload the 8-ball frame is back as it was, behind RESUME', preRl.saved && postRl.shots === preRl.shots && postRl.turn === preRl.turn && postRl.balls === preRl.balls &&
+       postRl.bih === preRl.bih && (!postRl.bih || postRl.phase === 'bih') && postRl.gate === 'resume',
+       { shots: [preRl.shots, postRl.shots], turn: [preRl.turn, postRl.turn], bih: [preRl.bih, postRl.bih], phase: postRl.phase, same: postRl.balls === preRl.balls, gate: postRl.gate });
+    await click('#pool-root [data-ph=startgo]');
+    ok('RESUME plays on', (await ev('window.__probe.S.awaitStart')) === null);
+
     // Let the CPU play whenever it is at the table: it must strike by itself.
     head('The CPU at the table');
     let cpuShots = 0;

@@ -133,7 +133,7 @@ head('Game seam');
     ok('the pool profile has every part the controller asks for', need.every(k => R[k] !== undefined), need.filter(k => R[k] === undefined).join(', '));
     const SN = P.POOL_GAMES.snooker;
     ok('the snooker profile has every part the pool profile has, and its own choice, concede and reload parts',
-       need.every(k => SN[k] !== undefined) && ['choose', 'choices', 'choiceNotice', 'concede', 'resultText', 'prime', 'rackPref'].every(k => SN[k]) && SN.keys.frame === 'snookerFrame' && !R.keys.frame,
+       need.every(k => SN[k] !== undefined) && ['choose', 'choices', 'choiceNotice', 'concede', 'resultText', 'prime', 'rackPref'].every(k => SN[k]) && SN.keys.frame === 'snookerFrame' && R.keys.frame === 'poolFrame',
        need.filter(k => SN[k] === undefined).join(', '));
     ok('pool\'s storage keys are the ones the host and old saves use',
        R.keys.cpuRec === 'poolCpuRecord' && R.keys.byTier === 'poolWinsByTier' && R.keys.tour === 'poolTournament' && R.keys.cab === 'poolTrophyCabinet' && R.xpType === 'pool' && R.lb === 'pool');
@@ -1149,7 +1149,23 @@ const COLOURS = [2, 3, 4, 5, 6, 7].map(id => [id].concat([[-293.5, -81.8], [-293
     const back = Q.poolRestoreTable(Q.poolLoadSaved());
     ok('…and a reload brings it back: the balls, the score, whose turn', back && JSON.stringify(Q.poolS.world.balls.map(b => [b.id, b.x, b.y, b.state])) === JSON.stringify(S.world.balls.map(b => [b.id, b.x, b.y, b.state])) &&
        Q.poolS.frame.turn === S.frame.turn && JSON.stringify(Q.poolS.frame.scores) === JSON.stringify(S.frame.scores));
-    ok('pool keeps no such save', (() => { const G = L.game({ seed: 92, store: {} }); G.poolNewFrame(1); G.poolSaveFrame(); return !Object.keys(G.store).some(k => /Frame$/.test(k)); })());
+    {
+        // 8-ball too: the break played, saved under its own key, and back after a reload.
+        const ps = {}, G = L.game({ seed: 92, store: ps }), GS = G.poolS;
+        G.poolNewFrame(1);
+        GS.phase = 'aim'; GS.awaitStart = null; GS.aim = 0; GS.power = 100; GS.phase = 'strike'; GS.strikeT = 1000;
+        for (let i = 0; i < 4000 && (GS.phase === 'strike' || GS.phase === 'moving'); i++) G.poolTick(16);
+        const sp = ps.poolFrame && JSON.parse(ps.poolFrame);
+        ok('an 8-ball frame is saved at the shot boundary too, under its own key', !!sp && sp.game === 'pool' && sp.balls.length === 16 && sp.frame.shots === 1 && !ps.snookerFrame);
+        const Q2 = L.game({ seed: 93, store: ps });
+        Q2.poolUseGame('pool');
+        const back2 = Q2.poolRestoreTable(Q2.poolLoadSaved());
+        ok('…and a reload brings it back: the balls, the groups, whose turn, ball in hand',
+           back2 && JSON.stringify(Q2.poolS.world.balls.map(b => [b.id, b.x, b.y, b.state])) === JSON.stringify(GS.world.balls.map(b => [b.id, b.x, b.y, b.state])) &&
+           Q2.poolS.frame.turn === GS.frame.turn && JSON.stringify(Q2.poolS.frame.groups) === JSON.stringify(GS.frame.groups) &&
+           Q2.poolS.frame.ballInHand === GS.frame.ballInHand && !Q2.poolS.frame.isBreak);
+        ok('…and a snooker save is never read as pool\'s', (() => { const X = L.game({ seed: 94, store: { poolFrame: ps.poolFrame.replace('"game":"pool"', '"game":"snooker"') } }); X.poolUseGame('pool'); return !X.poolRestoreTable(X.poolLoadSaved()); })());
+    }
     // Switching mid-shot: the shot is run to rest and judged, then parked.
     for (let i = 0; i < 4000 && S.phase !== 'moving'; i++) { if (S.frame.turn === 1) snkHuman(P, S); P.poolTick(16); }
     const shots = S.frame.shots;

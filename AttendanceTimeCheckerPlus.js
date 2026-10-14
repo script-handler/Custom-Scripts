@@ -9217,7 +9217,7 @@
             id: 'pool', title: '8-Ball Pool', icon: 'g-pool', lb: 'pool', xpType: 'pool', diffPref: 'poolDifficulty', diffs: PH_DIFFS,
             // ⚙️ Table Cloth: [its pick, its custom colours].
             felt: ['poolTableColor', 'poolFeltCustom'],
-            keys: { cpuRec: 'poolCpuRecord', byTier: 'poolWinsByTier', tour: 'poolTournament', cab: 'poolTrophyCabinet' },
+            keys: { cpuRec: 'poolCpuRecord', byTier: 'poolWinsByTier', tour: 'poolTournament', cab: 'poolTrophyCabinet', frame: 'poolFrame' },
             clock: POOL_CLOCK_S,
             // ⚙️ Shot Clock choices for a quick frame (0 is off).
             clockPref: 'poolClock', clocks: [30, 45, 0],
@@ -10454,7 +10454,7 @@
         if (!S.cfg) poolUseGame(userPreferences.poolVariant);
         poolS.cpuRec = poolLoadCpuRecord();
         if (!S.hudC || !root.contains(S.hudC.el)) poolBuild(root);
-        // A frame in progress survives switching games; a snooker frame survives a reload too.
+        // A frame in progress survives switching games, and a reload.
         if (!S.world && !poolRestoreTable(poolLoadSaved())) poolNewFrame(1);
         // Once per page: a tournament saved last time is offered back.
         if (!S.tour.checked) {
@@ -10584,8 +10584,8 @@
         S.drawKey = '';
         return true;
     }
-    // Snooker's quick frame survives a reload: written at every shot boundary, removed once
-    // the frame is decided (before the award). Pool keeps no such save.
+    // A quick frame survives a reload, under its game's key: written at every shot boundary,
+    // removed once the frame is decided (before the award).
     function poolSaveFrame() {
         const key = poolRules().keys.frame;
         // An online frame comes back from the server's log instead.
