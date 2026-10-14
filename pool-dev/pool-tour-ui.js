@@ -143,7 +143,7 @@
             '<div class="pu-group"><span class="pu-kicker">FRAMES PER ROUND · ' + (snk ? 'BEST OF' : 'RACE TO') + '</span><div class="pu-races" style="grid-template-columns:repeat(' + cols.length + ',minmax(0,1fr))">' + races + '</div></div>' +
             puSeg('Shot clock', 'clock', snk ? [[30, '30s'], [45, '45s'], [60, '60s'], [0, 'Off']] : [[30, '30s'], [45, '45s'], [0, 'Off']], s.clock) +
             (snk ? puSeg('Reds', 'reds', [[15, '15'], [10, '10'], [6, '6']], s.reds) : '') +
-            puSeg('Guideline', 'guide', [['full', 'Full'], ['short', 'Short'], ['off', 'Off']], s.guide) +
+            puSeg('Guideline', 'guide', [['full', 'Full'], ['short', 'Short'], ['off', 'None']], s.guide) +
             // Snooker passes its own options (the game's tourDefaults).
             puSeg('Call pocket', 'call', s.calls || [['8', '8 only'], ['every', 'Every shot']], s.call) +
             '<div class="pu-count"><span class="pu-count-t"><span class="pu-strong" id="pu-shuf">Shuffle seeds</span><span class="pu-note">Off keeps the list order as seeding</span></span>' +

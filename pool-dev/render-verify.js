@@ -332,6 +332,8 @@ function frame(scene, w, h) {
     const rim = Array.from({ length: 16 }, (_, i) => { const t = Math.PI / 4 + i / 15 * Math.PI / 2 * (i < 8 ? 1 : -1) + (i < 8 ? 0 : Math.PI); return [g2.contact[0] + R * Math.cos(t), R * Math.sin(t)]; });
     const ghost = img => rim.some(([x, y]) => Math.min(...img.px(...at(x, y))) > 120);
     ok('…and the ghost ball at the contact', ghost(none) && !ghost(frame({ view: ortho, world: two })));
+    const tourOff = frame({ view: ortho, world: two, aim: { angle: 0, power: 0 }, guide: g2, guideMode: 'off', guideLen: 150 });
+    ok("a tournament's Guideline None (guideMode off) draws the same: the aim line and the ghost ball, no path", lit(tourOff, aimLine) && ghost(tourOff) && !lit(tourOff, path));
 }
 
 // ── 7. Snooker's table ────────────────────────────────────────────────

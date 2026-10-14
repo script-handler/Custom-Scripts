@@ -6076,7 +6076,7 @@
     //   dpr,                                         backing-store scale of ctx
     //   aim: { angle, power, gap } | null,           null hides the cue and the guides
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
-    //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off', illegal,
+    //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode (default 150; 0 draws no paths),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
     //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
@@ -6140,11 +6140,12 @@
         // 6. Shadows, then guides.
         const live = w.balls.filter(b => b.state !== 'pocketed' && !(scene.bih && b.id === 0));
         pgFill(ctx, live.map(b => pcPoly(view, pgCirc(b.x + 4 * K, b.y - 5 * K, R * 1.08, 0.3, 20))), '#000000', 0.38);
-        const g = scene.aim && scene.guide && scene.guideMode !== 'off' ? scene.guide : null;
+        // 'off' (a tournament's) is ⚙️ Guideline None: the aim line and the ghost ball, nothing past the contact.
+        const g = scene.aim && scene.guide ? scene.guide : null;
         const Z = 0.6;
         if (g && g.contact) {
             const short = scene.guideMode === 'short';
-            const L = short ? 60 : typeof scene.guideLen === 'number' ? scene.guideLen : 150;
+            const L = scene.guideMode === 'off' ? 0 : short ? 60 : typeof scene.guideLen === 'number' ? scene.guideLen : 150;
             const dx = g.contact[0] - g.start[0], dy = g.contact[1] - g.start[1], dl = Math.hypot(dx, dy) || 1;
             const ux = dx / dl, uy = dy / dl;
             if (dl > 2.3 * R) {
@@ -7682,7 +7683,7 @@
             '<div class="pu-group"><span class="pu-kicker">FRAMES PER ROUND · ' + (snk ? 'BEST OF' : 'RACE TO') + '</span><div class="pu-races" style="grid-template-columns:repeat(' + cols.length + ',minmax(0,1fr))">' + races + '</div></div>' +
             puSeg('Shot clock', 'clock', snk ? [[30, '30s'], [45, '45s'], [60, '60s'], [0, 'Off']] : [[30, '30s'], [45, '45s'], [0, 'Off']], s.clock) +
             (snk ? puSeg('Reds', 'reds', [[15, '15'], [10, '10'], [6, '6']], s.reds) : '') +
-            puSeg('Guideline', 'guide', [['full', 'Full'], ['short', 'Short'], ['off', 'Off']], s.guide) +
+            puSeg('Guideline', 'guide', [['full', 'Full'], ['short', 'Short'], ['off', 'None']], s.guide) +
             // Snooker passes its own options (the game's tourDefaults).
             puSeg('Call pocket', 'call', s.calls || [['8', '8 only'], ['every', 'Every shot']], s.call) +
             '<div class="pu-count"><span class="pu-count-t"><span class="pu-strong" id="pu-shuf">Shuffle seeds</span><span class="pu-note">Off keeps the list order as seeding</span></span>' +
@@ -9868,7 +9869,7 @@
         line([c.x, c.y], g.contact);
         dot(g.contact[0], g.contact[1], R);
         // ⚙️ Aim Guide None draws nothing past the contact (a tournament's Short still does).
-        if (!poolGuideLen() && S.guideMode === 'full') return { segs, dots };
+        if (S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full')) return { segs, dots };
         if (g.pocketed) {
             const p = pockets.slice().sort((a, b) => Math.hypot(a.x - g.contact[0], a.y - g.contact[1]) - Math.hypot(b.x - g.contact[0], b.y - g.contact[1]))[0];
             if (p) dot(p.x, p.y, p.r);

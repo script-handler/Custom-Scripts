@@ -716,7 +716,7 @@
         line([c.x, c.y], g.contact);
         dot(g.contact[0], g.contact[1], R);
         // ⚙️ Aim Guide None draws nothing past the contact (a tournament's Short still does).
-        if (!poolGuideLen() && S.guideMode === 'full') return { segs, dots };
+        if (S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full')) return { segs, dots };
         if (g.pocketed) {
             const p = pockets.slice().sort((a, b) => Math.hypot(a.x - g.contact[0], a.y - g.contact[1]) - Math.hypot(b.x - g.contact[0], b.y - g.contact[1]))[0];
             if (p) dot(p.x, p.y, p.r);

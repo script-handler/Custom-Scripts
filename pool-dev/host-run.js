@@ -194,7 +194,10 @@ async function main() {
         });
         const clipped = Array.from(hud.el.querySelectorAll('.ph-name, .ph-tag, .ph-hint span, .ph-pill span, .ph-cam span, .ph-frames-n, .ph-btn span, .ph-replace span'))
             .filter(visible).filter(el => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).display !== 'inline');
-        ok('no label is cut off', !clipped.length, clipped.map(e => e.className + ' "' + e.textContent + '"').join(', '));
+        // On a failure: the widths, the card's tag and tight state, and whether the theme's fonts had loaded.
+        ok('no label is cut off', !clipped.length, clipped.map(e => { const card = e.closest('.ph-card'), tag = card && card.querySelector('.ph-tag');
+            return e.className + ' "' + e.textContent + '" ' + e.scrollWidth + '>' + e.clientWidth + (card ? ' tag "' + (tag ? tag.textContent : '') + '" tight ' + card.classList.contains('is-tight') : '') +
+                ' font ' + getComputedStyle(e).fontFamily.split(',')[0] + ' ' + document.fonts.status + ' ' + document.fonts.check('13px "Share Tech Mono"'); }).join(', '));
         const cs = getComputedStyle(hud.el), card = cs.getPropertyValue('--pool-card').trim();
         ok('--pool-card resolves', card && !/var\\(/.test(card), card);
         ok('canvas backing store is its CSS size × dpr', S.canvas.width === Math.round(S.W * S.dpr) && S.W === S.canvas.clientWidth, S.canvas.width + ' for ' + S.W);

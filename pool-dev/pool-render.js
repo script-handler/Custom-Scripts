@@ -672,7 +672,7 @@
     //   dpr,                                         backing-store scale of ctx
     //   aim: { angle, power, gap } | null,           null hides the cue and the guides
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
-    //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off', illegal,
+    //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode (default 150; 0 draws no paths),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
     //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
@@ -736,11 +736,12 @@
         // 6. Shadows, then guides.
         const live = w.balls.filter(b => b.state !== 'pocketed' && !(scene.bih && b.id === 0));
         pgFill(ctx, live.map(b => pcPoly(view, pgCirc(b.x + 4 * K, b.y - 5 * K, R * 1.08, 0.3, 20))), '#000000', 0.38);
-        const g = scene.aim && scene.guide && scene.guideMode !== 'off' ? scene.guide : null;
+        // 'off' (a tournament's) is ⚙️ Guideline None: the aim line and the ghost ball, nothing past the contact.
+        const g = scene.aim && scene.guide ? scene.guide : null;
         const Z = 0.6;
         if (g && g.contact) {
             const short = scene.guideMode === 'short';
-            const L = short ? 60 : typeof scene.guideLen === 'number' ? scene.guideLen : 150;
+            const L = scene.guideMode === 'off' ? 0 : short ? 60 : typeof scene.guideLen === 'number' ? scene.guideLen : 150;
             const dx = g.contact[0] - g.start[0], dy = g.contact[1] - g.start[1], dl = Math.hypot(dx, dy) || 1;
             const ux = dx / dl, uy = dy / dl;
             if (dl > 2.3 * R) {
