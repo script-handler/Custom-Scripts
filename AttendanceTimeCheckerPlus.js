@@ -302,7 +302,10 @@
     const XP_DEFAULTS = {
         level: 1, currentXP: 0, totalXP: 0, lastHourTracked: -1, todayHours: 0, consecutiveDays: 0, totalWorkDays: 0,
         gameSessions: 0, lastAttendanceDate: null, lastShiftCompletedDate: null, lastStreakBonusDate: null,
-        hadStreakReset: false, longestStreak: 0, achievements: [], milestonesReached: []
+        hadStreakReset: false, longestStreak: 0, achievements: [], milestonesReached: [],
+        // dayLog: what each attendance day has been paid (see dayEntry); todayKey: the day the
+        // one-day fields above (todayHours, lastHourTracked, milestonesReached) belong to.
+        dayLog: null, todayKey: null
     };
     function xpFrom(d) {
         const out = {};
@@ -318,6 +321,49 @@
     const STREAK_BONUS_MAX_DAYS = 7;
     // Min hours logged before a day counts toward the streak.
     const STREAK_MIN_HOURS = 1;
+    // The attendance day: Pakistan's date, still the day before until 5 AM, so a shift that runs
+    // past midnight is one day. calculateTotalTime picks it once, with the rows it reads, and passes
+    // it with their hours to awardXP; every per-day XP record (hourly XP, milestones, the shift, the
+    // streak) keys on it, as toDateString() text. They used the browser's midnight, so between
+    // midnight and 5 AM the day's hours were paid and its shift credited a second time.
+    const ATTENDANCE_TZ = 'Asia/Karachi', ATTENDANCE_ROLLOVER_H = 5;
+    const attendanceNow = () => new Date(new Date().toLocaleString('en-US', { timeZone: ATTENDANCE_TZ }));
+    function attendanceDay(now) {
+        const d = new Date(now || attendanceNow());
+        if (d.getHours() < ATTENDANCE_ROLLOVER_H) d.setDate(d.getDate() - 1);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+    // What each attendance day has been paid: hours (h), milestones (m), its shift (s) and the
+    // streak bonus (b). Keyed by the day, not "the last day seen", so a clock moved forward and back
+    // finds its day already paid, and a day key from a clock that was ahead blocks nothing. The
+    // last DAY_LOG_KEEP days are kept.
+    const DAY_LOG_KEEP = 40;
+    function dayEntry(day, hoursNow) {
+        const log = userXP.dayLog || (userXP.dayLog = seedDayLog(day, hoursNow));
+        if (!log[day]) {
+            log[day] = { h: 0, m: [], s: false, b: false };
+            const keys = Object.keys(log);
+            keys.slice(0, Math.max(0, keys.length - DAY_LOG_KEEP)).forEach(k => delete log[k]);
+        }
+        return log[day];
+    }
+    // The first run after the upgrade, or after a restore: the one-day fields become today's entry
+    // only where they can be today's. Their day (todayKey, else the old xpLastDay, written at the
+    // browser's midnight) must be today or tomorrow, their hours no more than today's rows show,
+    // and the shift counts only if today's rows complete one. Otherwise today starts unpaid.
+    function seedDayLog(day, hoursNow) {
+        const x = userXP, e = { h: 0, m: [], s: false, b: false };
+        const near = k => !!k && (k === day || new Date(k) - new Date(day) === 864e5);
+        const paid = Math.max(0, x.lastHourTracked || 0);
+        if (near(x.todayKey || localStorage.getItem('xpLastDay')) && paid <= Math.floor(hoursNow || 0)) {
+            e.h = paid; e.m = (x.milestonesReached || []).slice();
+        }
+        if (near(x.lastShiftCompletedDate) && (hoursNow || 0) >= getShiftSeconds() / 3600) e.s = true;
+        if (near(x.lastStreakBonusDate)) e.b = true;
+        localStorage.removeItem('xpLastDay');
+        return { [day]: e };
+    }
     // Runaway backstop for the level-curve loops (level 10000 needs ~1.2e11 XP).
     const LEVEL_LOOP_GUARD = 10000;
     const MILESTONE_BONUSES = {
@@ -915,6 +961,7 @@
             lastAttendanceDate: userXP.lastAttendanceDate || null,
             lastShiftCompletedDate: userXP.lastShiftCompletedDate || null,
             lastStreakBonusDate: userXP.lastStreakBonusDate || null,
+            todayKey: userXP.todayKey || null,
             hadStreakReset: !!userXP.hadStreakReset,
             gameSessions: userXP.gameSessions || 0,
             achievements: Array.isArray(userXP.achievements) ? userXP.achievements.slice() : [],
@@ -1115,6 +1162,9 @@
         if (rec.lastAttendanceDate)                        userXP.lastAttendanceDate = rec.lastAttendanceDate;
         if (rec.lastShiftCompletedDate)                    userXP.lastShiftCompletedDate = rec.lastShiftCompletedDate;
         if (rec.lastStreakBonusDate)                       userXP.lastStreakBonusDate = rec.lastStreakBonusDate;
+        if (rec.todayKey)                                  userXP.todayKey = rec.todayKey;
+        // The day ledger is this browser's; restored fields seed a new one (seedDayLog).
+        userXP.dayLog = null;
         if (typeof rec.hadStreakReset === 'boolean')      userXP.hadStreakReset = rec.hadStreakReset;
         if (Array.isArray(rec.achievements))               userXP.achievements = rec.achievements.slice();
         if (Array.isArray(rec.milestonesReached))          userXP.milestonesReached = rec.milestonesReached.slice();
@@ -16891,48 +16941,36 @@
         return true;
     }
 
-    function awardXP(hoursWorked) {
+    // hoursWorked: on the rows of the attendance day `day` (a Date; calculateTotalTime's, so the two
+    // never straddle 5 AM). Without one, the day now.
+    function awardXP(hoursWorked, day) {
         // Guard: must not run before initXPSystem() has loaded localStorage, or the ~100ms window
         // before the setTimeout fires saves default userXP over real progress.
         if (!xpSystemReady) return;
 
+        const today = (day || attendanceDay()).toDateString();
         const currentHour = Math.floor(hoursWorked);
 
         // Calculate and update streak. hoursWorked is passed through so a day with
         // no real hours logged can't advance the streak.
-        calculateStreak(hoursWorked);
+        calculateStreak(hoursWorked, today);
 
-        const today = new Date().toDateString();
-        const lastDay = localStorage.getItem('xpLastDay');
-
-        if (lastDay !== today) {
-            userXP.lastHourTracked = -1;
-            userXP.todayHours = 0;
-            userXP.milestonesReached = [];
-            localStorage.setItem('xpLastDay', today);
-        }
-
-        if (currentHour > userXP.lastHourTracked) {
-            const hoursToAward = currentHour - Math.max(0, userXP.lastHourTracked);
+        const e = dayEntry(today, hoursWorked);
+        if (currentHour > e.h) {
+            const hoursToAward = currentHour - e.h;
             const xpGained = hoursToAward * XP_PER_HOUR;
 
             userXP.currentXP += xpGained;
             userXP.totalXP += xpGained;
-            userXP.lastHourTracked = currentHour;
-            // todayHours mirrors the floor of actual hours worked — do NOT accumulate,
-            // otherwise the very first call of the day (lastHourTracked === -1) inflates it.
-            userXP.todayHours = currentHour;
+            e.h = currentHour;
+            showXPNotification(`+${xpGained} XP for ${hoursToAward} hour(s)!`, 'hourly');
 
-            if (hoursToAward > 0) {
-                showXPNotification(`+${xpGained} XP for ${hoursToAward} hour(s)!`, 'hourly');
-            }
+            checkMilestones(currentHour, e);
 
-            checkMilestones(currentHour);
-
-            // Award streak bonus — once per day, and only for a day with real hours. The award date is
-            // tracked explicitly rather than piggybacked on xpLastDay (already advanced by this point),
-            // so the bonus can wait for the first real hour of the day and still fire exactly once.
-            if (userXP.consecutiveDays > 1 && hoursToAward > 0 && userXP.lastStreakBonusDate !== today) {
+            // Award streak bonus — once per day, and only for a day with real hours, so it can wait
+            // for the day's first real hour and still fire exactly once.
+            if (userXP.consecutiveDays > 1 && !e.b) {
+                e.b = true;
                 userXP.lastStreakBonusDate = today;
                 const streakMultiplier = Math.min(userXP.consecutiveDays, STREAK_BONUS_MAX_DAYS);
                 const streakBonus = STREAK_BONUS * streakMultiplier;
@@ -16944,19 +16982,19 @@
 
             checkLevelUp();
         }
+        // The one-day fields mirror today's entry: the Work Rewards display and the cloud record read them.
+        userXP.todayKey = today; userXP.todayHours = e.h; userXP.lastHourTracked = e.h; userXP.milestonesReached = e.m;
 
         // Evaluated on every call, not only on hour boundaries, so the exact-shift Badge of Balance
         // window is still caught when it falls between integer-hour ticks.
-        checkAchievements(hoursWorked);
+        checkAchievements(hoursWorked, today);
 
         saveUserXP(userXP);
         updateXPDisplay();
     }
 
-    function calculateStreak(hoursWorked) {
-        const now = new Date();
-        const today = now.toDateString();
-        const dayOfWeek = now.getDay();
+    function calculateStreak(hoursWorked, today) {
+        const dayOfWeek = new Date(today).getDay();
 
         // Weekends are inert: they neither advance nor reset a streak. The skipped-work-day scan below
         // looks strictly between the two dates, so it returns 0 for Fri-Sat, Sat-Sun and Sun-Mon alike.
@@ -16981,7 +17019,8 @@
         const diffTime = currentDate - lastDate;
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) {
+        // The same day, or one that went back: no change (a negative gap used to count as consecutive).
+        if (diffDays <= 0) {
             return;
         }
 
@@ -17020,28 +17059,33 @@
         if (cur > (userXP.longestStreak || 0)) userXP.longestStreak = cur;
     }
 
-    function checkMilestones(currentHour) {
-        if (MILESTONE_BONUSES[currentHour] && !userXP.milestonesReached.includes(currentHour)) {
-            const milestone = MILESTONE_BONUSES[currentHour];
+    // Every milestone the day has passed and not been paid, once each: the day's entry (e) keeps
+    // them, so first opening the portal 3 hours in still pays the 2-hour one.
+    function checkMilestones(currentHour, e) {
+        Object.keys(MILESTONE_BONUSES).map(Number).filter(h => h <= currentHour && !e.m.includes(h)).forEach(h => {
+            const milestone = MILESTONE_BONUSES[h];
             userXP.currentXP += milestone.xp;
             userXP.totalXP += milestone.xp;
-            userXP.milestonesReached.push(currentHour);
+            e.m.push(h);
             showXPNotification(`${milestone.label}! +${milestone.xp} Bonus XP!`, 'milestone', 'f-ach');
-        }
+        });
     }
 
-    function checkAchievements(hoursWorked) {
-        // hoursWorked is a float (e.g. 7.42). Shift-completion checks use it, not the truncated
-        // userXP.todayHours, so achievements never fire early on partial work.
-        if (typeof hoursWorked !== 'number') hoursWorked = (userXP.todayHours || 0);
+    // hoursWorked is a float (e.g. 7.42) on the attendance day `today`. Shift-completion checks use
+    // it, not the paid whole hours, so achievements never fire early on partial work. Without them
+    // (after a game), the day now and the hours paid on it.
+    function checkAchievements(hoursWorked, today) {
+        today = today || attendanceDay().toDateString();
+        if (typeof hoursWorked !== 'number') hoursWorked = (userXP.dayLog && userXP.dayLog[today] ? userXP.dayLog[today].h : 0);
 
         const shiftHours = getShiftSeconds() / 3600;
-        const today = new Date().toDateString();
         const shiftCompletedToday = hoursWorked >= shiftHours;
+        const e = dayEntry(today, hoursWorked);
 
-        // Once per day: bump totalWorkDays on a completed shift. SINGLE source of truth for
-        // shift completed — used by Day One / Full Week / Month Done.
-        if (shiftCompletedToday && userXP.lastShiftCompletedDate !== today) {
+        // Once per attendance day: bump totalWorkDays on a completed shift. SINGLE source of truth
+        // for shift completed — used by Day One / Full Week / Month Done / Centurion.
+        if (shiftCompletedToday && !e.s) {
+            e.s = true;
             userXP.lastShiftCompletedDate = today;
             userXP.totalWorkDays = (userXP.totalWorkDays || 0) + 1;
         }
@@ -25531,15 +25575,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     }
 
     function calculateTotalTime(totalTimeDiv) {
-        let date = new Date();
-        let today = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
-        let todayFormatted = formatDate(today);
-
-        if (today.getHours() < 5) {
-            const prevDay = new Date(today);
-            prevDay.setDate(today.getDate() - 1);
-            todayFormatted = formatDate(prevDay);
-        }
+        const today = attendanceNow(), day = attendanceDay(today);
+        const todayFormatted = formatDate(day);
 
         let totalWorkedTime = 0;
         let checkInTime = null;
@@ -25563,7 +25600,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 const checkInHour = parseInt(time.split(":")[0], 10);
 
                 if (date === todayFormatted) {
-                    if (checkInOut === 'In' && checkInHour > 5) {
+                    if (checkInOut === 'In' && checkInHour >= ATTENDANCE_ROLLOVER_H) {
                         if (lastCheckOutTime) {
                             const gap = calculateTimeDifference(lastCheckOutTime, time);
                             if (gap <= 21600) {
@@ -25586,7 +25623,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         lastCheckOutTime = time;
                         checkInTime = null;
                     }
-                } else if (date === formatDate(today) && today.getHours() < 5 && checkInHour < 5) {
+                } else if (date === formatDate(today) && today.getHours() < ATTENDANCE_ROLLOVER_H && checkInHour < ATTENDANCE_ROLLOVER_H) {
                     if (checkInOut === 'In') {
                         if (lastCheckOutTime) {
                             const gap = calculateTimeDifference(lastCheckOutTime, time);
@@ -25635,10 +25672,10 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             const shouldRerender = isInitialRender || (tableStructureChanged && !featuresInitialized);
 
             if (shouldRerender) {
-                renderFullContent(totalTimeDiv, totalWorkedTime, checkInOutList, today);
+                renderFullContent(totalTimeDiv, totalWorkedTime, checkInOutList, today, day);
             } else {
                 // Just update dynamic content without re-rendering to preserve animations
-                updateDynamicContent(totalWorkedTime, today, checkInOutList);
+                updateDynamicContent(totalWorkedTime, today, checkInOutList, day);
             }
 
             lastTotalWorkedTime = totalWorkedTime;
@@ -25912,7 +25949,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             <span class="ws-rw-ach">${userXP.achievements.filter(k => ACHIEVEMENTS[k]).length}/${total} achievements</span>`;
     }
 
-    function renderFullContent(totalTimeDiv, totalWorkedTime, checkInOutList, today) {
+    function renderFullContent(totalTimeDiv, totalWorkedTime, checkInOutList, today, day) {
         const M = wsModel(totalWorkedTime, checkInOutList, today), progress = M.pct;
         const shiftCode = String(userPreferences.shiftDuration || '8h').toUpperCase();
 
@@ -26376,8 +26413,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 flappyHighScore = loadFlappyHighScore();
                 tetrisHighScore = loadTetrisHighScore();
 
-                const hoursWorked = totalWorkedTime / 3600;
-                awardXP(hoursWorked);
+                awardXP(totalWorkedTime / 3600, day);
 
                 document.addEventListener('keydown', (e) => {
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -26419,8 +26455,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 featuresInitialized = true;
             }, 100);
         } else {
-            const hoursWorked = totalWorkedTime / 3600;
-            awardXP(hoursWorked);
+            awardXP(totalWorkedTime / 3600, day);
         }
 
         // Expose functions to window for onclick handlers
@@ -26554,8 +26589,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         renderMiniBoard();
     }
 
-    function updateDynamicContent(totalWorkedTime, today, checkInOutList = []) {
-        awardXP(totalWorkedTime / 3600);
+    function updateDynamicContent(totalWorkedTime, today, checkInOutList = [], day) {
+        awardXP(totalWorkedTime / 3600, day);
         const last = checkInOutList[checkInOutList.length - 1], cell = document.getElementById('current-worked-time');
         if (last && last.checkOut === 'Current' && cell && cell.textContent !== last.workedTime) cell.textContent = last.workedTime;
         const root = document.querySelector('#total-time-summary .ws-center');
