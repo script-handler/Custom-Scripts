@@ -9,7 +9,7 @@
     //
     //   poolNetConnect()          ⚙️'s server (wss://, port 7777 by default), with backoff, then gives up
     //   poolNetDisconnect()       and stay off
-    //   poolNetChallenge(id, o)   { game, bestOf, reds } → the server's `challenged` at the other end
+    //   poolNetChallenge(id, o)   { game, bestOf, reds, call, guides } → the server's `challenged` at the other end
     //   poolNetAnswer(id, yes)    an invite; yes starts the room (pool-game.js poolNetStart)
     //   poolNetMove(m)            a move in this room: numbered, kept until acked, resent on reconnect
     //   poolNetAim(a)             the live cue, throttled; the other tab draws it
@@ -32,7 +32,7 @@
         state: 'off',            // off | connecting | open | down
         url: '', ws: null, err: '', tries: 0, retryT: null, beat: null, wanted: false, everOpen: false, downAt: 0,
         id: '', key: '', lobby: [], invites: [], outgoing: null, note: '',
-        room: null,              // { id, seed, game, bestOf, seat, names, ids }
+        room: null,              // { id, seed, game, bestOf, seat, names, ids, reds, rules: { call, guides } }
         known: 0,                // the room's last move seq this tab has seen or had acked
         out: [],                 // our moves not acked yet: { seq, m }
         inbox: [],               // moves to play, in order: { seq, m, seat, replay }
@@ -159,7 +159,7 @@
             N.invites = N.invites.filter(i => N.lobby.some(p => p.id === i.from));
             break;
         case 'challenged':
-            N.invites = N.invites.filter(i => i.from !== m.from).concat([{ id: m.id, from: m.from, name: m.name, game: m.game, bestOf: m.bestOf, reds: m.reds, until: Date.now() + (m.expiresMs || 30000) }]);
+            N.invites = N.invites.filter(i => i.from !== m.from).concat([{ id: m.id, from: m.from, name: m.name, game: m.game, bestOf: m.bestOf, reds: m.reds, rules: poolNetRules(m), until: Date.now() + (m.expiresMs || 30000) }]);
             if (on.invite) on.invite(m);
             break;
         case 'challenge':
@@ -173,7 +173,7 @@
             break;
         case 'start': {
             const again = !!(N.room && N.room.id === m.room);
-            N.room = { id: m.room, seed: m.seed >>> 0, game: m.game === 'snooker' ? 'snooker' : 'pool', bestOf: m.bestOf || 1, seat: m.seat === 2 ? 2 : 1, names: m.names || ['', ''], ids: m.ids || [], reds: [15, 10, 6].indexOf(m.reds) >= 0 ? m.reds : 15 };
+            N.room = { id: m.room, seed: m.seed >>> 0, game: m.game === 'snooker' ? 'snooker' : 'pool', bestOf: m.bestOf || 1, seat: m.seat === 2 ? 2 : 1, names: m.names || ['', ''], ids: m.ids || [], reds: [15, 10, 6].indexOf(m.reds) >= 0 ? m.reds : 15, rules: poolNetRules(m) };
             N.invites = []; N.outgoing = null; N.note = ''; N.peer = 'here'; N.aim = null;
             if (!again) { N.known = 0; N.out = []; N.inbox = []; }
             if (on.start) on.start(N.room, again);
@@ -224,9 +224,12 @@
     }
     function poolNetEnd() { const N = poolNet; N.room = null; N.out = []; N.inbox = []; N.known = 0; N.peer = 'here'; N.aim = null; N.said = {}; }
 
+    // A challenge's table rules; a server from before them sends none: no calls, guidelines on.
+    const poolNetRules = m => ({ call: m.call === true, guides: m.guides !== false });
     function poolNetChallenge(to, o) {
         o = o || {};
-        poolNetRaw({ t: 'challenge', to, game: o.game === 'snooker' ? 'snooker' : 'pool', bestOf: [1, 3, 5].indexOf(o.bestOf) >= 0 ? o.bestOf : 1, reds: [15, 10, 6].indexOf(o.reds) >= 0 ? o.reds : 15 });
+        poolNetRaw(Object.assign({ t: 'challenge', to, game: o.game === 'snooker' ? 'snooker' : 'pool', bestOf: [1, 3, 5].indexOf(o.bestOf) >= 0 ? o.bestOf : 1,
+            reds: [15, 10, 6].indexOf(o.reds) >= 0 ? o.reds : 15 }, poolNetRules(o)));
     }
     function poolNetCancel() { const N = poolNet; if (N.outgoing) poolNetRaw({ t: 'cancel', id: N.outgoing.id }); N.outgoing = null; poolNetBump(); }
     function poolNetAnswer(id, yes) {

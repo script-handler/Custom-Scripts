@@ -164,8 +164,8 @@
             newFrame: o => psNewFrame({ breaker: o.breaker, reds: POOL_GAMES.snooker.framesReds(), seed: o.seed }),
             status: (f, w, seat) => psStatus(f, w, seat || f.turn, poolS.nom),
             judge: (f, w, pick) => psJudge(f, w, pick.nominate, pick.call),
-            // Call pocket: a picked tier's (Adaptive changes no rule), the tournament's, none in 2 Players.
-            lockCall: (f, tier) => { f.call = poolMode === 'tour' ? poolS.callMode : poolMode === 'cpu' && poolDifficulty() !== 'adaptive' ? (tier.call || 'off') : 'off'; },
+            // Call pocket: a picked tier's (Adaptive changes no rule), else the table's (poolQuickRules, poolTourApply).
+            lockCall: (f, tier) => { f.call = poolMode !== 'cpu' ? poolS.callMode : poolDifficulty() !== 'adaptive' ? (tier.call || 'off') : 'off'; },
             apply: (w, v) => psApplySpots(w, v.spots),
             timeout: (f, w) => psTimeout(f, w, poolS.nom),
             text: (v, names) => psText(v, names),
@@ -507,9 +507,18 @@
 
     // ── Frames ────────────────────────────────────────────────────────
     // seed: online, the room's for this frame, so both tabs rack the same table.
+    // The table rules of a quick match, set as each frame racks (a tournament's come from its
+    // settings, poolTourApply): 2 Players plays the sheet's switches, Online the room's (the
+    // challenger's, shown on the invite), Vs CPU the plain game (its tiers add their own calls).
+    const poolPrefRules = () => ({ call: userPreferences.poolMatchCall === true, guides: userPreferences.poolMatchGuides !== false });
+    function poolQuickRules() {
+        const S = poolS, r = poolMode === 'net' && S.netRoom ? S.netRoom.rules : poolMode === 'pvp' ? poolPrefRules() : { call: false, guides: true };
+        S.guideMode = r.guides ? 'full' : 'off'; S.callEvery = r.call; S.callMode = r.call ? 'all' : 'off';
+    }
     function poolNewFrame(breaker, seed) {
         const S = poolS, R = poolRules();
         if (!S.cfg) poolUseGame(S.game);
+        if (poolMode !== 'tour') poolQuickRules();
         S.seed = seed !== undefined ? seed >>> 0 : (Date.now() ^ (S.rackId * 2654435761)) >>> 0;
         S.rng = ppRandom(S.seed);
         S.world = R.rack(R.world(), S.rng);
@@ -971,7 +980,7 @@
             result: S.result,
             canReplace: !!S.frame.ballInHand && S.placed && poolCanAct(),
             cpuTurn,
-            sheet: { open: S.sheet.open, mode: S.sheet.mode, note: poolSheetNote(),
+            sheet: { open: S.sheet.open, mode: S.sheet.mode, note: poolSheetNote(), rules: poolPrefRules(),
                 names: [1, 2].map(seat => ({ value: String(userPreferences[POOL_PVP_NAME_PREFS[seat]] || ''), placeholder: poolPvpDefault(seat) })) },
             difficulty: poolDifficulty(), adaptiveTier: R.cpu.adaptive(poolCpuRec()),
             tour: poolTourHead(), tourSheet: poolTourSheet(),
@@ -1249,6 +1258,16 @@
             if (poolFrameFresh()) { poolLockTier(); S.sheet.open = false; }
         },
         startPvp: () => { poolSetMode('pvp'); poolS.sheet.open = false; },
+        // The match rules on the 2 Players and Online tabs. Calls start with the next frame;
+        // guidelines change at once in 2 Players. A challenge sends them with it.
+        matchRule: k => {
+            if (k !== 'call' && k !== 'guides') return;
+            const r = poolPrefRules();
+            r[k] = !r[k];
+            userPreferences.poolMatchCall = r.call; userPreferences.poolMatchGuides = r.guides;
+            savePreferences();
+            if (poolMode === 'pvp') poolS.guideMode = r.guides ? 'full' : 'off';
+        },
         // A 2 Players name, as it is typed: the cards follow at once; saved once it settles.
         pvpName: d => {
             const key = d && POOL_PVP_NAME_PREFS[d.seat];
@@ -1317,7 +1336,7 @@
         netConnect: () => { userPreferences.poolNetAuto = true; savePreferences(); poolNetConnect(userPreferences.poolNetServer); },
         netDisconnect: () => { if (poolMode === 'net') poolNetQuit(); userPreferences.poolNetAuto = false; savePreferences(); poolNetDisconnect(); },
         netBestOf: n => { poolS.netBestOf = [1, 3, 5].indexOf(+n) >= 0 ? +n : 1; poolNetBump(); },
-        netChallenge: id => poolNetChallenge(id, { game: poolS.game, bestOf: poolS.netBestOf, reds: poolRules().framesReds ? poolRules().framesReds() : 15 }),
+        netChallenge: id => poolNetChallenge(id, Object.assign({ game: poolS.game, bestOf: poolS.netBestOf, reds: poolRules().framesReds ? poolRules().framesReds() : 15 }, poolPrefRules())),
         netCancel: () => poolNetCancel(),
         netAccept: id => { poolS.sheet.open = false; poolNetAnswer(id, true); },
         netDecline: id => poolNetAnswer(id, false),
@@ -1466,6 +1485,7 @@
     function poolRestoreTable(snap) {
         const S = poolS, R = poolRules();
         if (!snap || snap.v !== 1 || snap.game !== S.game || !R.validFrame(snap.frame)) return false;
+        if (poolMode !== 'tour') poolQuickRules();
         const world = poolWorldFrom(snap);
         if (!world) return false;
         if (poolMode !== 'tour') poolMode = snap.mode === 'pvp' ? 'pvp' : 'cpu';
@@ -1556,7 +1576,6 @@
             poolTourSnapshot();
             poolMode = T.prevMode === 'pvp' ? 'pvp' : 'cpu';
             T.matchId = null; T.pending = 0; T.screen = null; T.dialog = null;
-            S.guideMode = 'full'; S.callEvery = false; S.callMode = 'off';
             S.parked[S.game] = null;
         } else if (S.world) {
             S.parked[S.game] = poolSnapshotTable();
@@ -1694,7 +1713,7 @@
         poolTourSnapshot();
         poolMode = mode === 'pvp' || mode === 'cpu' ? mode : T.prevMode === 'pvp' ? 'pvp' : 'cpu';
         T.matchId = null; T.pending = 0;
-        S.guideMode = 'full'; S.callEvery = false; S.callMode = 'off'; S.clockTotal = poolQuickClock();
+        S.clockTotal = poolQuickClock();
         S.frames = [0, 0];
         poolNewFrame(1);
         poolRefreshScoreBtn();
@@ -1909,9 +1928,12 @@
         if (poolMode !== 'net' && S.world) S.parked[S.game] = poolSnapshotTable();
         if (S.game !== room.game) { S.netRoom = null; poolMode = 'cpu'; poolSetVariant(room.game); }
         poolMode = 'net';
-        S.netRoom = { id: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, seat: room.seat, names: room.names.slice(), reds: room.reds, closed: false };
+        S.netRoom = { id: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, seat: room.seat, names: room.names.slice(), reds: room.reds,
+            rules: room.rules || { call: false, guides: true }, closed: false };
         S.frames = [0, 0]; S.result = null; S.sheet.open = false; S.cues = false; S.spinOpen = false; S.drag = null; S.power = 0; S.netResyncs = 0;
         poolNetBeginFrame(0);
+        // Both tables say what the challenger set.
+        poolShowToast({ kind: 'notice', title: 'Match rules', sub: phRulesText(room.game, S.netRoom.rules) });
         poolRefreshScoreBtn();
         poolSyncChrome();
     }
@@ -2110,9 +2132,9 @@
         return {
             state: N.state, err: N.err, note: N.note, server: String(userPreferences.poolNetServer || ''),
             players: N.lobby.map(p => ({ id: p.id, name: p.name, busy: p.status === 'playing' })),
-            invites: N.invites.map(i => ({ id: i.id, name: i.name, game: i.game, bestOf: i.bestOf })),
+            invites: N.invites.map(i => ({ id: i.id, name: i.name, game: i.game, bestOf: i.bestOf, rules: i.rules })),
             outgoing: N.outgoing ? N.outgoing.name || 'them' : '',
-            bestOf: S.netBestOf, game: S.game,
+            bestOf: S.netBestOf, game: S.game, rules: poolPrefRules(),
             inRoom: poolMode === 'net' && !!S.netRoom && !S.netRoom.closed,
             said: poolNetSaying(),
             rev: N.rev,

@@ -77,6 +77,7 @@ function client(port, id, key, name, plus) {
     ok(sa && sb && sa.room === sb.room && sa.seed === sb.seed, 'same room and seed');
     ok(sa.seat === 1 && sb.seat === 2, 'challenger is seat 1');
     ok(sa.game === 'snooker' && sb.bestOf === 3, 'options carried');
+    ok(sa.call === false && sb.guides === true, 'no rules sent: no calls, guidelines on');
     const room = sa.room;
 
     console.log('moves');

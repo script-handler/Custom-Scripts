@@ -1392,5 +1392,33 @@ head('Table cloth, per game');
     Object.keys(U).forEach(k => delete U[k]); Object.assign(U, JSON.parse(keep)); P.poolS.game = game;
 }
 
+head('Match rules (2 Players and Online)');
+{
+    // The sheet's switches: call every shot, guidelines. 2 Players plays them; Vs CPU does not.
+    const G = L.game({ seed: 71 }), S = G.poolS;
+    G.poolOn.matchRule('call'); G.poolOn.matchRule('guides');
+    ok('the switches are saved as your settings', G.host.userPreferences.poolMatchCall === true && G.host.userPreferences.poolMatchGuides === false);
+    G.poolNewFrame(1);
+    ok('Vs CPU keeps the plain game whatever they say', G.poolMode === 'cpu' && !S.frame.callEvery && S.guideMode === 'full');
+    G.poolOn.startPvp();
+    ok('2 Players plays them: every shot called, no guidelines', G.poolMode === 'pvp' && S.frame.callEvery === true && S.guideMode === 'off');
+    G.poolOn.matchRule('guides'); G.poolOn.matchRule('call');
+    ok('mid-frame, guidelines come back at once; the call rule waits for the next frame', S.guideMode === 'full' && S.frame.callEvery === true);
+    G.poolNewFrame(1);
+    ok('…which plays without calls', S.frame.callEvery === false);
+    G.poolOn.matchRule('call');
+    G.poolSetVariant('snooker');
+    ok('snooker in 2 Players: call every shot is every pocket called', S.game === 'snooker' && S.frame.call === 'all');
+    // The sheet: the switches, the invite's words, and each tab's help behind ⓘ.
+    const html = G.phRulesHTML('pool', { call: true, guides: false });
+    ok('the switches say their state', /data-ph-rule="call"[^>]*aria-checked="true"/.test(html) && /data-ph-rule="guides"[^>]*aria-checked="false"/.test(html));
+    ok('…and lock while a challenge waits', (G.phRulesHTML('pool', {}, true).match(/disabled/g) || []).length === 2);
+    ok('rules in words: 8-ball calls the 8 without them; snooker calls nothing', G.phRulesText('pool', {}) === 'Call the 8 only · Guidelines on' && G.phRulesText('snooker', { guides: false }) === 'No calls · No guidelines');
+    ok('help: 2 Players and Tournament say what they are; Vs CPU has none', /Hot-seat/.test(G.phSheetHelp('pvp').html) && /Knockout/.test(G.phSheetHelp('tour').html) && G.phSheetHelp('cpu') === null);
+    const off = G.phSheetHelp('net', { state: 'off', err: "Can't reach the server. Open https://10.0.0.5:7777/ once and accept its certificate, then Connect" });
+    ok('Online\'s help has the whole error, its link live, and turns the ⓘ red', off.hot && /<a href="https:\/\/10\.0\.0\.5:7777\/"/.test(off.html) && /then Connect/.test(off.html));
+    ok('…while the status line keeps its first sentence', G.phNetStatus({ state: 'off', err: "Can't reach the server. Open it" }).text === "Can't reach the server");
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

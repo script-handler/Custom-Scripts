@@ -12,7 +12,8 @@
 //   client → server
 //     hello     {clientId, key, name, build, plus}   first message; key is the client's own secret,
 //                                              plus its Plus proof (online play is Plus, see plusTags)
-//     challenge {to, game, bestOf, reds}      → the target gets `challenged`
+//     challenge {to, game, bestOf, reds, call, guides}   → the target gets `challenged`
+//                                              (call: every shot called; guides: aim lines on)
 //     answer    {id, accept}                   accept → both get `start`
 //     cancel    {id}
 //     move      {room, seq, m}                 seq = 1, 2, 3… per room; relayed and logged
@@ -23,7 +24,7 @@
 //     ping
 //   server → client
 //     welcome {you, room?}  lobby {players}  challenged {...}  challenge {id, state}
-//     start {room, seed, game, bestOf, reds, seat, names, ids}  move {seq, m, seat}  say {text, seat}
+//     start {room, seed, game, bestOf, reds, call, guides, seat, names, ids}  move {seq, m, seat}  say {text, seat}
 //     ack {seq}  resync {have}  aim {...}  peer {state, holdMs?}  closed {reason, by?}
 //     error {code, msg}  pong
 const fs = require('fs');
@@ -71,7 +72,7 @@ function createServer(opts = {}) {
     function startRoom(ch) {
         const a = clients.get(ch.from), b = clients.get(ch.to);
         const room = {
-            id: shortId(), seed: crypto.randomInt(1, 2 ** 31), game: ch.game, bestOf: ch.bestOf, reds: ch.reds,
+            id: shortId(), seed: crypto.randomInt(1, 2 ** 31), game: ch.game, bestOf: ch.bestOf, reds: ch.reds, call: ch.call, guides: ch.guides,
             ids: [a.id, b.id], names: [a.name, b.name], log: [], away: new Map(), results: new Map(),
         };
         rooms.set(room.id, room);
@@ -80,7 +81,7 @@ function createServer(opts = {}) {
         say('room', room.id, room.game, a.name, 'v', b.name);
         lobby();
     }
-    const startMsg = (room, id) => ({ t: 'start', room: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, reds: room.reds,
+    const startMsg = (room, id) => ({ t: 'start', room: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, reds: room.reds, call: room.call, guides: room.guides,
         seat: room.ids.indexOf(id) + 1, names: room.names, ids: room.ids });
     const other = (room, id) => clients.get(room.ids[room.ids[0] === id ? 1 : 0]);
 
@@ -161,14 +162,14 @@ function createServer(opts = {}) {
             if (!to || !to.ws || to.id === c.id) return send(c, { t: 'error', code: 'challenge', msg: 'player is not online' });
             if (c.room || to.room) return send(c, { t: 'error', code: 'challenge', msg: 'already in a match' });
             const ch = { id: shortId(), from: c.id, to: to.id, game: m.game === 'snooker' ? 'snooker' : 'pool',
-                bestOf: [1, 3, 5].includes(m.bestOf) ? m.bestOf : 1, reds: [15, 10, 6].includes(m.reds) ? m.reds : 15 };
+                bestOf: [1, 3, 5].includes(m.bestOf) ? m.bestOf : 1, reds: [15, 10, 6].includes(m.reds) ? m.reds : 15, call: m.call === true, guides: m.guides !== false };
             ch.timer = setTimeout(() => {
                 challenges.delete(ch.id);
                 [c, to].forEach(x => send(clients.get(x.id), { t: 'challenge', id: ch.id, state: 'expired' }));
             }, o.challengeMs);
             challenges.set(ch.id, ch);
             send(c, { t: 'challenge', id: ch.id, state: 'sent', to: to.id });
-            send(to, { t: 'challenged', id: ch.id, from: c.id, name: c.name, game: ch.game, bestOf: ch.bestOf, reds: ch.reds, expiresMs: o.challengeMs });
+            send(to, { t: 'challenged', id: ch.id, from: c.id, name: c.name, game: ch.game, bestOf: ch.bestOf, reds: ch.reds, call: ch.call, guides: ch.guides, expiresMs: o.challengeMs });
             return;
         }
         case 'answer': case 'cancel': {

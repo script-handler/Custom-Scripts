@@ -6514,7 +6514,7 @@
     //   bih: { valid, reason, placed, sx, sy, sr } | null,
     //   canReplace,                  the placed cue ball may be picked up again
     //   cpuTurn,                     the CPU is at the table: its own hint, no human controls
-    //   sheet: { open, mode, note, names: [{ value, placeholder }] },   the Game mode sheet
+    //   sheet: { open, mode, note, names: [{ value, placeholder }], rules: { call, guides } },   the Game mode sheet
     //   difficulty, diffs,           the picked difficulty; this game's list (PH_DIFFS)
     //   pots: { 1: [ids], 2: [ids] } each seat's potted balls, shown while the table is open
     //   tour: { kicker, title, frame } | null   header strip; the footer becomes Bracket / Pause / Max
@@ -6684,6 +6684,7 @@
                 tour: g.tourSheet && g.tourSheet.saved ? { saved: true, cta: 'RESUME ' + String(g.tourSheet.name || 'TOURNAMENT').toUpperCase(), sub: g.tourSheet.where || '' }
                     : { saved: false, cta: 'SET UP TOURNAMENT', sub: '' },
                 net: g.net || null,
+                game: g.game, rules: (g.sheet && g.sheet.rules) || {}, help: phSheetHelp(sheetMode, g.net),
             } : { show: false },
             invite: phInvite(g.net, sheetOpen),
             // Online: the React button and tray, and what each seat just said (a bubble under its card).
@@ -6704,7 +6705,24 @@
     function phInvite(net, sheetOpen) {
         const i = net && !net.inRoom && !sheetOpen && net.invites && net.invites[0];
         if (!i) return { show: false };
-        return { show: true, id: i.id, title: i.name + ' challenges you', text: (i.game === 'snooker' ? 'Snooker' : '8-Ball') + (i.bestOf > 1 ? ' · best of ' + i.bestOf : ' · one frame') };
+        return { show: true, id: i.id, title: i.name + ' challenges you', text: (i.game === 'snooker' ? 'Snooker' : '8-Ball') + (i.bestOf > 1 ? ' · best of ' + i.bestOf : ' · one frame') +
+            ' · ' + phRulesText(i.game, i.rules) };
+    }
+    // A match's table rules in words: "Call every shot · No guidelines". Without "call every
+    // shot", 8-ball still calls the 8.
+    const phRulesText = (game, r) => {
+        r = r || {};
+        return (r.call ? 'Call every shot' : game === 'snooker' ? 'No calls' : 'Call the 8 only') + ' · ' + (r.guides === false ? 'No guidelines' : 'Guidelines on');
+    };
+    // The match rules' switches (2 Players, and Online before a challenge); off while one waits.
+    function phRulesHTML(game, r, off) {
+        r = r || {};
+        const rows = [['call', 'Call every shot', game === 'snooker' ? 'Name the pocket for every pot' : 'Name the pocket for every ball, not just the 8'],
+            ['guides', 'Guidelines', 'The aim line and the ghost ball']];
+        return '<div class="ph-rules" role="group" aria-label="Match rules"><span class="ph-sheet-l ph-label">MATCH RULES</span>' + rows.map(([k, t, d]) =>
+            '<div class="ph-rule"><span class="ph-rule-t" id="ph-rule-' + k + '">' + t + '<span class="ph-net-sub">' + d + '</span></span>' +
+            '<button type="button" class="pu-switch" role="switch" data-ph-rule="' + k + '" aria-labelledby="ph-rule-' + k + '" aria-checked="' + (r[k] === true || (k === 'guides' && r[k] !== false)) + '"' +
+            (off ? ' disabled' : '') + '><span><span></span></span></button></div>').join('') + '</div>';
     }
     const phEsc = v => String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     // The Online tab's status line: the connection, else why not, and the last challenge's news.
@@ -6712,8 +6730,18 @@
         if (!n) return { text: '', tone: '' };
         const k = (n.players || []).length;
         const base = n.state === 'open' ? 'Connected · ' + (k ? k + (k === 1 ? ' player' : ' players') + ' online' : 'no one else online')
-            : n.state === 'connecting' ? 'Connecting…' : n.err || (n.state === 'down' ? 'Reconnecting…' : 'Not connected');
+            : n.state === 'connecting' ? 'Connecting…' : (n.err && n.err.split('. ')[0]) || (n.state === 'down' ? 'Reconnecting…' : 'Not connected');
         return { text: base + (n.note && n.state === 'open' ? ' · ' + n.note : ''), tone: n.state === 'open' ? 'ok' : n.err ? 'hot' : '' };
+    }
+    // Each tab's help, behind the sheet header's ⓘ: what the mode is; for Online, how to get on,
+    // under the whole of the last error with its link live. Vs CPU's choices explain themselves.
+    function phSheetHelp(mode, n) {
+        const link = s => phEsc(s).replace(/https?:\/\/[^\s<]*[^\s<.,]/g, u => '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>');
+        if (mode === 'pvp') return { html: '<p>Hot-seat on this computer. Hand the panel over after each turn; the game tells you whose shot it is.</p>', hot: false };
+        if (mode === 'tour') return { html: '<p>Knockout bracket for 3 to 16 people taking turns on this computer. Humans only, no CPU players.</p>', hot: false };
+        if (mode !== 'net') return null;
+        const err = n && n.state !== 'open' && n.err;
+        return { html: (err ? '<p class="is-hot">' + link(err) + '</p>' : '') + '<p>Enter the server address, then Connect. Others join from Game mode › Online with the same address.</p>', hot: !!err };
     }
     // The Online tab's body: in a match, a way out; else invites, your challenge, the players and
     // (only once there is someone to challenge) the match length.
@@ -6724,15 +6752,16 @@
         const game = g => (g === 'snooker' ? 'Snooker' : '8-Ball');
         const len = b => (b > 1 ? 'best of ' + b : '1 frame');
         if (n.inRoom) return '<span class="ph-net-sub">In a match. Leaving concedes the frame.</span><div class="ph-sheet-links">' + btn('leave', undefined, 'Leave match', 'is-hot') + '</div>';
-        if (n.state !== 'open') return '<span class="ph-net-sub">Enter the server address, then Connect.</span>';
+        if (n.state !== 'open') return '';
         let h = '';
         if (n.invites.length) h += '<div class="ph-net-list">' + n.invites.map(i => '<div class="ph-net-row is-invite"><span class="ph-net-name">' + phEsc(i.name) +
-            '<span class="ph-net-sub">' + game(i.game) + ' · ' + len(i.bestOf) + '</span></span>' +
+            '<span class="ph-net-sub">' + game(i.game) + ' · ' + len(i.bestOf) + ' · ' + phRulesText(i.game, i.rules) + '</span></span>' +
             btn('accept', i.id, 'Accept', 'is-go') + btn('decline', i.id, 'Decline') + '</div>').join('') + '</div>';
         if (n.outgoing) h += '<div class="ph-net-row"><span class="ph-net-name">Challenge sent<span class="ph-net-sub">Waiting for ' + phEsc(n.outgoing) + '…</span></span>' + btn('cancel', undefined, 'Cancel') + '</div>';
-        if (!n.players.length) return h + '<span class="ph-net-sub">Waiting for players. Others join from Game mode › Online with the same address.</span>';
+        if (!n.players.length) return h + '<span class="ph-net-sub">Waiting for players.</span>';
         h += '<div class="ph-net-bo" role="radiogroup" aria-label="Match length"><span class="ph-sheet-l ph-label">MATCH · ' + game(n.game).toUpperCase() + '</span>' +
-            [1, 3, 5].map(b => '<button type="button" role="radio" class="ph-btn" data-ph-net="bo" data-id="' + b + '" aria-checked="' + (n.bestOf === b ? 'true' : 'false') + '">' + (b > 1 ? 'Best of ' + b : '1 frame') + '</button>').join('') + '</div>';
+            [1, 3, 5].map(b => '<button type="button" role="radio" class="ph-btn" data-ph-net="bo" data-id="' + b + '" aria-checked="' + (n.bestOf === b ? 'true' : 'false') + '">' + (b > 1 ? 'Best of ' + b : '1 frame') + '</button>').join('') + '</div>' +
+            phRulesHTML(n.game, n.rules, !!n.outgoing);
         h += '<div class="ph-net-list">' + n.players.map(p => '<div class="ph-net-row"><span class="ph-net-name">' + phEsc(p.name) + (p.busy ? '<span class="ph-net-sub">In a match</span>' : '') + '</span>' +
             (p.busy ? '' : btn('challenge', p.id, 'Challenge', 'is-go', !!n.outgoing)) + '</div>').join('') + '</div>';
         return h;
@@ -7017,7 +7046,10 @@
             '</span><span class="ph-sheet-dd">' + d.desc + '</span></span></button>').join('');
         return '<div class="ph-sheet-scrim" data-ph="sheetscrim" hidden></div>' +
             '<div class="ph-sheet" role="dialog" aria-label="Game mode" data-ph="sheet" hidden>' +
-            '<div class="ph-sheet-head"><span class="ph-sheet-title">Game mode</span><button type="button" class="ph-btn is-icon" data-ph="sheetx" aria-label="Close">' + PH_ICON.close + '</button></div>' +
+            '<div class="ph-sheet-head"><span class="ph-sheet-title">Game mode</span><span class="ph-sheet-acts">' +
+            '<button type="button" class="ph-btn is-icon ph-sheet-help" data-ph="sheethelp" aria-label="About this mode" aria-expanded="false" aria-controls="ph-sheet-pop" hidden>' + PH_ICON.info + '</button>' +
+            '<button type="button" class="ph-btn is-icon" data-ph="sheetx" aria-label="Close">' + PH_ICON.close + '</button></span>' +
+            '<div class="ph-sheet-pop" id="ph-sheet-pop" role="note" data-ph="sheetpop" hidden></div></div>' +
             '<div class="ph-sheet-modes" role="radiogroup" aria-label="Mode">' +
             '<button type="button" role="radio" class="ph-sheet-mode" data-ph-mode="cpu" aria-checked="false">' + PH_ICON.chip + '<span>Vs CPU</span></button>' +
             '<button type="button" role="radio" class="ph-sheet-mode" data-ph-mode="pvp" aria-checked="false">' + PH_ICON.people + '<span>2 Players</span></button>' +
@@ -7026,14 +7058,14 @@
             '<div class="ph-sheet-cpu" data-ph="sheetcpu"><div class="ph-sheet-l ph-label">CPU DIFFICULTY</div>' +
             '<div class="ph-sheet-diffs" role="radiogroup" aria-label="CPU difficulty">' + diffs + '</div>' +
             '<div class="ph-sheet-note" data-ph="sheetnote" hidden></div></div>' +
-            '<div class="ph-sheet-pvp" data-ph="sheettour" hidden><span>Knockout bracket for 3 to 16 people taking turns on this computer. Humans only, no CPU players.</span>' +
+            '<div class="ph-sheet-pvp" data-ph="sheettour" hidden>' +
             '<button type="button" class="ph-primary ph-label is-two" data-ph="sheettourgo"><span data-ph="sheettourcta">SET UP TOURNAMENT</span><span class="ph-primary-sub" data-ph="sheettoursub"></span></button>' +
             '<div class="ph-sheet-links"><button type="button" class="ph-btn" data-ph="sheetcab">' + PH_ICON.cup + '<span>Trophy cabinet</span></button>' +
             '<button type="button" class="ph-btn is-hot" data-ph="sheetabandon" hidden><span>Abandon</span></button></div></div>' +
-            '<div class="ph-sheet-pvp" data-ph="sheetpvp" hidden><span>Hot-seat on this computer. Hand the panel over after each turn; the game tells you whose shot it is.</span>' +
+            '<div class="ph-sheet-pvp" data-ph="sheetpvp" hidden>' +
             '<div class="ph-sheet-names">' + [1, 2].map(seat => '<label class="ph-sheet-name"><span class="ph-sheet-l ph-label">PLAYER ' + seat + '</span>' +
                 '<input type="text" class="ph-sheet-input" maxlength="16" autocomplete="off" spellcheck="false" data-ph="sheetp' + seat + '" aria-label="Player ' + seat + ' name"></label>').join('') + '</div>' +
-            '<button type="button" class="ph-primary ph-label" data-ph="sheetstart">START 2-PLAYER FRAME</button></div>' +
+            '<div data-ph="sheetrules"></div><button type="button" class="ph-primary ph-label" data-ph="sheetstart">START 2-PLAYER FRAME</button></div>' +
             // Online: the server, its status, then what phNetBodyHTML lists.
             '<div class="ph-sheet-pvp ph-sheet-net" data-ph="sheetnet" hidden><div class="ph-net-srv"><label class="ph-sheet-name"><span class="ph-sheet-l ph-label">SERVER</span>' +
             '<input type="text" class="ph-sheet-input" maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. 172.16.3.132" data-ph="sheetnetsrv" aria-label="Pool server address"></label>' +
@@ -7096,7 +7128,7 @@
             'hint', 'hintt', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
-            'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2',
+            'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2', 'sheetrules', 'sheethelp', 'sheetpop',
             'sheettour', 'sheettourgo', 'sheettourcta', 'sheettoursub', 'sheetcab', 'sheetabandon', 'bracket', 'pause', 'tourhead', 'tourk', 'tourn', 'tourf', 'title', 'trophy',
             'toastacts', 'track', 'trred', 'trreds', 'trdots', 'trsnk', 'trconcede', 'trrem', 'trlive', 'chips', 'chipgrid', 'chipcap', 'chippad', 'dlgstats', 'cscrim', 'cdlg', 'cdlgt', 'cdlgy', 'cdlgn',
             'cue', 'cues', 'cuenew', 'cuenewn', 'cuenewgo', 'cuenewx',
@@ -7195,8 +7227,14 @@
         hud.modeButtons.forEach(b => b.addEventListener('click', () => fire('sheetTab', b.getAttribute('data-ph-mode'))));
         hud.diffButtons.forEach(b => b.addEventListener('click', () => fire('difficulty', b.getAttribute('data-ph-diff'))));
         hud.sheetx.addEventListener('click', () => fire('sheetClose'));
+        // The ⓘ popover is the HUD's own: a click elsewhere in the sheet or Esc closes it.
+        hud.helpPop = on => { hud.helpOpen = on; phShow(hud.sheetpop, on); hud.sheethelp.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+        hud.sheethelp.addEventListener('click', () => hud.helpPop(!hud.helpOpen));
+        hud.sheet.addEventListener('click', e => { if (hud.helpOpen && !hud.sheetpop.contains(e.target) && !hud.sheethelp.contains(e.target)) hud.helpPop(false); });
+        hud.sheet.addEventListener('keydown', e => { if (e.key === 'Escape' && hud.helpOpen) { hud.helpPop(false); hud.sheethelp.focus(); e.preventDefault(); e.stopPropagation(); } });
         hud.sheetscrim.addEventListener('click', () => fire('sheetClose'));
         hud.sheetstart.addEventListener('click', () => fire('startPvp'));
+        hud.sheet.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ph-rule]'); if (b && !b.disabled) fire('matchRule', b.getAttribute('data-ph-rule')); });
         [1, 2].forEach(seat => {
             const inp = hud['sheetp' + seat];
             inp.addEventListener('input', () => fire('pvpName', { seat, value: inp.value }));
@@ -7533,7 +7571,7 @@
         }
         s('foot.mode', vm.foot.modeLabel, v => { hud.model.textContent = v; });
         const sh = vm.sheet;
-        s('sheet.show', sh.show, v => { phShow(hud.sheet, v); phShow(hud.sheetscrim, v); hud.mode.setAttribute('aria-expanded', v ? 'true' : 'false'); });
+        s('sheet.show', sh.show, v => { phShow(hud.sheet, v); phShow(hud.sheetscrim, v); hud.mode.setAttribute('aria-expanded', v ? 'true' : 'false'); if (!v) hud.helpPop(false); });
         if (sh.show) {
             s('sheet.mode', sh.mode, v => {
                 hud.modeButtons.forEach(b => b.setAttribute('aria-checked', b.getAttribute('data-ph-mode') === v ? 'true' : 'false'));
@@ -7546,7 +7584,7 @@
                 s('sheet.netgo', nt.state === 'off' ? 'Connect' : 'Disconnect', v => { hud.sheetnetgo.textContent = v; hud.netOn = v === 'Disconnect'; });
                 const st = phNetStatus(nt);
                 s('sheet.netst', st.text + '|' + st.tone, () => { hud.sheetnetst.textContent = st.text; hud.sheetnetst.className = 'ph-net-st' + (st.tone ? ' is-' + st.tone : ''); });
-                s('sheet.netbody', JSON.stringify([nt.state, nt.inRoom, nt.invites, nt.outgoing, nt.players, nt.bestOf, nt.game]), () => { hud.sheetnetbody.innerHTML = phNetBodyHTML(nt); });
+                s('sheet.netbody', JSON.stringify([nt.state, nt.inRoom, nt.invites, nt.outgoing, nt.players, nt.bestOf, nt.game, nt.rules]), () => { hud.sheetnetbody.innerHTML = phNetBodyHTML(nt); });
             }
             // The list is built once; its words follow the game being played.
             s('sheet.words', sh.diffs.map(d => d.name + '|' + d.desc).join(';'), () => hud.diffButtons.forEach((b, i) => {
@@ -7558,6 +7596,13 @@
             }));
             s('sheet.diff', sh.diffs.map(d => d.checked ? 1 : 0).join(''), () => hud.diffButtons.forEach((b, i) => b.setAttribute('aria-checked', sh.diffs[i].checked ? 'true' : 'false')));
             s('sheet.chip', sh.chip, v => { hud.sheetchip.textContent = v; });
+            s('sheet.helpmode', sh.mode, () => hud.helpPop(false));
+            s('sheet.help', JSON.stringify(sh.help), () => {
+                phShow(hud.sheethelp, !!sh.help); hud.sheethelp.classList.toggle('is-hot', !!(sh.help && sh.help.hot));
+                hud.sheetpop.innerHTML = sh.help ? sh.help.html : '';
+                if (!sh.help) hud.helpPop(false);
+            });
+            s('sheet.rules', JSON.stringify([sh.game, sh.rules]), () => { hud.sheetrules.innerHTML = phRulesHTML(sh.game, sh.rules); });
             s('sheet.note', sh.note, v => { hud.sheetnote.textContent = v; phShow(hud.sheetnote, !!v); });
             // A name being typed is never written back under the caret.
             sh.names.forEach((n, i) => {
@@ -9011,7 +9056,7 @@
     //
     //   poolNetConnect()          ⚙️'s server (wss://, port 7777 by default), with backoff, then gives up
     //   poolNetDisconnect()       and stay off
-    //   poolNetChallenge(id, o)   { game, bestOf, reds } → the server's `challenged` at the other end
+    //   poolNetChallenge(id, o)   { game, bestOf, reds, call, guides } → the server's `challenged` at the other end
     //   poolNetAnswer(id, yes)    an invite; yes starts the room (pool-game.js poolNetStart)
     //   poolNetMove(m)            a move in this room: numbered, kept until acked, resent on reconnect
     //   poolNetAim(a)             the live cue, throttled; the other tab draws it
@@ -9034,7 +9079,7 @@
         state: 'off',            // off | connecting | open | down
         url: '', ws: null, err: '', tries: 0, retryT: null, beat: null, wanted: false, everOpen: false, downAt: 0,
         id: '', key: '', lobby: [], invites: [], outgoing: null, note: '',
-        room: null,              // { id, seed, game, bestOf, seat, names, ids }
+        room: null,              // { id, seed, game, bestOf, seat, names, ids, reds, rules: { call, guides } }
         known: 0,                // the room's last move seq this tab has seen or had acked
         out: [],                 // our moves not acked yet: { seq, m }
         inbox: [],               // moves to play, in order: { seq, m, seat, replay }
@@ -9161,7 +9206,7 @@
             N.invites = N.invites.filter(i => N.lobby.some(p => p.id === i.from));
             break;
         case 'challenged':
-            N.invites = N.invites.filter(i => i.from !== m.from).concat([{ id: m.id, from: m.from, name: m.name, game: m.game, bestOf: m.bestOf, reds: m.reds, until: Date.now() + (m.expiresMs || 30000) }]);
+            N.invites = N.invites.filter(i => i.from !== m.from).concat([{ id: m.id, from: m.from, name: m.name, game: m.game, bestOf: m.bestOf, reds: m.reds, rules: poolNetRules(m), until: Date.now() + (m.expiresMs || 30000) }]);
             if (on.invite) on.invite(m);
             break;
         case 'challenge':
@@ -9175,7 +9220,7 @@
             break;
         case 'start': {
             const again = !!(N.room && N.room.id === m.room);
-            N.room = { id: m.room, seed: m.seed >>> 0, game: m.game === 'snooker' ? 'snooker' : 'pool', bestOf: m.bestOf || 1, seat: m.seat === 2 ? 2 : 1, names: m.names || ['', ''], ids: m.ids || [], reds: [15, 10, 6].indexOf(m.reds) >= 0 ? m.reds : 15 };
+            N.room = { id: m.room, seed: m.seed >>> 0, game: m.game === 'snooker' ? 'snooker' : 'pool', bestOf: m.bestOf || 1, seat: m.seat === 2 ? 2 : 1, names: m.names || ['', ''], ids: m.ids || [], reds: [15, 10, 6].indexOf(m.reds) >= 0 ? m.reds : 15, rules: poolNetRules(m) };
             N.invites = []; N.outgoing = null; N.note = ''; N.peer = 'here'; N.aim = null;
             if (!again) { N.known = 0; N.out = []; N.inbox = []; }
             if (on.start) on.start(N.room, again);
@@ -9226,9 +9271,12 @@
     }
     function poolNetEnd() { const N = poolNet; N.room = null; N.out = []; N.inbox = []; N.known = 0; N.peer = 'here'; N.aim = null; N.said = {}; }
 
+    // A challenge's table rules; a server from before them sends none: no calls, guidelines on.
+    const poolNetRules = m => ({ call: m.call === true, guides: m.guides !== false });
     function poolNetChallenge(to, o) {
         o = o || {};
-        poolNetRaw({ t: 'challenge', to, game: o.game === 'snooker' ? 'snooker' : 'pool', bestOf: [1, 3, 5].indexOf(o.bestOf) >= 0 ? o.bestOf : 1, reds: [15, 10, 6].indexOf(o.reds) >= 0 ? o.reds : 15 });
+        poolNetRaw(Object.assign({ t: 'challenge', to, game: o.game === 'snooker' ? 'snooker' : 'pool', bestOf: [1, 3, 5].indexOf(o.bestOf) >= 0 ? o.bestOf : 1,
+            reds: [15, 10, 6].indexOf(o.reds) >= 0 ? o.reds : 15 }, poolNetRules(o)));
     }
     function poolNetCancel() { const N = poolNet; if (N.outgoing) poolNetRaw({ t: 'cancel', id: N.outgoing.id }); N.outgoing = null; poolNetBump(); }
     function poolNetAnswer(id, yes) {
@@ -9448,8 +9496,8 @@
             newFrame: o => psNewFrame({ breaker: o.breaker, reds: POOL_GAMES.snooker.framesReds(), seed: o.seed }),
             status: (f, w, seat) => psStatus(f, w, seat || f.turn, poolS.nom),
             judge: (f, w, pick) => psJudge(f, w, pick.nominate, pick.call),
-            // Call pocket: a picked tier's (Adaptive changes no rule), the tournament's, none in 2 Players.
-            lockCall: (f, tier) => { f.call = poolMode === 'tour' ? poolS.callMode : poolMode === 'cpu' && poolDifficulty() !== 'adaptive' ? (tier.call || 'off') : 'off'; },
+            // Call pocket: a picked tier's (Adaptive changes no rule), else the table's (poolQuickRules, poolTourApply).
+            lockCall: (f, tier) => { f.call = poolMode !== 'cpu' ? poolS.callMode : poolDifficulty() !== 'adaptive' ? (tier.call || 'off') : 'off'; },
             apply: (w, v) => psApplySpots(w, v.spots),
             timeout: (f, w) => psTimeout(f, w, poolS.nom),
             text: (v, names) => psText(v, names),
@@ -9791,9 +9839,18 @@
 
     // ── Frames ────────────────────────────────────────────────────────
     // seed: online, the room's for this frame, so both tabs rack the same table.
+    // The table rules of a quick match, set as each frame racks (a tournament's come from its
+    // settings, poolTourApply): 2 Players plays the sheet's switches, Online the room's (the
+    // challenger's, shown on the invite), Vs CPU the plain game (its tiers add their own calls).
+    const poolPrefRules = () => ({ call: userPreferences.poolMatchCall === true, guides: userPreferences.poolMatchGuides !== false });
+    function poolQuickRules() {
+        const S = poolS, r = poolMode === 'net' && S.netRoom ? S.netRoom.rules : poolMode === 'pvp' ? poolPrefRules() : { call: false, guides: true };
+        S.guideMode = r.guides ? 'full' : 'off'; S.callEvery = r.call; S.callMode = r.call ? 'all' : 'off';
+    }
     function poolNewFrame(breaker, seed) {
         const S = poolS, R = poolRules();
         if (!S.cfg) poolUseGame(S.game);
+        if (poolMode !== 'tour') poolQuickRules();
         S.seed = seed !== undefined ? seed >>> 0 : (Date.now() ^ (S.rackId * 2654435761)) >>> 0;
         S.rng = ppRandom(S.seed);
         S.world = R.rack(R.world(), S.rng);
@@ -10255,7 +10312,7 @@
             result: S.result,
             canReplace: !!S.frame.ballInHand && S.placed && poolCanAct(),
             cpuTurn,
-            sheet: { open: S.sheet.open, mode: S.sheet.mode, note: poolSheetNote(),
+            sheet: { open: S.sheet.open, mode: S.sheet.mode, note: poolSheetNote(), rules: poolPrefRules(),
                 names: [1, 2].map(seat => ({ value: String(userPreferences[POOL_PVP_NAME_PREFS[seat]] || ''), placeholder: poolPvpDefault(seat) })) },
             difficulty: poolDifficulty(), adaptiveTier: R.cpu.adaptive(poolCpuRec()),
             tour: poolTourHead(), tourSheet: poolTourSheet(),
@@ -10533,6 +10590,16 @@
             if (poolFrameFresh()) { poolLockTier(); S.sheet.open = false; }
         },
         startPvp: () => { poolSetMode('pvp'); poolS.sheet.open = false; },
+        // The match rules on the 2 Players and Online tabs. Calls start with the next frame;
+        // guidelines change at once in 2 Players. A challenge sends them with it.
+        matchRule: k => {
+            if (k !== 'call' && k !== 'guides') return;
+            const r = poolPrefRules();
+            r[k] = !r[k];
+            userPreferences.poolMatchCall = r.call; userPreferences.poolMatchGuides = r.guides;
+            savePreferences();
+            if (poolMode === 'pvp') poolS.guideMode = r.guides ? 'full' : 'off';
+        },
         // A 2 Players name, as it is typed: the cards follow at once; saved once it settles.
         pvpName: d => {
             const key = d && POOL_PVP_NAME_PREFS[d.seat];
@@ -10601,7 +10668,7 @@
         netConnect: () => { userPreferences.poolNetAuto = true; savePreferences(); poolNetConnect(userPreferences.poolNetServer); },
         netDisconnect: () => { if (poolMode === 'net') poolNetQuit(); userPreferences.poolNetAuto = false; savePreferences(); poolNetDisconnect(); },
         netBestOf: n => { poolS.netBestOf = [1, 3, 5].indexOf(+n) >= 0 ? +n : 1; poolNetBump(); },
-        netChallenge: id => poolNetChallenge(id, { game: poolS.game, bestOf: poolS.netBestOf, reds: poolRules().framesReds ? poolRules().framesReds() : 15 }),
+        netChallenge: id => poolNetChallenge(id, Object.assign({ game: poolS.game, bestOf: poolS.netBestOf, reds: poolRules().framesReds ? poolRules().framesReds() : 15 }, poolPrefRules())),
         netCancel: () => poolNetCancel(),
         netAccept: id => { poolS.sheet.open = false; poolNetAnswer(id, true); },
         netDecline: id => poolNetAnswer(id, false),
@@ -10750,6 +10817,7 @@
     function poolRestoreTable(snap) {
         const S = poolS, R = poolRules();
         if (!snap || snap.v !== 1 || snap.game !== S.game || !R.validFrame(snap.frame)) return false;
+        if (poolMode !== 'tour') poolQuickRules();
         const world = poolWorldFrom(snap);
         if (!world) return false;
         if (poolMode !== 'tour') poolMode = snap.mode === 'pvp' ? 'pvp' : 'cpu';
@@ -10840,7 +10908,6 @@
             poolTourSnapshot();
             poolMode = T.prevMode === 'pvp' ? 'pvp' : 'cpu';
             T.matchId = null; T.pending = 0; T.screen = null; T.dialog = null;
-            S.guideMode = 'full'; S.callEvery = false; S.callMode = 'off';
             S.parked[S.game] = null;
         } else if (S.world) {
             S.parked[S.game] = poolSnapshotTable();
@@ -10978,7 +11045,7 @@
         poolTourSnapshot();
         poolMode = mode === 'pvp' || mode === 'cpu' ? mode : T.prevMode === 'pvp' ? 'pvp' : 'cpu';
         T.matchId = null; T.pending = 0;
-        S.guideMode = 'full'; S.callEvery = false; S.callMode = 'off'; S.clockTotal = poolQuickClock();
+        S.clockTotal = poolQuickClock();
         S.frames = [0, 0];
         poolNewFrame(1);
         poolRefreshScoreBtn();
@@ -11193,9 +11260,12 @@
         if (poolMode !== 'net' && S.world) S.parked[S.game] = poolSnapshotTable();
         if (S.game !== room.game) { S.netRoom = null; poolMode = 'cpu'; poolSetVariant(room.game); }
         poolMode = 'net';
-        S.netRoom = { id: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, seat: room.seat, names: room.names.slice(), reds: room.reds, closed: false };
+        S.netRoom = { id: room.id, seed: room.seed, game: room.game, bestOf: room.bestOf, seat: room.seat, names: room.names.slice(), reds: room.reds,
+            rules: room.rules || { call: false, guides: true }, closed: false };
         S.frames = [0, 0]; S.result = null; S.sheet.open = false; S.cues = false; S.spinOpen = false; S.drag = null; S.power = 0; S.netResyncs = 0;
         poolNetBeginFrame(0);
+        // Both tables say what the challenger set.
+        poolShowToast({ kind: 'notice', title: 'Match rules', sub: phRulesText(room.game, S.netRoom.rules) });
         poolRefreshScoreBtn();
         poolSyncChrome();
     }
@@ -11394,9 +11464,9 @@
         return {
             state: N.state, err: N.err, note: N.note, server: String(userPreferences.poolNetServer || ''),
             players: N.lobby.map(p => ({ id: p.id, name: p.name, busy: p.status === 'playing' })),
-            invites: N.invites.map(i => ({ id: i.id, name: i.name, game: i.game, bestOf: i.bestOf })),
+            invites: N.invites.map(i => ({ id: i.id, name: i.name, game: i.game, bestOf: i.bestOf, rules: i.rules })),
             outgoing: N.outgoing ? N.outgoing.name || 'them' : '',
-            bestOf: S.netBestOf, game: S.game,
+            bestOf: S.netBestOf, game: S.game, rules: poolPrefRules(),
             inRoom: poolMode === 'net' && !!S.netRoom && !S.netRoom.closed,
             said: poolNetSaying(),
             rev: N.rev,
@@ -21531,7 +21601,20 @@
                 background: var(--pool-overlay-strong); border-top: 1px solid var(--pool-overlay-line);
                 box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.5); color: var(--pool-overlay-text);
             }
-            .pool-hud .ph-sheet-head { height: 44px; display: flex; align-items: center; justify-content: space-between; }
+            .pool-hud .ph-sheet-head { position: relative; height: 44px; display: flex; align-items: center; justify-content: space-between; }
+            .pool-hud .ph-sheet-acts { display: flex; gap: 8px; }
+            /* The ⓘ: red while Online has an error to explain. Its popover drops under the header,
+               the sheet's glass over solid dark (the sheet is dark in every theme) so nothing shows through. */
+            .pool-hud .ph-sheet-head .ph-sheet-help.is-hot { color: var(--pool-hot-lite); border-color: var(--pool-hot-lite); }
+            .pool-hud .ph-sheet-pop {
+                position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 2; box-sizing: border-box; padding: 12px 14px;
+                border-radius: var(--pool-radius); border: 1px solid var(--pool-overlay-line); background: linear-gradient(var(--pool-overlay-strong), var(--pool-overlay-strong)), rgb(14, 17, 19);
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); font-size: 13px; line-height: 1.45; color: var(--pool-overlay-text); overflow-wrap: anywhere;
+            }
+            .pool-hud .ph-sheet-pop p { margin: 0; }
+            .pool-hud .ph-sheet-pop p + p { margin-top: 8px; }
+            .pool-hud .ph-sheet-pop .is-hot { color: var(--pool-hot-lite); }
+            .pool-hud .ph-sheet-pop a { color: var(--pool-accent-lite); }
             .pool-hud .ph-sheet-title { font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 18px; }
             .pool-hud .ph-sheet-head .ph-btn { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
             .pool-hud .ph-sheet-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -21641,6 +21724,12 @@
             .pool-hud .ph-net-sub { font-size: 11px; font-weight: 500; color: var(--pool-overlay-muted); white-space: normal; }
             .pool-hud .ph-net-bo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
             .pool-hud .ph-net-bo .ph-sheet-l { flex: 1 0 100%; margin: 0; white-space: nowrap; }
+            /* Match rules: a label, then a switch per rule with its line of help. */
+            .pool-hud .ph-rules { display: flex; flex-direction: column; gap: 8px; }
+            .pool-hud .ph-rules > .ph-sheet-l { margin: 0; }
+            .pool-hud .ph-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+            .pool-hud .ph-rule-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; font-weight: 600; }
+            .pool-hud .ph-rule .pu-switch:disabled { opacity: 0.5; cursor: default; }
             .pool-hud .ph-net-bo .ph-btn { flex: 1 1 0; min-width: 0; padding: 0 6px; white-space: nowrap; }
             /* Vs CPU: PLAY over the dimmed table, until the player starts the frame. */
             .pool-hud .ph-start-scrim { display: flex; align-items: center; justify-content: center; z-index: 7; }

@@ -619,7 +619,20 @@
                 background: var(--pool-overlay-strong); border-top: 1px solid var(--pool-overlay-line);
                 box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.5); color: var(--pool-overlay-text);
             }
-            .pool-hud .ph-sheet-head { height: 44px; display: flex; align-items: center; justify-content: space-between; }
+            .pool-hud .ph-sheet-head { position: relative; height: 44px; display: flex; align-items: center; justify-content: space-between; }
+            .pool-hud .ph-sheet-acts { display: flex; gap: 8px; }
+            /* The ⓘ: red while Online has an error to explain. Its popover drops under the header,
+               the sheet's glass over solid dark (the sheet is dark in every theme) so nothing shows through. */
+            .pool-hud .ph-sheet-head .ph-sheet-help.is-hot { color: var(--pool-hot-lite); border-color: var(--pool-hot-lite); }
+            .pool-hud .ph-sheet-pop {
+                position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 2; box-sizing: border-box; padding: 12px 14px;
+                border-radius: var(--pool-radius); border: 1px solid var(--pool-overlay-line); background: linear-gradient(var(--pool-overlay-strong), var(--pool-overlay-strong)), rgb(14, 17, 19);
+                box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); font-size: 13px; line-height: 1.45; color: var(--pool-overlay-text); overflow-wrap: anywhere;
+            }
+            .pool-hud .ph-sheet-pop p { margin: 0; }
+            .pool-hud .ph-sheet-pop p + p { margin-top: 8px; }
+            .pool-hud .ph-sheet-pop .is-hot { color: var(--pool-hot-lite); }
+            .pool-hud .ph-sheet-pop a { color: var(--pool-accent-lite); }
             .pool-hud .ph-sheet-title { font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 18px; }
             .pool-hud .ph-sheet-head .ph-btn { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
             .pool-hud .ph-sheet-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -729,6 +742,12 @@
             .pool-hud .ph-net-sub { font-size: 11px; font-weight: 500; color: var(--pool-overlay-muted); white-space: normal; }
             .pool-hud .ph-net-bo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
             .pool-hud .ph-net-bo .ph-sheet-l { flex: 1 0 100%; margin: 0; white-space: nowrap; }
+            /* Match rules: a label, then a switch per rule with its line of help. */
+            .pool-hud .ph-rules { display: flex; flex-direction: column; gap: 8px; }
+            .pool-hud .ph-rules > .ph-sheet-l { margin: 0; }
+            .pool-hud .ph-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+            .pool-hud .ph-rule-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; font-weight: 600; }
+            .pool-hud .ph-rule .pu-switch:disabled { opacity: 0.5; cursor: default; }
             .pool-hud .ph-net-bo .ph-btn { flex: 1 1 0; min-width: 0; padding: 0 6px; white-space: nowrap; }
             /* Vs CPU: PLAY over the dimmed table, until the player starts the frame. */
             .pool-hud .ph-start-scrim { display: flex; align-items: center; justify-content: center; z-index: 7; }

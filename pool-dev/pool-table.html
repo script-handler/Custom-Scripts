@@ -511,7 +511,9 @@ function toggleGameMaxModal(cfg) {
     if (Q.has('tipx') || Q.has('tipy')) S.tip = phClampTip(+Q.get('tipx') || 0, +Q.get('tipy') || 0);
     if (Q.has('spinopen')) S.spinOpen = true;
     // ?sheet=cpu|pvp opens the Game mode sheet on that tab.
-    if (Q.get('sheet')) S.sheet = { open: true, mode: ['pvp', 'tour'].includes(Q.get('sheet')) ? Q.get('sheet') : 'cpu' };
+    if (Q.get('sheet')) S.sheet = { open: true, mode: ['pvp', 'tour', 'net'].includes(Q.get('sheet')) ? Q.get('sheet') : 'cpu' };
+    // Online's tab after a failed Connect, and with the help open.
+    if (Q.has('neterr')) { poolNet.err = "Can't reach the server. Open https://172.16.3.132:7777/ once and accept its certificate, then Connect"; userPreferences.poolNetServer = '172.16.3.132'; }
     // ?tour=setup|bracket|intro|match|result|champion|cabinet|resume|pause|abandon: a
     // tournament of ?n players (6 by default) with ?played matches decided, the better
     // seed winning bar every third match; ?tframe=1 plays a frame of the next match first.
@@ -675,6 +677,8 @@ function toggleGameMaxModal(cfg) {
     });
     // The HUD's Vs CPU button switches the mode too; keep the rig's select in step.
     setInterval(() => { if ($('mode').value !== poolMode) $('mode').value = poolMode; }, 300);
+    // help=1: the sheet's ⓘ popover open.
+    if (Q.has('help')) { const t = setInterval(() => { if (S.hud && S.hud.sheethelp && !S.hud.sheethelp.hidden) { clearInterval(t); S.hud.sheethelp.click(); } }, 50); }
 
     // What only a real browser can check, run by `snapshot.js --check` on each scene.
     window.__hudAudit = () => {

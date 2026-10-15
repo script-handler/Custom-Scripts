@@ -184,6 +184,23 @@ ok('…and no tab needed a resync, the quick player included', A.poolS.netResync
 
     [A, B2].forEach(P => P.poolNetDisconnect());
 
+    head('Match rules');
+    {
+        // The challenger's switches go with the challenge: the invite says them, both tables play them.
+        const C = tab('Cy', port, {}, 7), D = tab('Di', port, {}, 8);
+        ok('two fresh tabs meet in the lobby', await until(() => C.poolNet.lobby.some(p => p.name === 'Di') && D.poolNet.lobby.some(p => p.name === 'Cy'), 3000, [C, D]));
+        C.poolOn.matchRule('call'); C.poolOn.matchRule('guides');
+        ok('the switches are your settings: call every shot on, guidelines off', C.host.userPreferences.poolMatchCall === true && C.host.userPreferences.poolMatchGuides === false);
+        C.poolOn.netChallenge(C.poolNet.lobby.find(p => p.name === 'Di').id);
+        ok('the invite carries them', await until(() => D.poolNet.invites.length === 1, 2000, [C, D]) && D.poolNet.invites[0].rules.call === true && D.poolNet.invites[0].rules.guides === false);
+        ok('…and says them', D.phInvite(D.poolNetModel(), false).text === '8-Ball · one frame · Call every shot · No guidelines', D.phInvite(D.poolNetModel(), false).text);
+        D.poolOn.netAccept(D.poolNet.invites[0].id);
+        ok('both tables play the challenger\'s rules, whatever the accepter\'s own switches', await until(() => C.poolMode === 'net' && D.poolMode === 'net', 2000, [C, D]) &&
+           [C, D].every(P => P.poolS.frame.callEvery === true && P.poolS.guideMode === 'off') && D.host.userPreferences.poolMatchCall !== true);
+        ok('…and each says so as the match starts', [C, D].every(P => P.poolS.toast && P.poolS.toast.title === 'Match rules' && P.poolS.toast.sub === 'Call every shot · No guidelines'));
+        [C, D].forEach(P => { P.poolNetQuit(); P.poolNetDisconnect(); });
+    }
+
     head('Plus');
     {
         // Online play is Plus: a server that checks, a browser with a listed secret, one without.
