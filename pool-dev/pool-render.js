@@ -673,7 +673,7 @@
     //   aim: { angle, power, gap } | null,           null hides the cue and the guides
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
-    //   guideLen: the object ball's line in full mode (default 150; 0 draws no paths),
+    //   guideLen: the object ball's line in full mode, table units (default 4 ball diameters; 0 draws no paths),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
     //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
     //   drops: [{ ball, pocket, t }],
@@ -740,8 +740,9 @@
         const g = scene.aim && scene.guide ? scene.guide : null;
         const Z = 0.6;
         if (g && g.contact) {
-            const short = scene.guideMode === 'short';
-            const L = scene.guideMode === 'off' ? 0 : short ? 60 : typeof scene.guideLen === 'number' ? scene.guideLen : 150;
+            // Lengths are in ball diameters, so snooker's small balls get as much line as pool's.
+            const short = scene.guideMode === 'short', D = 2 * R;
+            const L = scene.guideMode === 'off' ? 0 : short ? 2 * D : typeof scene.guideLen === 'number' ? scene.guideLen : 4 * D;
             const dx = g.contact[0] - g.start[0], dy = g.contact[1] - g.start[1], dl = Math.hypot(dx, dy) || 1;
             const ux = dx / dl, uy = dy / dl;
             if (dl > 2.3 * R) {
@@ -751,7 +752,7 @@
                 pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
             }
             if (g.after.length > 1 && L > 0) {
-                const path = pgTrim(g.after, (short ? 40 : g.cushion ? 120 : 90) + R);
+                const path = pgTrim(g.after, (short ? 1.5 : g.cushion ? 3.5 : 2.5) * D + R);
                 // Start the line at the ghost ball's edge.
                 let k = 0, acc = 0;
                 while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
@@ -778,11 +779,25 @@
             if (s && s[3] > PC_NEAR + R) {
                 const gr = R * s[2];
                 ghost = [s[0], s[1], gr];
+                // A solid rim with a reticle (Cue Club's): ticks square to the aim, one pointing at
+                // the contact, and the centre dot, so the line reads with no guide drawn.
+                const ink = scene.illegal ? theme.hot : pgRgba(PG_GUIDE, 0.95);
                 ctx.beginPath(); ctx.arc(s[0], s[1], gr, 0, Math.PI * 2);
                 ctx.fillStyle = pgRgba(PG_GUIDE, 0.08); ctx.fill();
-                ctx.setLineDash([3, 2.5]);
-                ctx.strokeStyle = scene.illegal ? theme.hot : pgRgba(PG_GUIDE, 0.9); ctx.lineWidth = 1.25; ctx.stroke();
-                ctx.setLineDash([]);
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)'; ctx.lineWidth = 3; ctx.stroke();
+                ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.stroke();
+                const s0 = pcProject(view, [g.start[0], g.start[1], R]);
+                if (!scene.illegal && gr >= 5) {
+                    const a = s0 && Math.hypot(s[0] - s0[0], s[1] - s0[1]) > 1 ? Math.atan2(s[1] - s0[1], s[0] - s0[0]) : 0;
+                    ctx.beginPath();
+                    for (let i = 0; i < 4; i++) {
+                        const c = Math.cos(a + i * Math.PI / 2), n = Math.sin(a + i * Math.PI / 2);
+                        ctx.moveTo(s[0] + c * gr * 0.45, s[1] + n * gr * 0.45); ctx.lineTo(s[0] + c * gr, s[1] + n * gr);
+                    }
+                    ctx.lineCap = 'round'; ctx.strokeStyle = ink; ctx.lineWidth = 1.25; ctx.stroke();
+                    ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(1, gr * 0.09), 0, Math.PI * 2);
+                    ctx.fillStyle = ink; ctx.fill();
+                }
                 if (scene.illegal) {
                     // The prohibition sign: this ball may not be hit first.
                     ctx.beginPath();

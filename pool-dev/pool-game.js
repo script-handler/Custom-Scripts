@@ -892,11 +892,13 @@
     }
 
     // ⚙️ Aim Guide: Full or None, no lengths to pick (the user, 2026-10-13), so a cue's line is the
-    // same for everyone who plays it, online too. Full runs the object ball's line 150 table units,
-    // stretched by the cue's aim; None (0) draws no object-ball or cue-ball path: the aim line to
-    // the contact and the ghost ball there. The old Long, Medium and Short read as Full.
-    const POOL_GUIDE_FULL = 150;
-    const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * poolHumanStats().aim));
+    // same for everyone who plays it, online too. Full runs the object ball's line 4 ball diameters,
+    // stretched by the cue's aim (a mastered Legendary's 1.75 is 7, about 8 Ball Pool's longest, the
+    // user, 2026-10-15, buffed from 3 the same day); in diameters, so snooker's small balls get no longer a line than pool's.
+    // None (0) draws no object-ball or cue-ball path: the aim line to the contact and the ghost
+    // ball there. The old Long, Medium and Short read as Full.
+    const POOL_GUIDE_FULL = 4;
+    const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * 2 * poolS.cfg.ballR * poolHumanStats().aim));
     function poolDraw(dt) {
         const S = poolS, R = poolRules();
         if (!poolFit()) return;

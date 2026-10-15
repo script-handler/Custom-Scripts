@@ -413,7 +413,10 @@ function playFrame(P, maxTicks) {
     P.host.userPreferences.poolGuideLen = 'none';
     const none = P.poolShotPath(v);
     ok('Aim Guide None: guide length 0, and the shot path stops at the contact', P.poolGuideLen() === 0 && none.dots.length === 1 && full.dots.length > 1 && none.segs.length < full.segs.length);
-    ok('an old Long, Medium or Short, or an unknown value, reads as Full', ['long', 'medium', 'short', 'bogus'].every(v => { P.host.userPreferences.poolGuideLen = v; return P.poolGuideLen() === 150; }));
+    ok('an old Long, Medium or Short, or an unknown value, reads as Full', ['long', 'medium', 'short', 'bogus'].every(v => { P.host.userPreferences.poolGuideLen = v; return P.poolGuideLen() === 112; }));
+    const K = L.game({ seed: 5 });
+    K.poolSetVariant('snooker'); K.poolNewFrame(1);
+    ok('snooker\'s line is 4 of its ball diameters too, not pool\'s table units', K.poolGuideLen() === Math.round(8 * K.poolS.cfg.ballR) && K.poolGuideLen() < 70);
 }
 {
     // The header's 🎱 | 🔴 switch, in place of ⚙️ Cue Game.
@@ -1243,7 +1246,7 @@ head('Cues (pool-cues.js, pool-game.js)');
     // Aim and time.
     P.host.userXP.achievements.push('level25');
     P.poolCueEquip('rosewood6');
-    ok('Aim: Rosewood Six (7) runs the guide 37.5 % longer', P.poolGuideLen() === 206);
+    ok('Aim: Rosewood Six (7) runs the guide 37.5 % longer', P.poolGuideLen() === 154);
     P.host.userPreferences.poolGuideLen = 'none';
     ok('…and None stays none', P.poolGuideLen() === 0);
     P.host.userPreferences.poolGuideLen = 'full';
@@ -1296,7 +1299,7 @@ head('Cues (pool-cues.js, pool-game.js)');
     T.frame.turn = 2;
     G.poolCueEquip('rosewood6');
     ok('Player 2 picks on their turn: their seat changes, your setting does not', G.poolSeatCueId(2) === 'rosewood6' && G.poolSeatCueId(1) === 'ember' && G.host.userPreferences.poolCue === 'ember');
-    ok('…and it plays: their aim line, their clock', G.poolGuideLen() === 206 && G.poolTurnClock() === 33 && G.poolCueStats().id === 'rosewood6');
+    ok('…and it plays: their aim line, their clock', G.poolGuideLen() === 154 && G.poolTurnClock() === 33 && G.poolCueStats().id === 'rosewood6');
     ok('…the collection says whose cue it sets', G.poolCueView().who === G.poolNames()[2] && G.poolCueView().eq === 'rosewood6');
     T.frame.turn = 1;
     G.poolCueEquip('tulipwood');
