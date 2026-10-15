@@ -39,14 +39,19 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // the digest is 0f1de5d155b56bfa, as before (checked 2026-10-13).
 // Render again for the guides (the user, 2026-10-15): lengths in ball diameters (full 4, short 2,
 // the cue ball's path 2.5 / 3.5 / 1.5), and the ghost ball a solid rim with a reticle. Before it
-// the digest was 6e4b6ccc845b00c5; the other six are untouched.
+// the digest was 6e4b6ccc845b00c5; the other six are untouched. Then pool's 3D pockets on
+// snooker's path (round lip, walls, cushions drawn in front; the user, 2026-10-15): before it
+// f80f2300b303af0a. Then pool's cushion ends drawn rounded (radius 12): before it 66ac479f818e788f.
+// Then the woodwork and the cues' rarity looks (the design, 2026-10-15): mitred rail boards lit
+// across, grain, a bevel, a graded apron, pearl sights; before it aa5cc3005b7e7b2d. With them the
+// light's sides follow the design's world (ours mirrored in y): the shade on the top and left.
 const POOL_ON_MAIN = {
     table: '1d1012657f807af2',
     breaks: 'ad93085bd4e0dc53',
     fuzz: 'c5cb3113d060a822',
     judge: 'b7dd7e7f76a57efe',
     cpu: '0cdfe55ec4e4a8a7',
-    render: 'f80f2300b303af0a',
+    render: '2dc82720b2062f08',
     match: '3c7bfff39b137b1b',
 };
 const WHAT = {

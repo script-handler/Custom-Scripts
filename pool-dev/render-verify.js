@@ -380,13 +380,31 @@ head('Snooker table');
     const snkRail = frame({ view: so, world: P.psCreateWorld() }).px(...at(dia[0], dia[1]));
     const poolRail = frame({ view: P.pcView(P.pcOrtho(W, H, cfg)), world: P.ppCreateWorld() }).px(...at(dia[0], dia[1]));
     ok('a diamond on pool\'s rail, plain wood on snooker\'s', poolRail[0] > 150 && snkRail[0] < 150, poolRail.join(',') + ' vs ' + snkRail.join(','));
+    // The woodwork (the design, 2026-10-15): pool's warm walnut, snooker's deep red mahogany,
+    // pool's sights mother-of-pearl in a brass ring.
+    const poolWood = frame({ view: P.pcView(P.pcOrtho(W, H, cfg)), world: P.ppCreateWorld() }).px(...at(60, dia[1]));
+    const snkWood = frame({ view: so, world: P.psCreateWorld() }).px(...at(60, dia[1]));
+    ok('each game its own wood: pool\'s walnut is warm and light, snooker\'s mahogany deep and red', poolWood[0] > 120 && poolWood[1] > 80 && snkWood[0] < 110 && snkWood[0] > 2 * snkWood[1],
+       poolWood.join(',') + ' vs ' + snkWood.join(','));
+    const ring = frame({ view: P.pcView(P.pcOrtho(W, H, cfg)), world: P.ppCreateWorld() }).px(...at(dia[0] + 4.1, dia[1]));
+    ok('pool\'s sight is pearl inside a brass ring', poolRail.every(c => c > 190) && ring[0] - ring[2] > 60, poolRail.join(',') + ' / ring ' + ring.join(','));
+    // Neon is lit across the rod by its own stops, not shaded dark like the rest.
+    const rod = new Raster(600, 40), rc = Object.assign(new Ctx(rod, 1), { clip() {} });
+    P.pqDrawFlat(rc, P.pqById('collector'), 'pool', 0, 20, 600, 0.71, 0.73, null);
+    const neon = (() => { const i = (20 * 600 + 300) * 4; return [rod.buf[i], rod.buf[i + 1], rod.buf[i + 2]]; })();
+    ok('a neon ring draws lit, white-hot at its core', neon.every(c => c > 200), neon.join(','));
     const black = frame({ view: so, world: snk }).px(...at(409.2, 0)), felt = frame({ view: so, world: snk }).px(...at(409.2, 60));
     ok('2D: the black sits on its spot (dark, not felt)', black.every(c => c < 60) && felt[1] > 60, black.join(',') + ' / felt ' + felt.join(','));
     const dIn = frame({ view: so, world: P.psCreateWorld(), zone: 'D' }).px(...at(-330, 0)), dOut = frame({ view: so, world: P.psCreateWorld() }).px(...at(-330, 0));
     ok('ball in hand tints the D in the theme accent', dIn.join() !== dOut.join(), dIn.join(',') + ' vs ' + dOut.join(','));
     const rounded = P.pgCushions(scfg), square = P.pgCushions(cfg);
-    ok('snooker\'s cushions curve into the pockets (each end a 9-point rounded nose and a straight jaw, the design revision 1790749498-5862), pool\'s end in straight jaws',
-       rounded.length === 6 && rounded.every(c => c.ends.length === 18) && square.length === 6 && square.every(c => c.ends.length === 2 && c.top.length === 4));
+    ok('snooker\'s cushions curve into the pockets (each end a 9-point rounded nose and a straight jaw, the design revision 1790749498-5862)',
+       rounded.length === 6 && rounded.every(c => c.ends.length === 18));
+    // Pool's are drawn rounded too (the user, 2026-10-15), within a couple of units of the nose colliders.
+    const noses = P.ppCreateWorld().table.points.filter(p => p.kind === 'nose'), arcPts = [].concat(...square.map(c => c.top));
+    const off = Math.max(...noses.map(n => Math.min(...arcPts.map(q => Math.hypot(q[0] - n.x, q[1] - n.y)))));
+    ok('pool\'s cushion ends are drawn rounded (a 9-point arc into a straight jaw), within 2.5 u of each nose collider',
+       square.length === 6 && square.every(c => c.ends.length === 18 && c.top.length === 20) && noses.length === 12 && off < 2.5, off.toFixed(2) + ' u');
     ok('the cue is pool\'s size on the snooker table (as designed); the shadow shrinks with the ball',
        P.pgK(scfg) < 0.53 && P.pcChase([0, 0], 0, 0, W, H, scfg).eye[2] - scfg.ballR === P.pcChase([0, 0], 0, 0, W, H, cfg).eye[2] - cfg.ballR);
 }

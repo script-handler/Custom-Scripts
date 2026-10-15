@@ -6,81 +6,94 @@
 
     // Materials: [base, shadow edge, highlight line], then the average colour and the rod width
     // (px) under which the texture is drawn as that average, then the texture (sizes in mm).
+    // Mirror metal and neon carry their own shading across the rod (PQ_OWN).
     const PQ_MATS = {
         tipBlue: ['#3E73B8', '#22447A', '#7FA5DA'], tipBrown: ['#7A5233', '#42291A', '#A67E5A'], ferrule: ['#F1ECE0', '#BDB4A1', '#FFFFFF'],
         brassFerr: ['#C9A55A', '#7D6128', '#F3DE9E'], lacquer: ['#1A1B1D', '#060607', '#5A5D62'], rubber: ['#1C1D1F', '#0B0B0C', '#3A3C40'],
-        brass: ['#C8A050', '#7A5C22', '#F5E2A6'], silver: ['#C9CDD2', '#7C838C', '#FFFFFF'], gold: ['#D4AF37', '#8A6A12', '#FFF0B0'],
-        turquoise: ['#3FB5A9', '#1E6E66', '#8BE0D5'],
+        brass: ['#C8A050', '#7A5C22', '#F5E2A6'], silver: ['#C9CDD2', '#7C838C', '#FFFFFF'], turquoise: ['#3FB5A9', '#1E6E66', '#8BE0D5'],
         maple: ['#E8D3A6', '#B08C5C', '#FAF0D8', '#E2CB9C', 28, { t: 'grain', c: '#CDAE78', w: 0.25, s: 1.6, wave: 0.6 }],
-        birdseye: ['#E4C998', '#A9824F', '#F7E8C8', '#DCC08D', 36, { t: 'grain', c: '#C9A56E', w: 0.25, s: 1.8, wave: 0.5, eye: '#8E6A3A', eyeS: 3.4, eyeR: 0.55 }],
-        flame: ['#E2B979', '#9E7440', '#F6DDB0', '#D8AE6E', 32, { t: 'grain', c: '#C89A5A', w: 0.3, s: 1.8, wave: 0.6, fig: '#B07E40', figS: 2.8 }],
-        cocobolo: ['#9C4A22', '#5A2610', '#C9774A', '#8A4020', 24, { t: 'stripe', c: '#4A1E0C', w: 0.6, s: 2.4, wave: 1.4 }],
+        birdseye: ['#E4C998', '#A9824F', '#F7E8C8', '#DCC08D', 36, { t: 'grain', c: '#C9A56E', w: 0.25, s: 1.8, wave: 0.5, eye: '#8E6A3A', eyeR: 0.55 }],
         ebony: ['#1E1A18', '#0A0908', '#4A423D', '#201C1A', 44, { t: 'grain', c: '#332C27', w: 0.3, s: 2.2, wave: 0.3 }],
         rosewood: ['#5E2A1C', '#30120A', '#8E4C36', '#52241A', 22, { t: 'stripe', c: '#2A0F08', w: 0.8, s: 3.0, wave: 1.8 }],
-        zebrano: ['#D9BF8C', '#8F7448', '#F1E0BC', '#B39A6C', 16, { t: 'stripe', c: '#4B3520', w: 1.4, s: 4.2, wave: 1.0 }],
         tulipwood: ['#D98A6A', '#9A5034', '#F2B79C', '#D07F60', 22, { t: 'stripe', c: '#B9654A', w: 0.7, s: 2.8, wave: 1.2 }],
         ash: ['#E7D7B4', '#AE9568', '#F8EFD9', '#DFCDA6', 30, { t: 'ash', c: '#C3A675', w: 0.35, s: 3.0, ang: 26 }],
         walnut: ['#3B2318', '#1C0F09', '#6A4634', '#36201A', 36, { t: 'grain', c: '#2A170E', w: 0.4, s: 2.0, wave: 0.6 }],
         linenBlack: ['#1F2023', '#0B0B0C', '#44464B', '#26282B', 40, { t: 'linen', c: '#3A3C41', p: 0.9 }],
         linenNavy: ['#2F4060', '#152035', '#6A7FA3', '#56647E', 40, { t: 'linen', c: '#C8CED8', p: 0.9 }],
         pebble: ['#6B4529', '#33200F', '#9C7150', '#603D24', 40, { t: 'pebble', c: '#4E301A', size: 0.9 }],
-        lizardRed: ['#6A1E18', '#320C08', '#A2483C', '#5C1A15', 40, { t: 'lizard', c: '#3E0F0B', size: 1.8 }],
         lizardBlk: ['#2A2C2F', '#0D0E0F', '#5C6066', '#232528', 40, { t: 'lizard', c: '#121315', size: 1.8 }],
         stitchBlk: ['#1D1C1B', '#0A0A09', '#4A4744', '#2A2826', 28, { t: 'stitched', c: '#E9DFC8', s: 3.2 }],
-        stitchGold: ['#1D1C1B', '#0A0A09', '#4A4744', '#2C2822', 28, { t: 'stitched', c: '#D9B45A', s: 3.2 }],
-        stack: ['#7A4A2A', '#3A200E', '#AE7A52', '#6A3F23', 16, { t: 'stack', c: '#4F2C16', ring: 2.0 }],
-        carbon: ['#1E2023', '#08090A', '#5E646B', '#1F2125', 40, { t: 'carbon', c: '#2B2E33', c2: '#131416', cell: 1.2 }],
-        flake: ['#2A2E34', '#0E1012', '#7A828C', '#3A3F46', 40, { t: 'flake', c: '#B8C0CA', size: 0.35 }],
+        carbon: ['#1E2023', '#08090A', '#6E757D', '#24272B', 14, { t: 'carbon', c: '#30343A', c2: '#121315', cell: 1.6 }],
         pearl: ['#EDE7DE', '#B7AFA4', '#FFFFFF', '#ECE9E2', 0, { t: 'pearl', c: '#E4EEF0', c2: '#F2E4EC', c3: '#E7ECD6' }],
         abalone: ['#4F8A86', '#234240', '#BFE3D6', '#5A8580', 0, { t: 'pearl', c: '#3E8E8A', c2: '#7A5BA8', c3: '#6FA65A' }],
-        malachite: ['#1F7A52', '#0C3E28', '#58B88A', '#1A6A47', 20, { t: 'bands', c: '#0F4F33', s: 1.2 }],
-        jasper: ['#2F5A3E', '#16301F', '#6E9A78', '#3F543B', 20, { t: 'spots', c: '#A82A22', size: 0.9 }],
+        malachite: ['#1F7A52', '#0C3E28', '#6CCB9C', '#1D7049', 14, { t: 'bands', c: '#0B4A30', s: 2.4 }],
+        // Polished metal: a dark horizon c, a white-hot line c2, a mid tone c3.
+        chrome: ['#B4BDC7', '#2E343B', '#FFFFFF', '#A9B2BC', 4, { t: 'mirror', c: '#2A3038', c2: '#FFFFFF', c3: '#9AA4AF' }],
+        goldPol: ['#E0B547', '#5E420A', '#FFF7D6', '#D8AC40', 4, { t: 'mirror', c: '#5A3D08', c2: '#FFF8DE', c3: '#C99528' }],
+        copper: ['#C9794A', '#4E220C', '#FFE2CC', '#BF6F42', 4, { t: 'mirror', c: '#4A200C', c2: '#FFE8D6', c3: '#A9592E' }],
+        anodViolet: ['#6E4FD0', '#2A1A62', '#CDBBFF', '#6A4CC6', 18, { t: 'brushed', c: '#A58EF5', p: 0.3, s: 40 }],
+        filigree: ['#121214', '#040405', '#6A6456', '#3A3122', 16, { t: 'filigree', c: '#E6BD52', size: 9, w: 0.5 }],
+        dragon: ['#15120E', '#050403', '#6E6248', '#56451F', 16, { t: 'scales', c: '#EDC458', c2: '#8A6A22', size: 8 }],
+        // Neon: edge, colour and a white-hot core across the rod, lit on every side; never a glow outside it.
+        neonCyan: ['#1AD4F2', '#0B6A80', '#E8FDFF', '#46DEF5', 0, { t: 'neon', core: '#F2FEFF', c: '#1AD4F2', edge: '#0A5266' }],
+        neonMagenta: ['#FF3DC8', '#7A145E', '#FFE6F7', '#FF5CD0', 0, { t: 'neon', core: '#FFF2FB', c: '#FF3DC8', edge: '#5E0C46' }],
+        circuit: ['#2F353B', '#0E1013', '#77818B', '#33404A', 16, { t: 'circuit', c: '#3CC6DC', pad: '#B4F4FF', seam: '#121518', cell: 5 }],
+        holo: ['#CFC8EE', '#5E5294', '#FFFFFF', '#C2BCE6', 10, { t: 'holo', c: '#FF9ADF', c2: '#86ECFF', c3: '#FFF29A', c4: '#B896FF', s: 36 }],
+        galaxy: ['#160F3A', '#060416', '#6A5CC0', '#2C1E62', 12, { t: 'galaxy', c: '#FF3DC8', c2: '#1AD4F2', star: '#FFFFFF', s: 16 }],
+        magma: ['#2A0E07', '#0D0402', '#7A3418', '#8A2E10', 14, { t: 'magma', c: '#FF6A18', core: '#FFD86A', s: 10 }],
     };
-    // Sections: [from %, to %, material, sheen], measured from the tip.
-    const pqStd = (sh, joint, fore, wrap, butt) => [[0, 0.9, 'tipBlue'], [0.9, 2.5, 'ferrule'], [2.5, 50, sh], [50, 51.5, joint, 1],
-        [51.5, 72, fore], [72, 90, wrap], [90, 99, butt], [99, 100, 'rubber']];
-    // Points and splices point at the tip, edged by veneers (outside in, [colour, mm]).
-    const pqPts = (n, apex, core, veneers, o) => Object.assign({ n, apex, base: 71.5, rot: 0, w: n > 4 ? 0.82 : 0.85, core, veneers }, o);
+    // Sections: [from %, to %, material, part], measured from the tip; a named part can catch the sheen.
+    const pqStd = (sh, joint, fore, wrap, butt, ferr) => [[0, 0.9, 'tipBlue'], [0.9, 2.5, ferr || 'ferrule'], [2.5, 50, sh, 'shaft'],
+        [50, 51.5, joint, 'joint'], [51.5, 72, fore, 'forearm'], [72, 90, wrap], [90, 99, butt, 'butt'], [99, 100, 'rubber']];
+    // Points and splices point at the tip, edged by veneers (outside in, [colour or material, mm]).
+    const pqPts = (n, apex, w, core, veneers, o) => Object.assign({ n, apex, base: 71.5, rot: 0, w, core, veneers }, o);
+    // Inlays set around the rod at a % of its length: diamond, window or dot, size in mm.
+    const pqIn = (at, n, shape, size, mat, rot) => ({ at, n, shape, size, mat, rot: rot || 0 });
     // bars: [power, aim, spin, time] at level 1 and at level 5. Rarity sets how strong a mastered
     // cue is, scaled as 8 Ball Pool's are (the user, 2026-10-13): see PQ_RARITY. A cue keeps its
     // character in its best bar, and the rarer it is, the more its levels add.
     // need: [game, tier, wins for levels 2, 3, 4 and 5]: the better the cue, the harder its wins
     // and the longer its climb (the user, 2026-10-05). See pqCounts.
+    // The look by rarity (the design's rarity ladder, 2026-10-15): Common is plain wood, Rare one
+    // exotic accent, Epic exotic surfaces and a slow 9 s sheen, Legendary nothing that reads as
+    // wood and its own sheen. sheen: c [core, fringe, second fringe], s seconds a cycle, band % of
+    // the cue, and the parts it crosses (joint, shaft, forearm, butt, rings, points, windows, inlays).
     const PQ_SET = [
         { id: 'standard', name: 'Standard', cond: 'Always yours · the house cue', blurb: 'Maple shaft · black linen wrap', rarity: 'common', bars: [[4, 4, 4, 4], [5, 5, 5, 5]], need: ['pool', 'easy', [5, 7, 10, 15]],
             sections: pqStd('maple', 'brass', 'lacquer', 'linenBlack', 'walnut') },
         { id: 'tulipwood', name: 'Tulipwood', cond: 'Team Player · join the leaderboard', ach: 'teamPlayer', blurb: 'Tulipwood forearm · navy linen', rarity: 'common', bars: [[5, 5, 4, 4], [6, 6, 6, 6]], need: ['pool', 'easy', [5, 7, 11, 16]],
             sections: pqStd('maple', 'silver', 'tulipwood', 'linenNavy', 'tulipwood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']] },
-        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pebble leather', rarity: 'rare', bars: [[5, 6, 5, 5], [7, 8, 7, 7]], need: ['pool', 'normal', [5, 8, 11, 16]],
-            sections: pqStd('maple', 'ebony', 'birdseye', 'pebble', 'birdseye'), rings: [[51.5, 0.8, 'brass'], [72, 0.8, 'brass'], [90, 0.8, 'brass']] },
-        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Flame maple · 4 points · lizard', rarity: 'rare', bars: [[7, 5, 3, 5], [10, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
-            sections: pqStd('maple', 'brass', 'flame', 'lizardRed', 'cocobolo'), rings: [[72, 1, 'brass'], [90, 1, 'brass']],
-            points: [pqPts(4, 54, 'cocobolo', [['#121212', 0.5], ['#F2EEE4', 0.5], ['#A3262A', 0.6]])] },
-        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: 'Maple · 6 rosewood points', rarity: 'rare', bars: [[4, 7, 5, 6], [6, 10, 6, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
+        { id: 'birdseye', name: 'Birdseye', cond: 'Office Gamer · earn XP in 50 game sessions', ach: 'gamer', blurb: 'Birdseye maple · pearl windows', rarity: 'rare', bars: [[5, 6, 5, 5], [7, 8, 7, 7]], need: ['pool', 'normal', [5, 8, 11, 16]],
+            sections: pqStd('maple', 'ebony', 'birdseye', 'pebble', 'birdseye'), rings: [[51.5, 0.8, 'brass'], [72, 0.8, 'brass'], [90, 0.8, 'brass'], [98.5, 0.8, 'brass']],
+            inlays: [pqIn(61.5, 4, 'window', 14, 'pearl'), pqIn(94.5, 4, 'window', 10, 'pearl', 45)] },
+        { id: 'ember', name: 'Ember', cond: 'On Fire · keep a 7-day work streak', ach: 'streak7', blurb: 'Magma forearm · copper rings', rarity: 'rare', bars: [[7, 5, 3, 5], [10, 7, 6, 6]], need: ['pool', 'normal', [5, 8, 12, 17]],
+            sections: pqStd('maple', 'copper', 'magma', 'lizardBlk', 'magma'), rings: [[51.5, 1, 'copper'], [72, 1.4, 'copper'], [90, 1.4, 'copper'], [98.5, 1, 'copper']],
+            points: [pqPts(4, 55, 0.72, 'ebony', [['copper', 0.7]])] },
+        { id: 'rosewood6', name: 'Rosewood Six', cond: 'Level 25 · reach level 25', ach: 'level25', blurb: '6 rosewood points · pearl windows', rarity: 'rare', bars: [[4, 7, 5, 6], [6, 10, 6, 8]], need: ['pool', 'hard', [5, 8, 12, 17]],
             sections: pqStd('maple', 'silver', 'maple', 'stitchBlk', 'rosewood'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
-            points: [pqPts(6, 53, 'rosewood', [['#121212', 0.5], ['#2C6E49', 0.5], ['#F2EEE4', 0.5]])] },
-        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon shaft · stacked leather', rarity: 'epic', bars: [[6, 5, 7, 5], [9, 7, 10, 7]], need: ['pool', 'hard', [5, 9, 13, 18]],
-            sections: pqStd('carbon', 'silver', 'ebony', 'stack', 'flake'), rings: [[72, 0.8, 'silver'], [90, 0.8, 'silver']],
-            points: [pqPts(4, 55, 'zebrano', [['#F2EEE4', 0.6], ['#121212', 0.5]])] },
-        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite points · black lizard', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
-            sections: pqStd('maple', 'silver', 'ebony', 'lizardBlk', 'ebony'), rings: [[72, 0.8, 'silver'], [89.05, 0.8, 'silver'], [89.45, 3, 'malachite'], [89.85, 0.8, 'silver']],
-            points: [pqPts(4, 53, 'malachite', [['#C9CDD2', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'turquoise', size: 7, at: 0.45 } })],
-            inlays: [{ at: 94.5, n: 4, shape: 'diamond', size: 7, mat: 'malachite', rot: 45 }] },
-        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash shaft · 4 ebony splices', rarity: 'epic', bars: [[5, 8, 5, 6], [8, 10, 8, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
+            points: [pqPts(6, 53, 0.82, 'rosewood', [['#121212', 0.5], ['#2C6E49', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'pearl', size: 9, at: 0.4 } })],
+            inlays: [pqIn(94.5, 6, 'dot', 5, 'pearl')] },
+        { id: 'carbonfin', name: 'Carbon Fin', cond: 'Pool Shark · win 100 pool games against the CPU', ach: 'poolShark', blurb: 'Carbon · chrome fins · cyan neon', rarity: 'epic', bars: [[6, 5, 7, 5], [9, 7, 10, 7]], need: ['pool', 'hard', [5, 9, 13, 18]],
+            sections: pqStd('carbon', 'chrome', 'carbon', 'circuit', 'carbon', 'chrome'), rings: [[72, 1.6, 'neonCyan'], [90, 1, 'chrome'], [98.5, 1, 'chrome']],
+            points: [pqPts(4, 54, 0.62, 'chrome', [['#0A0B0C', 0.6]])], inlays: [pqIn(94.5, 4, 'diamond', 8, 'chrome', 45)],
+            sheen: { c: ['#EFFCFF', '#7FE3F5'], s: 9, band: 4, on: 'joint rings points inlays' } },
+        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite · gold · turquoise', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
+            sections: pqStd('maple', 'goldPol', 'malachite', 'lizardBlk', 'malachite'), rings: [[72, 1.2, 'goldPol'], [90, 1.2, 'goldPol'], [98.5, 1, 'goldPol']],
+            points: [pqPts(4, 54, 0.55, 'ebony', [['goldPol', 0.6]], { rot: 45, inlay: { shape: 'window', mat: 'turquoise', size: 9, at: 0.42 } })],
+            inlays: [pqIn(94.5, 4, 'window', 10, 'turquoise')], sheen: { c: ['#FFF9E2', '#8FE3B8'], s: 9, band: 4, on: 'joint rings windows inlays' } },
+        { id: 'centuryash', name: 'Century Ash', cond: 'Century · make a century break against the snooker CPU', ach: 'snookerCentury', blurb: 'Ash · gold and abalone splices', rarity: 'epic', bars: [[5, 8, 5, 6], [8, 10, 8, 8]], need: ['snooker', 'hard', [5, 9, 14, 19]],
             sections: [[0, 0.9, 'tipBrown'], [0.9, 2.5, 'brassFerr'], [2.5, 70, 'ash'], [70, 99, 'ebony'], [99, 100, 'rubber']],
-            rings: [[70, 2, 'pearl'], [76, 1, 'brass'], [98.5, 1, 'brass']],
-            points: [pqPts(4, 40, 'ebony', [['#EFE3C6', 0.6], ['#121212', 0.4]], { base: 70, w: 0.92 }), pqPts(4, 62, 'ebony', [['#EFE3C6', 0.6]], { base: 70, rot: 45, w: 0.6 })],
-            inlays: [{ at: 95, n: 4, shape: 'dot', size: 4, mat: 'abalone', rot: 0 }] },
-        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Ebony · 6 abalone points', rarity: 'legendary', bars: [[7, 7, 6, 6], [10, 10, 9, 8]], need: ['snooker', 'pro', [5, 10, 14, 19]], sheen: 1,
-            sections: pqStd('maple', 'gold', 'ebony', 'stitchGold', 'ebony'), rings: [[51.5, 1, 'pearl'], [72, 1, 'gold'], [90, 1, 'gold'], [98.5, 1, 'gold']],
-            points: [pqPts(6, 53, 'abalone', [['#D4AF37', 0.5], ['#121212', 0.5], ['#F2EEE4', 0.5]], { inlay: { shape: 'window', mat: 'jasper', size: 6, at: 0.42 } })],
-            inlays: [{ at: 94.5, n: 6, shape: 'diamond', size: 6, mat: 'pearl', rot: 0 }] },
-        // Not in the design: the design's own vocabulary, for mastering five cues.
-        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Ebony · pearl and abalone points · lizard', rarity: 'legendary', bars: [[8, 7, 7, 6], [10, 10, 10, 10]], need: ['snooker', 'pro', [5, 10, 15, 20]], sheen: 1,
-            sections: pqStd('maple', 'gold', 'ebony', 'lizardRed', 'ebony'), rings: [[51.5, 1, 'abalone'], [71.4, 0.8, 'gold'], [72.4, 1.2, 'pearl'], [89.6, 1.2, 'pearl'], [90.6, 0.8, 'gold'], [98.5, 1, 'gold']],
-            points: [pqPts(4, 52, 'pearl', [['#D4AF37', 0.5], ['#121212', 0.5], ['#3FB5A9', 0.4]], { inlay: { shape: 'diamond', mat: 'gold', size: 5, at: 0.4 } }),
-                pqPts(4, 63, 'abalone', [['#D4AF37', 0.4], ['#121212', 0.4]], { rot: 45, w: 0.55 })],
-            inlays: [{ at: 94.5, n: 4, shape: 'dot', size: 4, mat: 'pearl', rot: 0 }, { at: 94.5, n: 4, shape: 'diamond', size: 5, mat: 'abalone', rot: 45 }] },
+            rings: [[70, 2.4, 'abalone'], [76, 1, 'goldPol'], [98.5, 1, 'goldPol']],
+            points: [pqPts(4, 40, 0.92, 'ebony', [['goldPol', 0.6], ['#121212', 0.4]], { base: 70 }), pqPts(4, 61, 0.6, 'abalone', [['goldPol', 0.5]], { base: 70, rot: 45 })],
+            inlays: [pqIn(95, 4, 'window', 10, 'abalone')], sheen: { c: ['#FFFBEF', '#DCC48C'], s: 9, band: 4, on: 'rings points inlays' } },
+        { id: 'crown', name: 'Black Crown', cond: 'Maximum · make a 147 against the snooker CPU', ach: 'snookerMaximum', blurb: 'Gold filigree · dragon-scale wrap', rarity: 'legendary', bars: [[7, 7, 6, 6], [10, 10, 9, 8]], need: ['snooker', 'pro', [5, 10, 14, 19]],
+            sections: pqStd('lacquer', 'goldPol', 'filigree', 'dragon', 'filigree', 'brassFerr'), rings: [[51.5, 1.2, 'goldPol'], [72, 1.6, 'goldPol'], [90, 1.6, 'goldPol'], [98.5, 1.2, 'goldPol']],
+            points: [pqPts(6, 56, 0.7, 'goldPol', [['goldPol', 0.4], ['#050506', 0.9]], { inlay: { shape: 'window', mat: 'pearl', size: 7, at: 0.3 } })],
+            inlays: [pqIn(94.5, 6, 'diamond', 8, 'goldPol')], sheen: { c: ['#FFF6DE', '#E9C46A'], s: 7, band: 6, on: 'joint rings points windows inlays' } },
+        { id: 'collector', name: 'Collector', cond: 'Master 5 cues', blurb: 'Galaxy · holo shaft · neon points', rarity: 'legendary', bars: [[8, 7, 7, 6], [10, 10, 10, 10]], need: ['snooker', 'pro', [5, 10, 15, 20]],
+            sections: pqStd('holo', 'chrome', 'galaxy', 'anodViolet', 'galaxy', 'chrome'), rings: [[51.5, 1.4, 'neonMagenta'], [72, 1.6, 'neonCyan'], [90, 1.6, 'neonMagenta'], [98.5, 1, 'chrome']],
+            points: [pqPts(2, 55, 0.5, 'neonMagenta', [['chrome', 0.6]], { rot: -45 }), pqPts(2, 55, 0.5, 'neonCyan', [['chrome', 0.6]], { rot: 45 })],
+            inlays: [pqIn(94.5, 4, 'diamond', 8, 'neonCyan', 45)], sheen: { c: ['#FFFFFF', '#FF7AD9', '#6FE6FF'], s: 6, band: 8, on: 'joint shaft forearm butt rings points inlays' } },
     ];
     // Rarity, as 8 Ball Pool's collection shows it: [label, the fewest and most bar points a
     // mastered cue totals, the lowest bar it keeps]. Its Legendary cues max at 37–40 of 40 (Inferno
@@ -144,15 +157,22 @@
         return '#' + [16, 8, 0].map(s => { const x = (p >> s) & 255; return Math.round(x + (((q >> s) & 255) - x) * t).toString(16).padStart(2, '0'); }).join('');
     };
 
+    // Mirror metal and neon: their own stops across the rod, edge to edge, instead of a texture
+    // and the facet shading (the design's mirror and neon fills).
+    const PQ_OWN = {
+        mirror: T => [[0, T.c3], [0.09, T.c2], [0.17, T.c2], [0.26, T.c3], [0.42, T.c], [0.53, T.c], [0.64, T.c3], [0.76, pqMix(T.c3, T.c2, 0.65)], [0.85, T.c3], [1, T.c]],
+        neon: T => [[0, T.edge], [0.2, T.c], [0.37, pqMix(T.c, T.core, 0.6)], [0.45, T.core], [0.55, T.core], [0.63, pqMix(T.c, T.core, 0.6)], [0.8, T.c], [1, T.edge]],
+    };
+
     // A texture's repeating tile, once per material and scale: x along the rod, y across it.
     function pqTile(key, m, q, mk) {
         const id = key + '@' + q;
         if (PQ_TILES.has(id)) return PQ_TILES.get(id);
         const T = m[5], rows = Math.max(1, Math.ceil(6 / (T.s || 6)));
         const size = {
-            grain: [T.fig ? T.figS * 8 : 24, T.s * rows], ash: [T.s, 8], linen: [T.p, T.p], pebble: [T.size, T.size], lizard: [T.size * 1.2, T.size],
-            stitched: [T.s, 11], stack: [T.ring, 1], carbon: [T.cell * 2.83, T.cell * 2.83], flake: [T.size * 9, T.size * 7], bands: [T.s * 8, T.s * 4],
-            spots: [T.size * 3, T.size * 2.4], pearl: [12, 1],
+            grain: [24, T.s * rows], ash: [T.s, 8], linen: [T.p, T.p], pebble: [T.size, T.size], lizard: [T.size * 1.2, T.size], stitched: [T.s, 11],
+            carbon: [T.cell * 2.83, T.cell * 2.83], bands: [T.s * 8, T.s * 4], pearl: [12, 1], brushed: [T.s, T.p], filigree: [T.size, T.size],
+            scales: [T.size * 0.62, T.size], circuit: [T.cell * 12, 24], holo: [T.s, T.s], galaxy: [T.s * 2, 24], magma: [T.s * 2, T.s * 1.5],
         }[T.t === 'stripe' ? 'grain' : T.t];
         const W = Math.max(2, Math.round(size[0] * q)), H = Math.max(2, Math.round(size[1] * q));
         const cv = mk(W, H), c = cv.getContext('2d'), tw = size[0], th = size[1];
@@ -160,6 +180,16 @@
         c.fillStyle = m[0]; c.fillRect(0, 0, tw, th);
         const rgba = (a, hex) => pgRgba(hex || T.c, a);
         const dot = (x, y, r, style) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = style; c.fill(); };
+        // A soft round light fading out from its centre, repeated either side so the tile wraps.
+        const glow = (x, y, r, stops) => [-tw, 0, tw].forEach(o => {
+            const g = c.createRadialGradient(x + o, y, 0, x + o, y, r);
+            stops.forEach(s => g.addColorStop(s[0], s[1]));
+            dot(x + o, y, r, g);
+        });
+        const line = (pts, lw, style) => {
+            c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(p[0] * tw, p[1] * th) : c.moveTo(p[0] * tw, p[1] * th)));
+            c.lineWidth = lw; c.strokeStyle = style; c.stroke();
+        };
         // Bands where (x ∓ y) mod L lies in [L/2, L), for twills and weaves.
         const diag = (L, flip, style) => {
             c.fillStyle = style; c.beginPath();
@@ -177,7 +207,6 @@
         const t = T.t;
         if (t === 'grain' || t === 'stripe') {
             const a = t === 'stripe' ? 0.8 : 0.5;
-            if (T.fig) for (let x = 0; x < tw; x += T.figS) { c.fillStyle = rgba(0.4, T.fig); c.fillRect(x + T.figS * 0.15, 0, T.figS * 0.4, th); }
             for (let i = 0; i < rows; i++) {
                 [-th, 0, th].forEach(o => {
                     wave(o + (i + 0.3) * T.s, T.wave * 0.35, i * 1.7, T.w, rgba(a));
@@ -198,20 +227,50 @@
             });
         } else if (t === 'stitched') {
             c.fillStyle = rgba(0.9); c.fillRect(tw * 0.45, 3, tw * 0.55, 0.5); c.fillRect(tw * 0.45, 8, tw * 0.55, 0.5);
-        } else if (t === 'stack') {
-            c.fillStyle = rgba(0.85); c.fillRect(tw - 0.3, 0, 0.3, th);
         } else if (t === 'carbon') {
             c.fillStyle = T.c; c.fillRect(0, 0, tw, th); diag(tw, false, T.c2); diag(tw, true, 'rgba(0, 0, 0, 0.28)');
-        } else if (t === 'flake') {
-            dot(tw * 0.2, th * 0.25, T.size, rgba(0.9)); dot(tw * 0.65, th * 0.7, T.size * 0.8, rgba(0.6)); dot(tw * 0.85, th * 0.15, T.size * 0.6, rgba(0.5));
         } else if (t === 'bands') {
             for (let i = 0; i < 4; i++) [-th, 0, th].forEach(o => wave(o + (i + 0.5) * T.s, T.s * 0.4, i, T.s * 0.5, rgba(0.7)));
-        } else if (t === 'spots') {
-            dot(tw / 2, th / 2, T.size / 2, rgba(0.85));
-        } else if (t === 'pearl') {
-            const g = c.createLinearGradient(0, 0, tw, 0);
-            [[0, T.c], [0.35, T.c2], [0.65, T.c3], [1, T.c]].forEach(s => g.addColorStop(s[0], s[1]));
+        } else if (t === 'pearl' || t === 'holo') {
+            const g = c.createLinearGradient(0, 0, tw, 0), cs = t === 'holo' ? [T.c, T.c3, T.c2, T.c4, T.c] : [T.c, T.c2, T.c3, T.c];
+            cs.forEach((col, i) => g.addColorStop(t === 'holo' ? i / 4 : [0, 0.35, 0.65, 1][i], col));
             c.fillStyle = g; c.fillRect(0, 0, tw, th);
+            // Holo's diffraction lines, a third of the tile apart so they wrap.
+            if (t === 'holo') for (let x = -tw; x <= tw; x += tw / 3) line([[x / tw, 0], [x / tw + 1, 1]], tw * 0.04, 'rgba(255, 255, 255, 0.3)');
+        } else if (t === 'brushed') {
+            // Fine lines along the rod, and a broad soft highlight.
+            c.fillStyle = rgba(0.24); c.fillRect(0, 0, tw, th / 2);
+            const g = c.createLinearGradient(0, 0, tw, 0);
+            [[0, 0], [0.5, 0.16], [1, 0]].forEach(s => g.addColorStop(s[0], 'rgba(255, 255, 255, ' + s[1] + ')'));
+            c.fillStyle = g; c.fillRect(0, 0, tw, th);
+        } else if (t === 'filigree') {
+            // Interlocking rings with a small ring and a dot at each rosette.
+            c.lineWidth = T.w; c.strokeStyle = rgba(0.95);
+            [[0.5, 0.5, 0.2], [0.5, 0.5, 0.5], [0, 0, 0.5], [1, 0, 0.5], [0, 1, 0.5], [1, 1, 0.5]].forEach(([x, y, r]) => { c.beginPath(); c.arc(x * tw, y * th, r * tw - T.w / 2, 0, Math.PI * 2); c.stroke(); });
+            [0, tw].forEach(x => dot(x, th / 2, tw * 0.07, rgba(0.95)));
+        } else if (t === 'scales') {
+            // Overlapping scales, convex toward the butt: gold rim, a warm sheen inside, rows half offset.
+            [[tw / 2, 0], [tw / 2, th], [0, th / 2], [tw, th / 2]].forEach(([x, y]) => {
+                const g = c.createRadialGradient(x, y, 0, x, y, th / 2);
+                [[0.44, rgba(0, T.c2)], [0.76, rgba(0.45, T.c2)], [0.9, rgba(0.95)], [1, rgba(0.95)]].forEach(s => g.addColorStop(s[0], s[1]));
+                dot(x, y, th / 2, g);
+            });
+        } else if (t === 'circuit') {
+            // Trace rows at 28 % and 72 %, a link between them every 6 cells, pads every 3, a seam per tile.
+            const C = T.cell, w = 0.32, y1 = th * 0.28, y2 = th * 0.72;
+            c.fillStyle = rgba(0.8);
+            for (let x = -6 * C; x < tw; x += 6 * C) { c.fillRect(x - 0.5 * C, y1 - w / 2, 4.5 * C, w); c.fillRect(x + 2.5 * C, y2 - w / 2, 4.5 * C, w); c.fillRect(x + 1.5 * C - w / 2, y1, w, y2 - y1); }
+            for (let x = 1.5 * C; x < tw; x += 3 * C) { dot(x, y1, 0.55, T.pad); dot(x, y2, 0.55, T.pad); }
+            c.fillStyle = T.seam; c.fillRect(0, 0, 0.3, th);
+        } else if (t === 'galaxy') {
+            // Two nebulae and stars of three sizes.
+            [[0.25, 0.4, T.c, 0.62], [0.75, 0.62, T.c2, 0.5]].forEach(([x, y, col, a]) => glow(x * tw, y * th, th * 0.45, [[0, pgRgba(col, a)], [1, pgRgba(col, 0)]]));
+            for (let i = 0; i < 24; i++) dot((i * 0.618) % 1 * tw, (i * 0.382 + 0.1) % 1 * th, 0.12 + (i % 3) * 0.08, rgba(0.6 + (i % 3) * 0.2, T.star));
+        } else if (t === 'magma') {
+            // Dark crust, molten pools, and glowing cracks that meet across the tile's edges.
+            glow(0.3 * tw, 0.35 * th, T.s * 0.62, [[0, rgba(0.95, T.core)], [0.35, rgba(0.8)], [1, rgba(0)]]);
+            glow(0.78 * tw, 0.78 * th, T.s * 0.5, [[0, rgba(0.6)], [1, rgba(0)]]);
+            [[[0, 0.3], [0.2, 0.45], [0.45, 0.2], [0.7, 0.5], [1, 0.3]], [[0.6, 0], [0.55, 0.3], [0.8, 0.6], [0.6, 1]]].forEach(p => { line(p, 0.9, rgba(0.9)); line(p, 0.3, T.core); });
         }
         const tile = { cv, sx: tw / W, sy: th / H };
         PQ_TILES.set(id, tile);
@@ -240,7 +299,7 @@
             return a && b ? { a, b, px: Math.hypot(b[0] - a[0], b[1] - a[1]) } : null;
         };
         const pattern = (key, m, f, s) => {
-            if (!f || !m[5] || f.px < m[4] || !V.mk || !ctx.createPattern) return null;
+            if (!f || !m[5] || PQ_OWN[m[5].t] || f.px < m[4] || !V.mk || !ctx.createPattern) return null;
             const k = f.px / (2 * r(s) * G[3]), q = Math.min(16, Math.max(2, Math.pow(2, Math.ceil(Math.log2(k)))));
             const tile = pqTile(key, m, q, V.mk), pat = ctx.createPattern(tile.cv, 'repeat');
             const o = V.scr(V.pt(s, 0)), o2 = V.scr(V.pt(Math.min(1, s + 0.01), 0));
@@ -265,19 +324,20 @@
             });
             return g;
         };
-        // One slow band along the inlays and rings: 7 s a cycle, moving for 72 % of it.
+        // The cue's sheen: one band along the parts it names, moving for 72 % of each cycle;
+        // Epic's at three quarters of Legendary's strength.
+        const SH = cue.sheen, glint = p => !!SH && SH.on.split(' ').indexOf(p) >= 0;
         let band = null;
-        if (cue.sheen && V.t != null) {
-            const p = (V.t % 7000) / 7000;
-            if (p < 0.72) { const e = p / 0.72, x = -0.08 + 1.08 * e * e * (3 - 2 * e); band = [x, x + 0.06]; }
+        if (SH && V.t != null) {
+            const T = SH.s * 1000, p = (V.t % T) / T, w = SH.band / 100;
+            if (p < 0.72) { const e = p / 0.72, x = -w + (1 + w) * e * e * (3 - 2 * e); band = [x, x + w]; }
         }
-        const sheen = (a, b) => {
-            if (!band || b < band[0] || a > band[1]) return;
+        const sheen = (a, b, on) => {
+            if (!on || !band || b < band[0] || a > band[1]) return;
             const p = V.scr(V.pt(band[0], 0)), q = V.scr(V.pt(band[1], 0));
             if (!p || !q) return;
-            const g = ctx.createLinearGradient(p[0], p[1], q[0], q[1]);
-            [[0, 'rgba(233, 196, 106, 0)'], [0.3, 'rgba(233, 196, 106, 0.35)'], [0.5, 'rgba(255, 246, 222, 0.92)'], [0.7, 'rgba(233, 196, 106, 0.35)'], [1, 'rgba(233, 196, 106, 0)']]
-                .forEach(st => g.addColorStop(st[0], st[1]));
+            const g = ctx.createLinearGradient(p[0], p[1], q[0], q[1]), k = cue.rarity === 'legendary' ? 1 : 0.75, f2 = SH.c[2] || SH.c[1];
+            [[0, SH.c[1], 0], [0.3, SH.c[1], 0.4], [0.5, SH.c[0], 0.92], [0.7, f2, 0.4], [1, f2, 0]].forEach(st => g.addColorStop(st[0], pgRgba(st[1], st[2] * k)));
             ctx.fillStyle = g; ctx.fill();
         };
         // A stretch of rod, a dome on the tip and a bumper on the butt, its taper in short steps.
@@ -289,21 +349,28 @@
             const cap = (s, len, dir) => { const out = []; for (let i = 1; i < 6; i++) { const th = Math.PI * i / 6; out.push(V.pt(s + dir * len * Math.sin(th), r(s) * Math.cos(th))); } return out; };
             const pts = top.concat(b >= 1 ? cap(1, 0.45 * r(1) / G[0], 1) : [], bot, a <= 0 ? cap(0, 0.03 / G[0], -1).reverse() : []);
             if (!trace(pts)) return;
-            const m = M(key), s = (a + b) / 2, f = frame(s), pat = pattern(key, m, f, s);
-            ctx.fillStyle = pat || m[3] || m[0]; ctx.fill();
-            if (f) { ctx.fillStyle = shade(m, f, !!pat); ctx.fill(); }
-            if (glint) sheen(a, b);
+            const m = M(key), s = (a + b) / 2, f = frame(s), own = f && m[5] && f.px >= m[4] && PQ_OWN[m[5].t];
+            if (own) {
+                const g = ctx.createLinearGradient(f.a[0], f.a[1], f.b[0], f.b[1]);
+                own(m[5]).forEach(st => g.addColorStop(st[0], st[1]));
+                ctx.fillStyle = g; ctx.fill();
+            } else {
+                const pat = pattern(key, m, f, s);
+                ctx.fillStyle = pat || m[3] || m[0]; ctx.fill();
+                if (f) { ctx.fillStyle = shade(m, f, !!pat); ctx.fill(); }
+            }
+            sheen(a, b, glint);
         };
         // A small shape on the rod's surface: centre (s, w), half sizes along (mm) and across (D).
-        const inlay = (shape, s, w, hl, hw, key, c) => {
+        const inlay = (shape, s, w, hl, hw, key, c, on) => {
             const d = hl / Lmm, k = shape === 'diamond' ? [[-1, 0], [0, 1], [1, 0], [0, -1]]
                 : shape === 'dot' ? [0, 1, 2, 3, 4, 5, 6, 7].map(i => [Math.cos(i * Math.PI / 4), Math.sin(i * Math.PI / 4)]) : [[-1, -1], [-1, 1], [1, 1], [1, -1]];
             if (!trace(k.map(p => V.pt(s + p[0] * d, w + p[1] * hw)))) return;
             ctx.fillStyle = paint(key, frame(s), s, c); ctx.fill();
-            sheen(s - d, s + d);
+            sheen(s - d, s + d, on);
         };
-        (cue.sections || []).forEach(x => part(x[0] / 100, x[1] / 100, x[2], cue.sheen && x[3]));
-        (cue.rings || []).forEach(x => { const h = x[1] / 2 / Lmm; part(x[0] / 100 - h, x[0] / 100 + h, x[2], cue.sheen); });
+        (cue.sections || []).forEach(x => part(x[0] / 100, x[1] / 100, x[2], glint(x[3])));
+        (cue.rings || []).forEach(x => { const h = x[1] / 2 / Lmm; part(x[0] / 100 - h, x[0] / 100 + h, x[2], glint('rings')); });
         (cue.points || []).forEach(P => {
             const aS = P.apex / 100, bS = P.base / 100, rB = r(bS);
             let e = P.veneers.reduce((t, v) => t + v[1], 0);
@@ -315,10 +382,11 @@
                     const hw = ((Math.PI * rB * G[3] / P.n) * P.w + ly.e) / G[3] * c, ap = aS - ly.e * 4 / Lmm, wc = sn * rB;
                     if (!trace([V.pt(ap, sn * r(ap)), V.pt(bS, Math.min(rB, wc + hw)), V.pt(bS, Math.max(-rB, wc - hw))])) return;
                     ctx.fillStyle = ly.col.charAt(0) === '#' ? ly.col : paint(ly.col, frame((ap + bS) / 2), (ap + bS) / 2, c); ctx.fill();
+                    sheen(ap, bS, glint('points'));
                 });
                 if (P.inlay) {
                     const N = P.inlay, s = bS - (bS - aS) * N.at;
-                    inlay(N.shape, s, sn * r(s), N.size / 2, N.size * (N.shape === 'window' ? 0.2 : 0.3) * c / G[3], N.mat, c);
+                    inlay(N.shape, s, sn * r(s), N.size / 2, N.size * (N.shape === 'window' ? 0.2 : 0.3) * c / G[3], N.mat, c, glint('windows'));
                 }
             }
         });
@@ -326,7 +394,7 @@
             const s = N.at / 100;
             for (let i = 0; i < N.n; i++) {
                 const th = (N.rot + i * 360 / N.n) * Math.PI / 180, c = Math.cos(th);
-                if (c >= 0.1) inlay(N.shape, s, Math.sin(th) * r(s), N.size / 2, N.size * (N.shape === 'diamond' ? 0.35 : 0.5) * c / G[3], N.mat, c);
+                if (c >= 0.1) inlay(N.shape, s, Math.sin(th) * r(s), N.size / 2, N.size * (N.shape === 'diamond' ? 0.35 : N.shape === 'window' ? 0.2 : 0.5) * c / G[3], N.mat, c, glint('inlays'));
             }
         });
     }

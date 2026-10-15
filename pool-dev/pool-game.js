@@ -21,10 +21,12 @@
     //   poolMode, poolGamesWon, poolMaximized, poolRecord, poolCpuTier
     //
     // Input:
-    //   3D     sideways mouse turns the aim (0.3°/px, Shift finer), even off the table
-    //   2D     point at the target
+    //   3D     sideways mouse turns the aim, even off the table: a slow move turns finely, a quick
+    //          one coarsely (poolMouseGain); Shift holds the fine gain
+    //   2D     point at the target; with Shift held, sideways mouse turns finely from there
     //   power  press, then pull back or push along the shot line; under 3% or Esc cancels
-    //   ←/→    fine aim while the table has the mouse or Max is open
+    //   ←/→    fine aim while the table has the mouse or Max is open: a tap is one step, a
+    //          hold turns on, slow at first and faster the longer it is held
     //   ball in hand: drag the cue ball; it stops at the cushions (and the head string on the break)
     // Tournaments (pool-tour.js, pool-tour-ui.js): poolMode 'tour' while a match is on the
     // table; the bracket is saved after every frame, with a table snapshot after every shot.
@@ -68,8 +70,10 @@
             clock: POOL_CLOCK_S,
             // ⚙️ Shot Clock choices for a quick frame (0 is off).
             clockPref: 'poolClock', clocks: [30, 45, 0],
-            // Aim steps: ←/→ and the Shift fine aim, in degrees.
-            aimKey: 0.1, aimFine: 0.05,
+            // Aim steps, in degrees: a ←/→ tap (the finest step), and the Shift fine aim per px.
+            aimKey: 0.05, aimFine: 0.05,
+            // Mouse aim in 3D, degrees per screen px: [slow, fast] (poolMouseGain).
+            aimMouse: [0.02, 0.22],
             record: () => poolRecord,
             world: () => ppCreateWorld(),
             rack: (w, rng) => ppRack(w, rng),
@@ -148,7 +152,7 @@
             felt: ['snookerTableColor', 'snookerFeltCustom', 'poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'snookerCpuRecord', byTier: 'snookerWinsByTier', tour: 'snookerTournament', cab: 'snookerTrophyCabinet', frame: 'snookerFrame' },
             // True scale: aiming is slower, so a longer clock and finer aim steps.
-            clock: 45, aimKey: 0.025, aimFine: 0.0125,
+            clock: 45, aimKey: 0.0125, aimFine: 0.0125, aimMouse: [0.005, 0.08],
             clockPref: 'snookerClock', clocks: [30, 45, 60, 0],
             // ⚙️ Ball Ring: 'off' hides the nominated ball's ring.
             ringPref: 'snookerRing',
@@ -314,6 +318,10 @@
         // phase 'choice': after a snooker foul the table waits for the incoming player's pick.
         running: false, raf: null, lastMs: 0, acc: 0, sinceDraw: 0, drawKey: '',
         attached: false, armed: false, lastX: null, leanSave: null, nameSave: null, scheme: null,
+        // A held ←/→: { dir, key, t ms held }, turned on in poolAimHoldTick.
+        aimHold: null,
+        // Mouse aim: the smoothed pointer speed (px/ms) and the last move's time.
+        aimV: 0, aimT: 0,
     };
 
     // ── Seats, names, records ─────────────────────────────────────────
@@ -862,6 +870,7 @@
             S.clockLeft -= dt / 1000;
             if (S.clockLeft <= 0) poolTimeout();
         }
+        poolAimHoldTick(dt);
         poolCpuTick(dt);
         // A match just ended: its result covers the table once the last ball has dropped.
         if (S.tour.pending > 0) { S.tour.pending -= dt; if (S.tour.pending <= 0) { S.tour.pending = 0; S.tour.screen = 'result'; poolTourBump(); } }
@@ -913,7 +922,7 @@
         const bihBad = S.phase === 'bih' ? R.canPlace(S.world, c.x, c.y, S.frame.ballInHand) : null;
         const felt = poolFelt();
         const theme = phThemeTokens(S.hud);
-        // The shooter's cue; Black Crown's and Collector's sheen moves unless motion is reduced.
+        // The shooter's cue; an Epic or Legendary cue's sheen moves unless motion is reduced.
         const cue = pqById(poolRemoteTurn() ? poolSeatCueId(S.frame.turn) : poolCueStats().id);
         poolCuePill();
         if (S.still === undefined) S.still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1025,7 +1034,7 @@
     }
     const poolClamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const poolIsControl = el => !!(el && el.closest && el.closest('button, input, select, label, a, textarea'));
-    function poolDisarm() { poolS.armed = false; poolS.lastX = null; }
+    function poolDisarm() { poolS.armed = false; poolS.lastX = null; poolS.aimHold = null; }
 
     // Power: only movement along the shot line counts, back or forward; full power fits the canvas.
     function poolShotAxis() {
@@ -1050,7 +1059,7 @@
         R.placeCue(S.world, q[0], q[1]);
     }
 
-    function poolOnEnter(e) { poolS.armed = true; poolS.lastX = poolLocal(e)[0]; }
+    function poolOnEnter(e) { poolS.armed = true; poolS.lastX = e.clientX; poolS.aimV = 0; }
     function poolOnDown(e) {
         const S = poolS;
         S.spinOpen = false;
@@ -1059,7 +1068,7 @@
         if (!poolCanAct() || !S.W) return;
         const [sx, sy] = poolLocal(e);
         try { S.canvas.setPointerCapture(e.pointerId); } catch (_) {}
-        S.armed = true; S.lastX = sx;
+        S.armed = true; S.lastX = e.clientX;
         if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; poolPlace(sx, sy); return; }
         if (S.phase !== 'aim') return;
         const st = poolRules().status(S.frame, S.world);
@@ -1094,6 +1103,18 @@
         });
         return best;
     }
+    // Mouse aim's degrees per px, from how fast the mouse moves (as an OS pointer's acceleration):
+    // a slow, careful move gets the game's fine gain, a quick swipe the coarse one, eased between
+    // 0.15 and 1.6 px/ms. The speed is smoothed so one jittery event doesn't jump the gain.
+    const POOL_MOUSE_V = [0.15, 1.6];
+    function poolMouseGain(dx, ts) {
+        const S = poolS, g = poolRules().aimMouse, now = ts || Date.now();
+        const dt = S.aimT ? Math.max(1, Math.min(100, now - S.aimT)) : 16;
+        S.aimT = now;
+        S.aimV = 0.6 * (S.aimV || 0) + 0.4 * Math.abs(dx) / dt;
+        const k = Math.max(0, Math.min(1, (S.aimV - POOL_MOUSE_V[0]) / (POOL_MOUSE_V[1] - POOL_MOUSE_V[0])));
+        return g[0] + (g[1] - g[0]) * k * k * (3 - 2 * k);
+    }
     function poolOnMove(e) {
         const S = poolS;
         if (!S.W) return;
@@ -1108,10 +1129,14 @@
         if (!S.armed) return;
         const far = sx < -POOL_AIM_REACH || sx > S.W + POOL_AIM_REACH || sy < -POOL_AIM_REACH || sy > S.H + POOL_AIM_REACH;
         if (far || poolIsControl(e.target)) { poolDisarm(); return; }
-        const dx = S.lastX === null ? 0 : sx - S.lastX;
-        S.lastX = sx;
+        // In screen px, so the scaled-down Max view turns no faster than the panel.
+        const dx = S.lastX === null ? 0 : e.clientX - S.lastX;
+        S.lastX = e.clientX;
+        const gain = poolMouseGain(dx, e.timeStamp);
         if (S.phase !== 'aim' || !poolCanAct()) return;
-        if (userPreferences.poolCamera !== '2d') S.aim -= dx * (e.shiftKey ? poolRules().aimFine : 0.3) * POOL_DEG;
+        // 3D turns with the mouse; 2D points at the target, or with Shift turns finely from there.
+        if (userPreferences.poolCamera !== '2d') S.aim -= dx * (e.shiftKey ? poolRules().aimMouse[0] : gain) * POOL_DEG;
+        else if (e.shiftKey) S.aim -= dx * poolRules().aimMouse[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
             if (p && Math.hypot(p[0] - c.x, p[1] - c.y) > 2) S.aim = Math.atan2(p[1] - c.y, p[0] - c.x);
@@ -1164,9 +1189,31 @@
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-            S.aim += (e.key === 'ArrowLeft' ? 1 : -1) * poolRules().aimKey * POOL_DEG;
             e.preventDefault();
+            // A tap is one fine step; holding turns on in poolAimHoldTick, so the OS's key
+            // repeat is ignored.
+            const dir = e.key === 'ArrowLeft' ? 1 : -1;
+            if (e.repeat || (S.aimHold && S.aimHold.dir === dir)) return;
+            S.aim += dir * poolRules().aimKey * POOL_DEG;
+            S.aimHold = { dir, key: e.key, t: 0 };
         }
+    }
+    function poolOnKeyUp(e) { if (poolS.aimHold && e.key === poolS.aimHold.key) poolS.aimHold = null; }
+    // A held ←/→: after a beat, the aim turns at a rate that eases up from a crawl to a sweep,
+    // in aim steps a second (pool's step 0.05°: 1°/s to 20°/s; snooker's a quarter of that).
+    const POOL_HOLD_DELAY = 260, POOL_HOLD_RAMP = 1500, POOL_HOLD_RATE = [20, 400];
+    function poolAimHoldTick(dt) {
+        const S = poolS, h = S.aimHold;
+        if (!h) return;
+        if (S.phase !== 'aim' || !poolCanAct()) { S.aimHold = null; return; }
+        const t0 = h.t;
+        h.t += dt;
+        const from = Math.max(t0, POOL_HOLD_DELAY), to = h.t;
+        if (to <= from) return;
+        // The rate at the middle of this slice: quadratic ease from the slowest to the fastest.
+        const k = Math.min(1, ((from + to) / 2 - POOL_HOLD_DELAY) / POOL_HOLD_RAMP);
+        const rate = POOL_HOLD_RATE[0] + (POOL_HOLD_RATE[1] - POOL_HOLD_RATE[0]) * k * k;
+        S.aim += h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
     }
 
     // ── HUD wiring ────────────────────────────────────────────────────
@@ -1331,6 +1378,7 @@
         window.addEventListener('pointermove', poolOnMove);
         window.addEventListener('pointerdown', poolOnWindowDown, true);
         window.addEventListener('keydown', poolOnKey, true);
+        window.addEventListener('keyup', poolOnKeyUp, true);
         window.addEventListener('blur', poolDisarm);
         document.documentElement.addEventListener('pointerleave', poolDisarm);
         if (window.matchMedia) {
@@ -1358,6 +1406,7 @@
         window.removeEventListener('pointermove', poolOnMove);
         window.removeEventListener('pointerdown', poolOnWindowDown, true);
         window.removeEventListener('keydown', poolOnKey, true);
+        window.removeEventListener('keyup', poolOnKeyUp, true);
         window.removeEventListener('blur', poolDisarm);
         document.documentElement.removeEventListener('pointerleave', poolDisarm);
         if (S.scheme && S.scheme.removeEventListener) S.scheme.removeEventListener('change', poolOnThemeChange);

@@ -316,9 +316,33 @@ function playFrame(P, maxTicks) {
     ok('with no stroke, Esc passes on (the Max modal closes itself)', stopped === 1);
     S.armed = true; const a0 = S.aim;
     P.poolOnKey({ key: 'ArrowLeft', preventDefault: () => prevented++, stopImmediatePropagation: () => {}, target: { tagName: 'DIV' } });
-    ok('← turns the aim 0.1° while the table has the mouse', Math.abs(S.aim - a0 - 0.1 * Math.PI / 180) < 1e-12);
+    ok('← turns the aim 0.05° while the table has the mouse', Math.abs(S.aim - a0 - 0.05 * Math.PI / 180) < 1e-12);
+    P.poolOnKeyUp({ key: 'ArrowLeft' });
     P.poolOnKey({ key: 'ArrowLeft', preventDefault: () => prevented++, stopImmediatePropagation: () => {}, target: { tagName: 'INPUT' } });
-    ok('…but not while a slider or field has focus', Math.abs(S.aim - a0 - 0.1 * Math.PI / 180) < 1e-12);
+    ok('…but not while a slider or field has focus', Math.abs(S.aim - a0 - 0.05 * Math.PI / 180) < 1e-12);
+    {
+        // Held: the OS's repeats do nothing; after a beat the aim turns, faster the longer it is held.
+        const deg = () => (S.aim - a1) * 180 / Math.PI, down = { key: 'ArrowRight', preventDefault() {}, stopImmediatePropagation() {}, target: {} };
+        const a1 = S.aim;
+        P.poolOnKey(down);
+        P.poolOnKey(Object.assign({}, down, { repeat: true }));
+        P.poolOnKey(Object.assign({}, down, { repeat: true }));
+        ok('a tap is one step: key repeats add nothing', Math.abs(deg() + 0.05) < 1e-9);
+        P.poolAimHoldTick(250);
+        ok('…and nothing more before the hold beat (260 ms)', Math.abs(deg() + 0.05) < 1e-9);
+        const at = () => deg();
+        for (let i = 0; i < 30; i++) P.poolAimHoldTick(16);       // ~0.5 s in
+        const early = -at();
+        for (let i = 0; i < 125; i++) P.poolAimHoldTick(16);      // to ~2.5 s
+        const mid = -at();
+        for (let i = 0; i < 30; i++) P.poolAimHoldTick(16);
+        const lateRate = (-at() - mid) / 0.48;
+        ok('held, the aim turns slowly at first, then sweeps (pool tops out at 20°/s)', early > 0.05 && early < 1.2 && early < lateRate / 10 && Math.abs(lateRate - 20) < 0.5, early.toFixed(3) + '° early, ' + lateRate.toFixed(2) + '°/s late');
+        P.poolOnKeyUp({ key: 'ArrowRight' });
+        const stop = S.aim;
+        P.poolAimHoldTick(500);
+        ok('letting go stops it at once', S.aim === stop && !S.aimHold);
+    }
     // Free spin: the tip you place is the tip the physics strikes with.
     P.prPlaceCue(S.world, S.world.table.headX - 60, 0); S.placed = true; S.phase = 'aim';
     P.poolOn.tip({ x: 0.3, y: -0.9 });
@@ -857,7 +881,7 @@ head('Escapes (pool-ai.js)');
 // ── 9. Keys (a mouse game) ────────────────────────────────────────────
 head('Keys (pool-game.js)');
 {
-    // Pool is played with the mouse. The one key it takes is ←/→ fine aim, 0.1°, while the
+    // Pool is played with the mouse. The one key it takes is ←/→ fine aim, 0.05° a tap, while the
     // mouse is over the table or Max is open; nothing shoots, sets power or calls from the keyboard.
     const P = L.game({ seed: 61 });
     const S = P.poolS;
@@ -869,7 +893,25 @@ head('Keys (pool-game.js)');
     ok('← does nothing unless the mouse is over the table', S.aim === a0);
     S.armed = true;
     key('ArrowLeft');
-    ok('with the mouse over the table, ← turns the aim 0.1°', Math.abs((S.aim - a0) / (Math.PI / 180) - 0.1) < 1e-9);
+    ok('with the mouse over the table, ← turns the aim 0.05°', Math.abs((S.aim - a0) / (Math.PI / 180) - 0.05) < 1e-9);
+    {
+        // Mouse aim: degrees per screen px by pointer speed, the same in a scaled-down Max view.
+        const deg = Math.PI / 180, gain = (px, ms, n) => { S.aimT = 0; S.aimV = 0; let g = 0; for (let i = 1; i <= n; i++) g = P.poolMouseGain(px, 1000 + i * ms); return g; };
+        ok('mouse aim: a slow move turns 0.02°/px, a quick one 0.22°/px, eased between', Math.abs(gain(1, 16, 20) - 0.02) < 1e-9 && Math.abs(gain(40, 16, 20) - 0.22) < 1e-9 && gain(12, 16, 20) > 0.02 && gain(12, 16, 20) < 0.22);
+        S.W = 400; S.H = 400; S.canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 200 }) };
+        S.phase = 'aim'; S.armed = true; S.lastX = 100; S.aimT = 0; S.aimV = 0; P.host.userPreferences.poolCamera = '3d';
+        const m0 = S.aim;
+        for (let i = 1; i <= 10; i++) P.poolOnMove({ clientX: 100 + i, clientY: 100, timeStamp: 1000 + i * 16, target: {}, shiftKey: false });
+        ok('…ten slow 1 px moves turn 0.2°, counted in screen px (the view here is scaled to half)', Math.abs((m0 - S.aim) / deg - 0.2) < 1e-6, ((m0 - S.aim) / deg).toFixed(4));
+        const m1 = S.aim;
+        P.poolOnMove({ clientX: 160, clientY: 100, timeStamp: 1300, target: {}, shiftKey: true });
+        ok('…and Shift keeps the fine gain however fast the mouse goes', Math.abs((m1 - S.aim) / deg - 50 * 0.02) < 1e-6);
+        P.host.userPreferences.poolCamera = '2d';
+        const m2 = S.aim;
+        P.poolOnMove({ clientX: 170, clientY: 100, timeStamp: 1316, target: {}, shiftKey: true });
+        ok('2D with Shift turns finely from the aim instead of pointing', Math.abs((m2 - S.aim) / deg - 10 * 0.02) < 1e-6);
+        P.host.userPreferences.poolCamera = '3d';
+    }
     ['ArrowUp', 'Enter', ' ', 'q', ']'].forEach(k => key(k));
     ok('no key sets power, shoots or calls a pocket', S.power === 0 && S.phase === 'aim' && S.called === -1);
 }
@@ -1229,7 +1271,18 @@ head('Cues (pool-cues.js, pool-game.js)');
         const c = G.poolCueModel().list.find(x => x.id === 'ember');
         return c.level === 2 && c.bars.join('/') === '8/5/4/5' && c.top.join('/') === '9/6/4/6' && c.rarity === 'rare' && c.rarityName === 'Rare';
     })());
-    ok('every cue draws from the design\'s materials', P.PQ_SET.every(q => q.sections.concat(q.rings || []).every(x => P.PQ_MATS[x[2]]) && (q.points || []).every(p => P.PQ_MATS[p.core])));
+    const used = new Set();
+    ok('every cue draws from the design\'s materials (veneers, windows and inlays too), and every material is used', P.PQ_SET.every(q => {
+        const keys = q.sections.concat(q.rings || []).map(x => x[2]).concat((q.inlays || []).map(n => n.mat),
+            ...(q.points || []).map(p => [p.core].concat(p.veneers.map(v => v[0]), p.inlay ? [p.inlay.mat] : [])));
+        keys.forEach(k => used.add(k));
+        return keys.every(k => k.charAt(0) === '#' || P.PQ_MATS[k]);
+    }) && Object.keys(P.PQ_MATS).every(k => used.has(k)));
+    // The look by rarity (the design's rarity ladder, 2026-10-15).
+    const woody = k => P.PQ_MATS[k] && P.PQ_MATS[k][5] && ['grain', 'stripe', 'ash'].indexOf(P.PQ_MATS[k][5].t) >= 0;
+    ok('Common and Rare cues have no sheen; each Epic and Legendary its own colours', P.PQ_SET.every(q => !!q.sheen === /epic|legendary/.test(q.rarity)) &&
+       new Set(P.PQ_SET.filter(q => q.sheen).map(q => q.sheen.c.join())).size === 5);
+    ok('nothing on a Legendary cue reads as wood', P.PQ_SET.filter(q => q.rarity === 'legendary').every(q => q.sections.every(x => !woody(x[2]))));
     // Unlocks.
     P.host.userPreferences.poolCue = 'ember';
     ok('a locked cue does not play: an unearned Ember is Standard', P.poolCueId() === 'standard');

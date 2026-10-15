@@ -688,7 +688,7 @@
                 border: 1px solid rgba(var(--pool-accent-rgb), 0.35); color: var(--pool-accent-ink); font-size: 10px;
             }
             .pool-hud[data-layout="max"] .ph-tourhead { justify-content: flex-start; gap: 14px; }
-            .pool-hud[data-layout="max"] .ph-tourhead-n { font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 20px; }
+            .pool-hud[data-layout="max"] .ph-tourhead-n { font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 20px; line-height: 1.1; white-space: normal; text-wrap: balance; }
             .pool-hud[data-layout="max"] .ph-tourhead-f { height: 30px; padding: 0 14px; border-radius: 15px; font-size: 11px; }
             .pool-hud .ph-primary.is-two { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
             .pool-hud .ph-primary-sub { font-family: var(--pool-body); font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }

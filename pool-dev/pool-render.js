@@ -4,15 +4,16 @@
     // Canvas2D, painted in layers:
     //   1  table shadow, apron, felt
     //   2  rail inner face, jaw faces, nose faces
-    //   3  cushion tops, rail wood, lip, diamonds, spots
+    //   3  cushion tops, rail boards and bevel, lip, sights, spots
     //   4  pocket rims, then the pocket shafts
     //   5  kitchen tint, head string
     //   6  ball shadows, guides
     //   7  balls, far to near
     //   8  ghost ball, cue, called-pocket rings, ball-in-hand ghost and hand
     // Layers 1–4 depend only on the camera, so they can be cached.
-    // Pool's pockets and ball markings are clipped as polygons (Sutherland–Hodgman),
-    // not ctx.clip(), so the tests' headless rasterizer can draw them.
+    // 2D pocket floors and ball markings are clipped as polygons (Sutherland–Hodgman),
+    // not ctx.clip(), so the tests' headless rasterizer can draw them; 3D pockets clip
+    // (a headless context without clip() gets the opening alone).
     // Table materials and ball colours are physical; theme colours come in via scene.theme.
 
     const PG_RAIL_Z = 16;              // rail top
@@ -140,16 +141,6 @@
         return out;
     }
 
-    function pgHull(pts) {
-        const P = pts.map(q => [q[0], q[1]]).sort((u, v) => u[0] - v[0] || u[1] - v[1]);
-        if (P.length < 3) return P;
-        const cr = (o, u, v) => (u[0] - o[0]) * (v[1] - o[1]) - (u[1] - o[1]) * (v[0] - o[0]);
-        const lo = [], up = [];
-        P.forEach(q => { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); });
-        for (let i = P.length - 1; i >= 0; i--) { const q = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
-        return lo.slice(0, -1).concat(up.slice(0, -1));
-    }
-
     function pgRgb(hex, k) {
         const n = parseInt(hex.slice(1), 16);
         const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.min(255, Math.round(v * k)));
@@ -177,8 +168,33 @@
         [-1, 1].forEach(sx => {
             q.push([[sx * HL, -HW + CN, N], [sx * HL, HW - CN, N], [sx * (HL + CU), HW - CB, T], [sx * (HL + CU), -HW + CB, T]]);
         });
-        return q.map(c => ({ top: c, nose: [c[0], c[1]], ends: [[c[0], c[3]], [c[1], c[2]]] }));
+        // Each end's corner, where the playing face meets the jaw, is drawn rounded (the user,
+        // 2026-10-15), as snooker's are. Drawn only: the nose point collider sits within a
+        // couple of units of the arc.
+        const at = (x, y, A, u) => { const dep = Math.min(1, Math.abs(u[0] * (y - A[1]) - u[1] * (x - A[0])) / CU); return [x, y, N + (T - N) * dep]; };
+        const round = (A, other, rail) => {
+            const nb = pgUnit(other[0] - A[0], other[1] - A[1]), jl = Math.hypot(rail[0] - A[0], rail[1] - A[1]), jb = [(rail[0] - A[0]) / jl, (rail[1] - A[1]) / jl];
+            const half = Math.acos(Math.max(-1, Math.min(1, nb[0] * jb[0] + nb[1] * jb[1]))) / 2;    // half the corner's angle
+            const r = Math.min(PG_NOSE_ROUND, 0.6 * jl * Math.tan(half)), d = r / Math.tan(half);
+            const bis = pgUnit(nb[0] + jb[0], nb[1] + jb[1]), C = [A[0] + bis[0] * r / Math.sin(half), A[1] + bis[1] * r / Math.sin(half)];
+            const a0 = Math.atan2(A[1] + nb[1] * d - C[1], A[0] + nb[0] * d - C[0]), a1 = Math.atan2(A[1] + jb[1] * d - C[1], A[0] + jb[0] * d - C[0]);
+            let sp = a1 - a0;
+            sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
+            const pts = [];
+            for (let i = 0; i <= 8; i++) { const t = a0 + sp * i / 8; pts.push(at(C[0] + r * Math.cos(t), C[1] + r * Math.sin(t), A, nb)); }
+            return pts;                                                    // nose side first, jaw side last
+        };
+        return q.map(c => {
+            const sa = round(c[0], c[1], c[3]), sb = round(c[1], c[0], c[2]), ends = [];
+            [[sa, c[3]], [sb, c[2]]].forEach(([s, rail]) => {
+                for (let i = 0; i < s.length - 1; i++) ends.push([s[i], s[i + 1]]);
+                ends.push([s[s.length - 1], rail]);
+            });
+            return { top: [c[3]].concat(sa.slice().reverse(), sb, [c[2]]), nose: [sa[0], sb[0]], ends };
+        });
     }
+    const PG_NOSE_ROUND = 12;             // pool's drawn nose radius: the cushion's depth, as snooker's design
+    const pgUnit = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
 
     // Snooker's cushions, matching ppBuildRoundedTable; the top rises from nose to rail height.
     function pgRoundedCushions(cfg) {
@@ -211,11 +227,12 @@
         return out;
     }
 
-    // Which rail a cushion lies along (N is −y), and the way into the table from it.
-    const PG_INWARD = { N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0] };
+    // Which rail a cushion lies along, and the way into the table from it. The design's world is
+    // ours mirrored in y: its N, the top of its 2D view and of ours, is our +y.
+    const PG_INWARD = { N: [0, -1], S: [0, 1], W: [1, 0], E: [-1, 0] };
     function pgCushionSide(cfg, c) {
         const y = (c.nose[0][1] + c.nose[1][1]) / 2, x = (c.nose[0][0] + c.nose[1][0]) / 2;
-        return Math.abs(y) >= cfg.halfWidth - 1e-6 ? (y < 0 ? 'N' : 'S') : x < 0 ? 'W' : 'E';
+        return Math.abs(y) >= cfg.halfWidth - 1e-6 ? (y > 0 ? 'N' : 'S') : x < 0 ? 'W' : 'E';
     }
     // A linear gradient across a band, from the line a–b (world points) to that line moved by
     // [dx, dy] at height z, its stripes parallel to the line as drawn; null when off screen.
@@ -264,13 +281,55 @@
         if (marks.spots && marks.spots.length) pgFill(ctx, marks.spots.map(s => pcPoly(view, pgCirc(s.x, s.y, s.r, 0.1, 10))), PG_IVORY, 0.35);
     }
 
-    // cloth: a preset's name, or a cloth (pgFeltFrom).
-    function pgDrawTable(ctx, view, cfg, table, cloth) {
+    // The woodwork (the design, 2026-10-15): warm walnut for pool, deep red mahogany for snooker.
+    // Each rail board runs outer edge to inner [4 stops], darker on the far rails (N, W); the
+    // apron falls from rail height to its foot. A bevel at the inner edge: shade on the far
+    // rails, light on the near, by alpha.
+    const PG_WOOD = {
+        pool: { far: ['#5C381F', '#B67E47', '#966236', '#6A4123'], near: ['#6E4426', '#D09455', '#B0753F', '#7E4F2A'], apron: ['#45291A', '#1F1209'] },
+        snooker: { far: ['#2E1108', '#642B19', '#4C1D10', '#2A1007'], near: ['#3A160B', '#7A3520', '#5E2414', '#34140A'], apron: ['#2A0E06', '#120502'] },
+    };
+    const PG_BEVEL = 5, PG_BEVEL_A = { N: 0.34, W: 0.28, S: 0.2, E: 0.16 };
+    // Pool's sights, mother-of-pearl in a brass ring: [dx, dy, r, colour, alpha] (ring, pearl,
+    // a blue-green and a pink tint, a highlight).
+    const PG_SIGHT = [[0, 0, 4.6, '#B98F3E', 1], [0, 0, 3.5, '#ECE6DC', 1], [0.9, 0.7, 2.2, '#C9E2E6', 0.75], [-1.1, 1.2, 1.4, '#EBD3E2', 0.7], [-1.1, -1.1, 1.1, '#FFFFFF', 0.9]];
+    // Wood grain over poly, running along the world line a→b as drawn: a tile of fine waving
+    // streaks, dark grain with a lighter figure (the design's turbulence), made once; none
+    // without a canvas to make it on.
+    let PG_GRAIN = null;
+    function pgGrain(ctx, view, mk, poly, a, b) {
+        const p = pcProject(view, a), q = pcProject(view, b);
+        if (!mk || !ctx.createPattern || typeof DOMMatrix !== 'function' || !p || !q || poly.length < 3) return;
+        if (!PG_GRAIN) {
+            const W = 512, H = 64, cv = mk(W, H), c = cv.getContext('2d'), img = c.createImageData(W, H);
+            let seed = 7;
+            const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+            const rows = () => { const r = Array.from({ length: H }, rnd); return r.map((v, y) => (r[(y + H - 1) % H] + 2 * v + r[(y + 1) % H]) / 4); };
+            const g = rows(), fig = rows(), ph = g.map(() => rnd() * 2 * Math.PI);
+            for (let x = 0; x < W; x++) {
+                const wv = Math.round(2.5 * Math.sin(2 * Math.PI * x / W) + 1.2 * Math.sin(6 * Math.PI * x / W + 1));
+                for (let y = 0; y < H; y++) {
+                    const n = g[(y + wv + H) % H], m = fig[y] * (0.5 + 0.5 * Math.sin(14 * Math.PI * x / W + ph[y]));
+                    const dark = Math.max(0, Math.min(1, 2.6 * n - 1.1)) * 0.55, light = Math.max(0, Math.min(1, 3.2 * m - 1.9)) * 0.16;
+                    img.data.set(dark >= light ? [15, 8, 4, dark * 255] : [255, 219, 158, light * 255], 4 * (y * W + x));
+                }
+            }
+            c.putImageData(img, 0, 0);
+            PG_GRAIN = cv;
+        }
+        const pat = ctx.createPattern(PG_GRAIN, 'repeat'), l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, cs = (q[0] - p[0]) / l, sn = (q[1] - p[1]) / l;
+        if (!pat) return;
+        pat.setTransform(new DOMMatrix([cs, sn, -sn, cs, p[0], p[1]]));
+        pgFill(ctx, [poly], pat);
+    }
+
+    // cloth: a preset's name, or a cloth (pgFeltFrom). mk(w, h): a canvas, for the grain.
+    function pgDrawTable(ctx, view, cfg, table, cloth, mk) {
         const P = pts => pcPoly(view, pts);
         const mat = cloth && typeof cloth === 'object' && Array.isArray(cloth.felt) ? cloth : PG_FELTS[cloth] || PG_FELTS.green;
         const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RL = cfg.railWidth - cfg.cushionWidth;
         const TZ = pgRailZ(cfg), OX = HL + CU + RL, OY = HW + CU + RL, IX = HL + CU, IY = HW + CU;
-        const eye = view.eye;
+        const eye = view.eye, wood = PG_WOOD[cfg.game] || PG_WOOD.pool;
 
         // 1. Shadow, apron, felt.
         const shadow = view.ortho ? P(pgRect(OX + 4, OY + 4, -1).map(p => [p[0], p[1] - 12, p[2]])) : P(pgRect(OX + 30, OY + 30, -90));
@@ -279,12 +338,14 @@
         pgFill(ctx, [shadow], '#000000', 0.55);
         ctx.restore();
         if (eye) {
-            const lo = -46, ap = [];
-            if (eye[0] > OX) ap.push(P([[OX, -OY, TZ], [OX, OY, TZ], [OX, OY, lo], [OX, -OY, lo]]));
-            if (eye[0] < -OX) ap.push(P([[-OX, -OY, TZ], [-OX, OY, TZ], [-OX, OY, lo], [-OX, -OY, lo]]));
-            if (eye[1] > OY) ap.push(P([[-OX, OY, TZ], [OX, OY, TZ], [OX, OY, lo], [-OX, OY, lo]]));
-            if (eye[1] < -OY) ap.push(P([[-OX, -OY, TZ], [OX, -OY, TZ], [OX, -OY, lo], [-OX, -OY, lo]]));
-            pgFill(ctx, ap, '#26160E');
+            const lo = -46;
+            [[OX, -OY, OX, OY, eye[0] > OX], [-OX, -OY, -OX, OY, eye[0] < -OX], [-OX, OY, OX, OY, eye[1] > OY], [-OX, -OY, OX, -OY, eye[1] < -OY]].forEach(([x0, y0, x1, y1, seen]) => {
+                if (!seen) return;
+                const a = [x0, y0, TZ], b = [x1, y1, TZ], face = P([a, b, [x1, y1, lo], [x0, y0, lo]]), g = pgBandGradient(ctx, view, a, b, 0, 0, lo);
+                if (g) wood.apron.forEach((c, i) => g.addColorStop(i, c));
+                pgFill(ctx, [face], g || wood.apron[1]);
+                pgGrain(ctx, view, mk, face, a, b);
+            });
         }
         const felt = P(pgRect(IX, IY, 0));
         if (felt.length >= 3) {
@@ -317,36 +378,41 @@
         }
         pgFill(ctx, cush.map(c => P([c.nose[0], c.nose[1], [c.nose[1][0], c.nose[1][1], 0], [c.nose[0][0], c.nose[0][1], 0]])), mat.nose);
 
-        // 3. Cushion tops, rail wood, lip, diamonds, spots.
+        // 3. Cushion tops, rail boards and bevel, mitres, lip, sights, spots.
         pgDrawCushionTops(ctx, view, cfg, cush, mat);
-        const rails = [
-            P([[-OX, OY, TZ], [OX, OY, TZ], [IX, IY, TZ], [-IX, IY, TZ]]),
-            P([[OX, OY, TZ], [OX, -OY, TZ], [IX, -IY, TZ], [IX, IY, TZ]]),
-            P([[OX, -OY, TZ], [-OX, -OY, TZ], [-IX, -IY, TZ], [IX, -IY, TZ]]),
-            P([[-OX, -OY, TZ], [-OX, OY, TZ], [-IX, IY, TZ], [-IX, -IY, TZ]]),
-        ];
-        const rb = pgBounds(rails.filter(p => p.length >= 3));
-        if (isFinite(rb.x)) {
-            const wood = ctx.createLinearGradient(rb.x, rb.y, rb.x + rb.w, rb.y + rb.h);
-            wood.addColorStop(0, '#7A4B2C'); wood.addColorStop(0.5, '#553220'); wood.addColorStop(1, '#3A2116');
-            pgFill(ctx, rails, wood);
-        }
-        ctx.beginPath(); pgTrace(ctx, P(pgRect(IX, IY, TZ)));
-        ctx.strokeStyle = 'rgba(243, 238, 226, 0.12)'; ctx.lineWidth = 1; ctx.stroke();
+        // A side's strip of rail top from k0 to k1 units out from the cloth: [outer ×2, inner ×2].
+        const strip = (side, k0, k1) => {
+            const v = PG_INWARD[side], sg = -(v[0] + v[1]), ns = !v[0];
+            const at = (u, k) => (ns ? [u * (IX + k), sg * (IY + k), TZ] : [sg * (IX + k), u * (IY + k), TZ]);
+            return [at(-1, k1), at(1, k1), at(1, k0), at(-1, k0)];
+        };
+        ['N', 'S', 'W', 'E'].forEach(side => {
+            const far = side === 'N' || side === 'W', v = PG_INWARD[side], q = strip(side, 0, RL), board = P(q), st = wood[far ? 'far' : 'near'];
+            const g = pgBandGradient(ctx, view, q[0], q[1], v[0] * RL, v[1] * RL, TZ);
+            if (g) [0, 0.34, 0.62, 1].forEach((at, i) => g.addColorStop(at, st[i]));
+            pgFill(ctx, [board], g || st[2]);
+            pgGrain(ctx, view, mk, board, q[0], q[1]);
+            pgFill(ctx, [P(strip(side, 0, PG_BEVEL))], far ? '#000000' : '#FFE4BC', PG_BEVEL_A[side]);
+        });
+        ctx.beginPath();
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy]) => {
+            const a = pcProject(view, [sx * OX, sy * OY, TZ]), b = pcProject(view, [sx * IX, sy * IY, TZ]);
+            if (a && b) { ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+        });
+        ctx.strokeStyle = 'rgba(26, 12, 6, 0.7)'; ctx.lineWidth = 1; ctx.stroke();
+        [[PG_BEVEL, 'rgba(255, 233, 200, 0.18)', 0.75], [0, 'rgba(243, 238, 226, 0.12)', 1]].forEach(([k, style, w]) => {
+            ctx.beginPath(); pgTrace(ctx, P(pgRect(IX + k, IY + k, TZ)));
+            ctx.strokeStyle = style; ctx.lineWidth = w; ctx.stroke();
+        });
         if (cfg.diamonds !== false) {
-            const dia = [];
-            [-375, -250, -125, 125, 250, 375].forEach(x => {
-                dia.push(P(pgCirc(x, -(IY + RL / 2), 3.6, TZ + 0.1, 8)), P(pgCirc(x, IY + RL / 2, 3.6, TZ + 0.1, 8)));
-            });
-            [-125, 0, 125].forEach(y => {
-                dia.push(P(pgCirc(-(IX + RL / 2), y, 3.6, TZ + 0.1, 8)), P(pgCirc(IX + RL / 2, y, 3.6, TZ + 0.1, 8)));
-            });
-            pgFill(ctx, dia, '#E9DDBF');
+            const at = [];
+            [-375, -250, -125, 125, 250, 375].forEach(x => at.push([x, -(IY + RL / 2)], [x, IY + RL / 2]));
+            [-125, 0, 125].forEach(y => at.push([-(IX + RL / 2), y], [IX + RL / 2, y]));
+            PG_SIGHT.forEach(([dx, dy, r, col, a]) => pgFill(ctx, at.map(([x, y]) => P(pgCirc(x + dx, y + dy, r, TZ + 0.1, 12))), col, a));
         }
         pgDrawMarks(ctx, view, pgMarks(table));
 
-        // 4. Pockets: a leather rim clamped to the rail's inner edge, then the
-        // shaft seen through the opening (rail cut ∩ felt cut).
+        // 4. Pockets: a leather rim clamped to the rail's inner edge, then the hole.
         const rims = table.pockets.map(p => P(pgCirc(p.x, p.y, p.r + 7, TZ + 0.2, 36).map(q => {
             if (Math.abs(q[0]) < IX && Math.abs(q[1]) < IY) {
                 const dx = IX - Math.abs(q[0]), dy = IY - Math.abs(q[1]);
@@ -359,10 +425,10 @@
         const bandRGB = ['#563C29', '#302117', '#150F0B'];
         const lit = [0.55, 0.8, 1.08];
         const NF = 30;
-        // Snooker in 3D: a pocket sits mostly behind the cushion line, so its lip is at rail
-        // height only over the rail and drops to the felt across the gap; the wall's top band
-        // shows only over the rail. The cushions are then redrawn in front of the holes.
-        if (cfg.pocketStyle === 'rounded' && eye) {
+        // In 3D (pool and snooker): a pocket's lip is at rail height only over the rail and
+        // drops to the felt across the gap; the wall's top band shows only over the rail.
+        // The cushions are then redrawn in front of the holes.
+        if (eye) {
             const over = (x, y) => Math.abs(x) > IX || Math.abs(y) > IY;
             table.pockets.forEach(p => {
                 const rim = [];
@@ -404,29 +470,11 @@
             pgDrawCushionTops(ctx, view, cfg, cush, mat);
             return;
         }
+        // 2D: the hole from above, its floor inside it.
         table.pockets.forEach(p => {
-            const top = P(pgCirc(p.x, p.y, p.r, TZ + 0.3, 36));
-            const aperture = view.ortho ? top : pgClipConvex(top, pgHull(P(pgCirc(p.x, p.y, p.r, 0, 36))));
+            const aperture = P(pgCirc(p.x, p.y, p.r, TZ + 0.3, 36));
             if (aperture.length < 3) return;
-            pgFill(ctx, [aperture], view.ortho ? '#3A281C' : '#040303');
-            if (eye) {
-                const walls = [[], [], [], [], [], [], [], [], []];
-                const cl = Math.hypot(p.x, p.y) || 1;
-                for (let k = 0; k < NF; k++) {
-                    const a0 = k / NF * Math.PI * 2, a1 = (k + 1) / NF * Math.PI * 2, am = (a0 + a1) / 2;
-                    const nx = -Math.cos(am), ny = -Math.sin(am);
-                    const px = p.x + p.r * Math.cos(am), py = p.y + p.r * Math.sin(am);
-                    if ((eye[0] - px) * nx + (eye[1] - py) * ny <= 0) continue;    // only the far wall faces us
-                    const face = Math.max(0, nx * (-p.x / cl) + ny * (-p.y / cl)); // how much it faces the lamp
-                    const bi = face > 0.66 ? 2 : face > 0.25 ? 1 : 0;
-                    const x0 = p.x + p.r * Math.cos(a0), y0 = p.y + p.r * Math.sin(a0);
-                    const x1 = p.x + p.r * Math.cos(a1), y1 = p.y + p.r * Math.sin(a1);
-                    bandZ.forEach((bz, band) => {
-                        walls[band * 3 + bi].push(pgClipConvex(P([[x0, y0, bz[0]], [x1, y1, bz[0]], [x1, y1, bz[1]], [x0, y0, bz[1]]]), aperture));
-                    });
-                }
-                walls.forEach((w, i) => { if (w.length) pgFill(ctx, w, pgRgb(bandRGB[Math.floor(i / 3)], lit[i % 3])); });
-            }
+            pgFill(ctx, [aperture], '#3A281C');
             pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.86, PG_POCKET_FLOOR, 36)), aperture)], '#1E140E');
             pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.66, PG_POCKET_FLOOR, 36)), aperture)], '#020303');
         });
@@ -693,7 +741,7 @@
         const moving = !!scene.cache && scene.cache.lastKey !== undefined && scene.cache.lastKey !== key;
         if (scene.cache) scene.cache.lastKey = key;
         if (scene.cache && scene.makeCanvas && moving && scene.cache.key !== key) {
-            pgDrawTable(ctx, view, cfg, table, scene.felt);
+            pgDrawTable(ctx, view, cfg, table, scene.felt, scene.makeCanvas);
         } else if (scene.cache && scene.makeCanvas) {
             const c = scene.cache;
             if (c.key !== key) {
@@ -704,12 +752,12 @@
                 tc.setTransform(1, 0, 0, 1, 0, 0);
                 tc.clearRect(0, 0, c.canvas.width, c.canvas.height);
                 tc.setTransform(dpr, 0, 0, dpr, 0, 0);
-                pgDrawTable(tc, view, cfg, table, scene.felt);
+                pgDrawTable(tc, view, cfg, table, scene.felt, scene.makeCanvas);
                 c.key = key;
             }
             ctx.drawImage(c.canvas, 0, 0, view.W, view.H);
         } else {
-            pgDrawTable(ctx, view, cfg, table, scene.felt);
+            pgDrawTable(ctx, view, cfg, table, scene.felt, scene.makeCanvas);
         }
 
         // 5. The ball-in-hand zone.
