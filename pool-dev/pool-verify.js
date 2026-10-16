@@ -337,7 +337,7 @@ function playFrame(P, maxTicks) {
         const mid = -at();
         for (let i = 0; i < 30; i++) P.poolAimHoldTick(16);
         const lateRate = (-at() - mid) / 0.48;
-        ok('held, the aim turns slowly at first, then sweeps (pool tops out at 20°/s)', early > 0.05 && early < 1.2 && early < lateRate / 10 && Math.abs(lateRate - 20) < 0.5, early.toFixed(3) + '° early, ' + lateRate.toFixed(2) + '°/s late');
+        ok('held, the aim turns slowly at first, then sweeps (pool tops out at 30°/s)', early > 0.05 && early < 1.2 && early < lateRate / 10 && Math.abs(lateRate - 30) < 0.5, early.toFixed(3) + '° early, ' + lateRate.toFixed(2) + '°/s late');
         P.poolOnKeyUp({ key: 'ArrowRight' });
         const stop = S.aim;
         P.poolAimHoldTick(500);
@@ -895,20 +895,23 @@ head('Keys (pool-game.js)');
     key('ArrowLeft');
     ok('with the mouse over the table, ← turns the aim 0.05°', Math.abs((S.aim - a0) / (Math.PI / 180) - 0.05) < 1e-9);
     {
-        // Mouse aim: degrees per screen px by pointer speed, the same in a scaled-down Max view.
-        const deg = Math.PI / 180, gain = (px, ms, n) => { S.aimT = 0; S.aimV = 0; let g = 0; for (let i = 1; i <= n; i++) g = P.poolMouseGain(px, 1000 + i * ms); return g; };
-        ok('mouse aim: a slow move turns 0.02°/px, a quick one 0.22°/px, eased between', Math.abs(gain(1, 16, 20) - 0.02) < 1e-9 && Math.abs(gain(40, 16, 20) - 0.22) < 1e-9 && gain(12, 16, 20) > 0.02 && gain(12, 16, 20) < 0.22);
+        // Mouse aim: one rate per screen px, however fast the mouse goes (no acceleration), the
+        // same in a scaled-down Max view.
+        const deg = Math.PI / 180;
         S.W = 400; S.H = 400; S.canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 200 }) };
-        S.phase = 'aim'; S.armed = true; S.lastX = 100; S.aimT = 0; S.aimV = 0; P.host.userPreferences.poolCamera = '3d';
+        S.phase = 'aim'; S.armed = true; S.lastX = 100; P.host.userPreferences.poolCamera = '3d';
         const m0 = S.aim;
         for (let i = 1; i <= 10; i++) P.poolOnMove({ clientX: 100 + i, clientY: 100, timeStamp: 1000 + i * 16, target: {}, shiftKey: false });
-        ok('…ten slow 1 px moves turn 0.2°, counted in screen px (the view here is scaled to half)', Math.abs((m0 - S.aim) / deg - 0.2) < 1e-6, ((m0 - S.aim) / deg).toFixed(4));
+        ok('mouse aim: ten slow 1 px moves turn 1.2° (0.12°/px), counted in screen px (the view here is scaled to half)', Math.abs((m0 - S.aim) / deg - 1.2) < 1e-6, ((m0 - S.aim) / deg).toFixed(4));
+        const mq = S.aim;
+        P.poolOnMove({ clientX: 150, clientY: 100, timeStamp: 1176, target: {}, shiftKey: false });
+        ok('…and one quick 40 px swipe turns 4.8°: the same rate, no acceleration', Math.abs((mq - S.aim) / deg - 4.8) < 1e-6, ((mq - S.aim) / deg).toFixed(4));
         const m1 = S.aim;
-        P.poolOnMove({ clientX: 160, clientY: 100, timeStamp: 1300, target: {}, shiftKey: true });
-        ok('…and Shift keeps the fine gain however fast the mouse goes', Math.abs((m1 - S.aim) / deg - 50 * 0.02) < 1e-6);
+        P.poolOnMove({ clientX: 200, clientY: 100, timeStamp: 1300, target: {}, shiftKey: true });
+        ok('…and Shift turns finely (0.02°/px)', Math.abs((m1 - S.aim) / deg - 50 * 0.02) < 1e-6);
         P.host.userPreferences.poolCamera = '2d';
         const m2 = S.aim;
-        P.poolOnMove({ clientX: 170, clientY: 100, timeStamp: 1316, target: {}, shiftKey: true });
+        P.poolOnMove({ clientX: 210, clientY: 100, timeStamp: 1316, target: {}, shiftKey: true });
         ok('2D with Shift turns finely from the aim instead of pointing', Math.abs((m2 - S.aim) / deg - 10 * 0.02) < 1e-6);
         P.host.userPreferences.poolCamera = '3d';
     }

@@ -21,12 +21,12 @@
     //   poolMode, poolGamesWon, poolMaximized, poolRecord, poolCpuTier
     //
     // Input:
-    //   3D     sideways mouse turns the aim, even off the table: a slow move turns finely, a quick
-    //          one coarsely (poolMouseGain); Shift holds the fine gain
+    //   3D     sideways mouse turns the aim, even off the table, at one rate per screen px (no
+    //          acceleration: it made slow moves crawl); Shift turns finely
     //   2D     point at the target; with Shift held, sideways mouse turns finely from there
     //   power  press, then pull back or push along the shot line; under 3% or Esc cancels
     //   ←/→    fine aim while the table has the mouse or Max is open: a tap is one step, a
-    //          hold turns on, slow at first and faster the longer it is held
+    //          hold turns on, slow at first and faster the longer it is held (poolAimHoldTick)
     //   ball in hand: drag the cue ball; it stops at the cushions (and the head string on the break)
     // Tournaments (pool-tour.js, pool-tour-ui.js): poolMode 'tour' while a match is on the
     // table; the bracket is saved after every frame, with a table snapshot after every shot.
@@ -72,8 +72,8 @@
             clockPref: 'poolClock', clocks: [30, 45, 0],
             // Aim steps, in degrees: a ←/→ tap (the finest step), and the Shift fine aim per px.
             aimKey: 0.05, aimFine: 0.05,
-            // Mouse aim in 3D, degrees per screen px: [slow, fast] (poolMouseGain).
-            aimMouse: [0.02, 0.22],
+            // Mouse aim, degrees per screen px: [with Shift, without] (3D; 2D turns only with Shift).
+            aimMouse: [0.02, 0.12],
             record: () => poolRecord,
             world: () => ppCreateWorld(),
             rack: (w, rng) => ppRack(w, rng),
@@ -152,7 +152,7 @@
             felt: ['snookerTableColor', 'snookerFeltCustom', 'poolTableColor', 'poolFeltCustom'],
             keys: { cpuRec: 'snookerCpuRecord', byTier: 'snookerWinsByTier', tour: 'snookerTournament', cab: 'snookerTrophyCabinet', frame: 'snookerFrame' },
             // True scale: aiming is slower, so a longer clock and finer aim steps.
-            clock: 45, aimKey: 0.0125, aimFine: 0.0125, aimMouse: [0.005, 0.08],
+            clock: 45, aimKey: 0.0125, aimFine: 0.0125, aimMouse: [0.005, 0.04],
             clockPref: 'snookerClock', clocks: [30, 45, 60, 0],
             // ⚙️ Ball Ring: 'off' hides the nominated ball's ring.
             ringPref: 'snookerRing',
@@ -321,7 +321,6 @@
         // A held ←/→: { dir, key, t ms held }, turned on in poolAimHoldTick.
         aimHold: null,
         // Mouse aim: the smoothed pointer speed (px/ms) and the last move's time.
-        aimV: 0, aimT: 0,
     };
 
     // ── Seats, names, records ─────────────────────────────────────────
@@ -1068,7 +1067,7 @@
         R.placeCue(S.world, q[0], q[1]);
     }
 
-    function poolOnEnter(e) { poolS.armed = true; poolS.lastX = e.clientX; poolS.aimV = 0; }
+    function poolOnEnter(e) { poolS.armed = true; poolS.lastX = e.clientX; }
     function poolOnDown(e) {
         const S = poolS;
         S.spinOpen = false;
@@ -1112,18 +1111,6 @@
         });
         return best;
     }
-    // Mouse aim's degrees per px, from how fast the mouse moves (as an OS pointer's acceleration):
-    // a slow, careful move gets the game's fine gain, a quick swipe the coarse one, eased between
-    // 0.15 and 1.6 px/ms. The speed is smoothed so one jittery event doesn't jump the gain.
-    const POOL_MOUSE_V = [0.15, 1.6];
-    function poolMouseGain(dx, ts) {
-        const S = poolS, g = poolRules().aimMouse, now = ts || Date.now();
-        const dt = S.aimT ? Math.max(1, Math.min(100, now - S.aimT)) : 16;
-        S.aimT = now;
-        S.aimV = 0.6 * (S.aimV || 0) + 0.4 * Math.abs(dx) / dt;
-        const k = Math.max(0, Math.min(1, (S.aimV - POOL_MOUSE_V[0]) / (POOL_MOUSE_V[1] - POOL_MOUSE_V[0])));
-        return g[0] + (g[1] - g[0]) * k * k * (3 - 2 * k);
-    }
     function poolOnMove(e) {
         const S = poolS;
         if (!S.W) return;
@@ -1141,11 +1128,11 @@
         // In screen px, so the scaled-down Max view turns no faster than the panel.
         const dx = S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
-        const gain = poolMouseGain(dx, e.timeStamp);
         if (S.phase !== 'aim' || !poolCanAct()) return;
         // 3D turns with the mouse; 2D points at the target, or with Shift turns finely from there.
-        if (userPreferences.poolCamera !== '2d') S.aim -= dx * (e.shiftKey ? poolRules().aimMouse[0] : gain) * POOL_DEG;
-        else if (e.shiftKey) S.aim -= dx * poolRules().aimMouse[0] * POOL_DEG;
+        const g = poolRules().aimMouse;
+        if (userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
             if (p && Math.hypot(p[0] - c.x, p[1] - c.y) > 2) S.aim = Math.atan2(p[1] - c.y, p[0] - c.x);
@@ -1209,8 +1196,8 @@
     }
     function poolOnKeyUp(e) { if (poolS.aimHold && e.key === poolS.aimHold.key) poolS.aimHold = null; }
     // A held ←/→: after a beat, the aim turns at a rate that eases up from a crawl to a sweep,
-    // in aim steps a second (pool's step 0.05°: 1°/s to 20°/s; snooker's a quarter of that).
-    const POOL_HOLD_DELAY = 260, POOL_HOLD_RAMP = 1500, POOL_HOLD_RATE = [20, 400];
+    // in aim steps a second (pool's step 0.05°: 1°/s to 30°/s; snooker's a quarter of that).
+    const POOL_HOLD_DELAY = 260, POOL_HOLD_RAMP = 1500, POOL_HOLD_RATE = [20, 600];
     function poolAimHoldTick(dt) {
         const S = poolS, h = S.aimHold;
         if (!h) return;
