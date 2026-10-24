@@ -158,13 +158,16 @@ are final"). The physics table is rebuilt to it, and the renderer draws the same
 
 | | corner | side |
 |---|---|---|
-| hole (capture circle) | centre (±504, ±254), r 27 | centre (0, ±266), r 24 |
-| cushion nose ends | 36 u from the corner along each cushion (mouth 36·√2 ≈ 50.9 u) | 30 u either side of centre (mouth 60 u) |
-| cushion rail ends | 22 u from the corner, at the rail line (HW + 12) | 24 u from centre, at the rail line |
+| hole (capture circle) | centre (±504, ±254), r 31 (was 27) | centre (0, ±266), r 27 (was 24) |
+| cushion nose ends | 43 u from the corner along each cushion (mouth 43·√2 ≈ 60.8 u; was 36, 50.9 u) | 34 u either side of centre (mouth 68 u; was 30, 60 u) |
+| cushion rail ends | 26 u from the corner, at the rail line (HW + 12) (was 22) | 27 u from centre, at the rail line (was 24) |
 | jaw | nose end → rail end, continued to the hole edge | same |
 
-The rail ends sit on the hole edges (27.2 vs 27, 24.3 vs 24), so each jaw closes its
-throat against its hole.
+The rail ends sit on the hole edges (31.05 vs 31, 27.3 vs 27), so each jaw closes its
+throat against its hole. **Widened 2026-10-24** (the user: pool felt tighter than snooker). At R 14
+the design's pockets took a narrower line than snooker's in ball diameters (corner 1.00 vs 1.29,
+side 1.41 vs 1.58, side at 45° 0.84 vs 1.05); now a little wider than snooker's, as real tables
+are (1.34, 1.72, 1.06). The CPU tiers held (balance-check, 60 frames a cell, all within noise).
 
 ### Theme mapping
 
@@ -2895,6 +2898,11 @@ It is still 1,256 under where C0 started. `verify-all` passes 2574; `host-run` 1
 | 2026-10-05 | **Achievement icons are designed by the user in Claude Design from the prompt in Appendix D**: stroke glyphs in the cue icons' family, with a medallion per XP tier | The user asked for sleek, unique icons like the cue ones. All 39 are still emoji, and three pairs clash: 🎯 Day One and Sharpshooter, 🧱 Wallflower and Block Master, 👑 Veteran and Grand Serpent, plus the Maximum cue's crown |
 | 2026-10-05 | **Snooker: a CPU free ball now explains itself** (reported: "after a foul the CPU played the black, not the blue, and no foul was given") | The rules were right: 569 simulated fouls with blue, pink and black left gave 27 CPU shots off the order, every one a legal free ball (the black nominated, scored as the blue, re-spotted, the blue still on). But the "CPU takes the free ball" notice timed out before the CPU struck, and the pot itself said nothing. The notice now says "Any colour may stand in for the blue" and stays until the strike; a potted free ball says "Free ball · the black counts as the blue · 5 points · the black is re-spotted, the blue is still on" |
 | 2026-10-13 | **Cues get rarity, scaled as 8 Ball Pool's; ⚙️ Aim Guide is Full or None** | The user: a mastered Century Ash (power 5, spin 5) was a small jump, and every cue kept one bar high and the rest basic; the reference shows Legendary masters at 37–40 of 40. Long / Medium / Short let a player shorten or keep a line the cue already stretches, so in cross play two players with one cue saw different lines |
+| 2026-10-24 | **Pool's pockets widened: corner noses 36 → 43 u, side 30 → 34, holes r 27 → 31 and 24 → 27, rail ends 22 → 26 and 24 → 27** | The user: pool felt tighter than snooker. Measured, it was: at R 14 (24 % over a real ball) the design's pockets took 1.00 ball diameters at a corner against snooker's 1.29. Now 1.34 (side 1.72, at 45° 1.06), a little wider than snooker's, as real tables are. The rail ends move onto the bigger holes' edges. balance-check (60 frames a cell): every tier within noise, hard 73 % vs skilled and 95 % vs casual, pro above hard. All seven pool fingerprints move; with the old pockets the code still gave the old ones |
+| 2026-10-24 | **Malachite levels on Hard+ wins, not Pro** | The user: too much for its place. It now asks what Carbon Fin does: [5, 9, 13, 18] Hard or Pro pool wins |
+| 2026-10-24 | **The cue collection filters: All, Owned, Locked** | The user. Owned and All keep the equipped cue on top; Locked leaves it out. A new filter starts at the top of the list, focus kept on its button |
+| 2026-10-24 | **C flips the camera; L locks the mouse, as an FPS aims** | The user. L, not Ctrl: a lone modifier is no user gesture and the browser refuses the lock. Locked, the cursor hides at the table's centre and movement only turns the aim, 2D included; an unseen pointer from the centre (or the cue ball, placing it) serves the pull. Raw movement where the browser has it (unadjustedMovement), readings over 250 px dropped (Chrome's pointer-lock spikes), and ⚙️ Mouse Lock Aim sets the share of the unlocked rate (Slow ¼, Medium ½, Fast 1): a first build at the full rate, with a ring for the pointer, spun too fast |
+| 2026-10-24 | **A card re-measures its tag when the font changes** | host-run caught a name cut off in compact Cyberpunk: the fit was measured on name, tag and width only, so the theme's wider font kept the long tag |
 | 2026-10-05 | **Cues C1–C3 built.** Tournament frames don't level a cue (humans only, as 2 Players). The picker is dark glass over the panel; compact's pill sits in the host's scoreboard, Max's button beside the title. Fingerprints re-recorded once | The plan said tournament frames count, but its own reason (you cannot beat yourself for a level) covers them. Max's action row had no room: a labelled button wrapped "Vs CPU" |
 | 2026-10-05 | **Cues: achievements unlock, wins level, mastering 5 unlocks Collector; four stat bars where Standard 4/4/4/4 is today** | The user asked for 8 Ball Pool-style stats and unlocks by achievement, play, time, wins and collecting. Standard equal to today keeps the CPU, the fingerprint and the balance tests unchanged |
 | 2026-10-05 | **A lean pass (C0) before any cue code** | The user: the file is nearly 30k lines; the reviews found about 1,300 removable lines and 7 bugs |

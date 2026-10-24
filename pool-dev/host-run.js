@@ -627,6 +627,20 @@ async function main() {
     ok('the header\'s cue pill names the cue; a cue an achievement earns is noticed; the pill opens the collection, every cue drawn',
        cue.pill === 'Standard' && cue.notice === 'ember' && picked.open && picked.cards === 10 && picked.drawn, [cue, picked]);
     ok('Equip puts it on: the setting, the pill and the "equipped" line', worn.pref === 'ember' && worn.pill === 'Ember' && worn.just, worn);
+    // All, Owned and Locked.
+    const view = async f => {
+        await click(`#pool-root .ph-cues [data-ph-cuef="${f}"]`);
+        await sleep(300);
+        return ev(`(() => { const p = document.querySelector('#pool-root .ph-cues'), cards = [...p.querySelectorAll('.ph-cue-card:not(.is-hero)')];
+            return { n: cards.length, locked: cards.filter(c => c.classList.contains('is-locked')).length, hero: !!p.querySelector('.is-hero'), pressed: p.querySelector('[aria-pressed="true"]').getAttribute('data-ph-cuef'),
+                focus: document.activeElement && document.activeElement.getAttribute('data-ph-cuef') }; })()`);
+    };
+    const vOwned = await view('owned'), vLocked = await view('locked');
+    await shot('cue-filter-locked', '#pool-root .ph-cues');
+    const vAll = await view('all');
+    ok('the collection filters: Owned shows only owned cues under the equipped one, Locked only locked ones, All every cue',
+       vOwned.locked === 0 && vOwned.n > 0 && vOwned.hero && vLocked.n > 0 && vLocked.locked === vLocked.n && !vLocked.hero && vOwned.n + vLocked.n === 10 && vAll.n === 10 && vAll.pressed === 'all', [vOwned, vLocked, vAll]);
+    ok('…and the pressed filter keeps the focus', vOwned.focus === 'owned' && vLocked.focus === 'locked' && vAll.focus === 'all');
     await ev(`(() => { document.querySelector('#pool-root .ph-cues [data-ph-cuesx]').click(); window.__probe.prefs.poolCue = 'standard'; window.__probe.poolOnPrefChange('poolCue'); return 1; })()`);
     await sleep(300);
     if (await ev('!!window.__probe.toggleSettingsModal')) {
@@ -823,6 +837,9 @@ async function main() {
 
     head('Accounts: name + password');
     {
+        // Pool parked: a CPU frame ending mid-login would pay XP the restore checks do not expect.
+        await ev("window.switchGame('snake')");
+        await sleep(300);
         const nc = require('crypto'), sha = v => nc.createHash('sha256').update(v).digest('hex');
         const pwOf = (name, password) => nc.pbkdf2Sync(password, 'atc-login:' + name.toLowerCase(), 100000, 32, 'sha256').toString('hex');
         const PASS = { current: 'pool-shark-7' };
@@ -876,7 +893,9 @@ async function main() {
         await click('#acct-modal .rcv-go');
         ok('the right password: "Welcome back, Rina R.!"', await waitFor("/Welcome back, Rina R\\.!/.test(document.getElementById('acct-modal').textContent)", 8000), await status());
         ok('…Game Mode opens on this computer', (await ev('window.__probe.gamesUnlocked')) === true && !(await lockState()).hidden);
-        ok('…and this computer is now Rina, with her progress', (await ev('window.__probe.lbClientId')) === 'acct-1' && (await ev('window.__probe.lbRegistered')) === true && (await ev('window.__probe.xp.totalXP')) === 54321);
+        ok('…and this computer is now Rina, with her progress', (await ev('window.__probe.lbClientId')) === 'acct-1' && (await ev('window.__probe.lbRegistered')) === true &&
+            // Her XP, plus any achievement her level earns on the next tick (unsynced, so in the ledger).
+            (await ev('(() => { const l = window.__probe.syncLedger(); return window.__probe.xp.totalXP - l.xp - Object.values(l.ach).reduce((a, b) => a + b, 0); })()')) === 54321, await ev('JSON.stringify({ xp: window.__probe.xp.totalXP, ach: window.__probe.xp.achievements, ledger: window.__probe.syncLedger() })'));
         await ev("document.querySelector('#acct-modal .rcv-ok').click()");
 
         // Locked again for the key field (an open browser would just say "You're in").
@@ -959,20 +978,54 @@ async function main() {
         await press('c', 'KeyC');
         ok('…but not while typing in a field', (await cam()) === c0);
         await ev("document.getElementById('kc-probe').remove()");
-        // Headless Chrome grants no pointer lock, so the lock is set as pointerlockchange would leave it.
-        const r = await ev("(() => { const S = window.__probe.S, b = S.canvas.getBoundingClientRect(); document.dispatchEvent(new Event('pointerlockchange')); S.lock = { x: b.left + b.width / 2, y: b.top + b.height / 2 }; document.body.appendChild(S.lockDot); return [b.left + b.width / 2, b.top + b.height / 2, b.right, S.aim, S.phase === 'aim' && window.__probe.poolCanAct()]; })()");
-        await mouse('mouseMoved', 300, 300);
-        const x0 = await ev('window.__probe.S.lock.x');
-        await mouse('mouseMoved', 340, 300); await mouse('mouseMoved', 380, 300);
-        const lk = await ev('(() => { const S = window.__probe.S; return { x: S.lock.x, left: parseFloat(S.lockDot.style.left), aim: S.aim }; })()');
-        ok('mouse lock: raw movement drives a virtual pointer, drawn as a ring, kept on the table', Math.abs(lk.x - Math.min(r[2], x0 + 80)) < 0.5 && Math.abs(lk.left - lk.x) < 0.5, [r, x0, lk]);
-        if (r[4]) ok('…and turns the aim', lk.aim !== r[3], [r[3], lk.aim]);
-        await ev("(() => { const S = window.__probe.S; S.lock = null; S.lockDot.remove(); })()");
+        // Headless Chrome grants no pointer lock: the browser's side is faked, the widget's handler is real.
+        await ev('window.__probe.poolNewFrame(1)');
+        await sleep(200);
+        await click('#pool-root [data-ph="startgo"]');
+        const r = await ev(`(() => { const P = window.__probe, S = P.S, b = S.canvas.getBoundingClientRect(), cam = P.prefs.poolCamera;
+            P.prefs.poolCamera = '2d';
+            Object.defineProperty(document, 'pointerLockElement', { get: () => S.canvas, configurable: true });
+            document.dispatchEvent(new Event('pointerlockchange'));
+            const c = S.world.balls.find(x => x.id === 0);
+            return { cx: b.left + b.width / 2, cy: b.top + b.height / 2, lock: S.lock, phase: S.phase, cam, ring: !!S.lockDot, ball: [c.x, c.y] }; })()`);
+        ok("mouse lock: no ring, the pointer held at the table's centre", !r.ring && Math.abs(r.lock.x - r.cx) < 0.5 && Math.abs(r.lock.y - r.cy) < 0.5, r);
+        // Ball in hand, locked: a press anywhere picks the cue ball up where it lies; movement slides it.
+        const cue = () => ev('(() => { const c = window.__probe.S.world.balls.find(x => x.id === 0); return [c.x, c.y]; })()');
+        await mouse('mouseMoved', r.cx + 100, r.cy + 50);
+        held = true; await mouse('mousePressed', r.cx + 100, r.cy + 50);
+        const b1 = await cue();
+        await mouse('mouseMoved', r.cx + 100, r.cy + 70);
+        const b2 = await cue();
+        held = false; await mouse('mouseReleased', r.cx + 100, r.cy + 70);
+        ok('…ball in hand: a press does not jump the cue ball, and moving slides it', r.phase === 'bih' && Math.hypot(b1[0] - r.ball[0], b1[1] - r.ball[1]) < 0.5 && Math.hypot(b2[0] - b1[0], b2[1] - b1[1]) > 3, [r.phase, r.ball, b1, b2]);
+        await ev("(() => { const S = window.__probe.S; S.phase = 'aim'; S.placed = true; S.drag = null; return 1; })()");
+        const a1 = await ev('window.__probe.S.aim'), act = await ev('window.__probe.poolCanAct()');
+        await mouse('mouseMoved', r.cx + 140, r.cy + 70); await mouse('mouseMoved', r.cx + 180, r.cy + 70);
+        const a2 = await ev('window.__probe.S.aim');
+        // Real pointer lock sends every press to the canvas; here it has to land on it.
+        await mouse('mouseMoved', r.cx + 100, r.cy + 50);
+        const before = await ev('({ x: window.__probe.S.lock.x, y: window.__probe.S.lock.y })');
+        held = true; await mouse('mousePressed', r.cx + 100, r.cy + 50);
+        const pressed = await ev('({ x: window.__probe.S.lock.x, y: window.__probe.S.lock.y })');
+        held = false; await mouse('mouseReleased', r.cx + 100, r.cy + 50);
+        ok('…moving the mouse turns the aim, in 2D too, as an FPS', act && a2 < a1, [act, a1, a2]);
+        // Chrome's pointer-lock glitch: one reading hundreds of px long. Dropped, not a spin.
+        const a2b = await ev('window.__probe.S.aim');
+        await mouse('mouseMoved', r.cx - 260, r.cy + 70);
+        const a3 = await ev('window.__probe.S.aim');
+        ok('…a single huge jump in the reading is ignored, not a spin', a3 === a2b, [a2b, a3]);
+        await mouse('mouseMoved', r.cx + 180, r.cy + 70);
+        ok("…and a shot's pull starts from the centre again", Math.hypot(before.x - r.cx, before.y - r.cy) > 5 && Math.abs(pressed.x - r.cx) < 0.5 && Math.abs(pressed.y - r.cy) < 0.5, [before, pressed]);
+        await ev(`(() => { delete document.pointerLockElement; document.dispatchEvent(new Event('pointerlockchange')); window.__probe.prefs.poolCamera = ${JSON.stringify(r.cam)}; return 1; })()`);
+        ok('…and unlocking lets the pointer go', await ev('window.__probe.S.lock === null'));
     }
 
     head('Cloud: two-way sync and logout');
     {
         // This browser is the account from the login checks; the stand-in bot keeps the higher XP, as sync.yml does.
+        // Pool parked first: a CPU frame finishing mid-check would earn XP the expected totals do not hold.
+        await ev("window.switchGame('snake')");
+        await sleep(300);
         const me = await ev('window.__probe.lbClientId'), xp0 = await ev('JSON.parse(JSON.stringify(window.__probe.xp))'), sent = [];
         const rec = { clientId: me, displayName: 'Rina Rahman', login: true, level: 1, currentXP: 0, totalXP: xp0.totalXP + 205, gameSessions: xp0.gameSessions || 0,
             totalWorkDays: xp0.totalWorkDays || 0, achievements: (xp0.achievements || []).slice(), lastAttendanceDate: xp0.lastAttendanceDate, todayKey: xp0.todayKey, lastHourTracked: xp0.lastHourTracked };

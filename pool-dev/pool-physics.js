@@ -20,14 +20,14 @@
         railWidth: 48,            // cushion + rail, for the off-table fail-safe
         // Pockets and cushion ends. A jaw runs from a cushion's nose end to its rail end and on to the hole.
         cushionWidth: 12,         // nose line to rail line
-        cornerNose: 36,           // nose end, from the corner along each cushion (mouth 36·√2)
-        cornerRailEnd: 22,        // rail end, from the corner, on the rail line
-        sideNose: 30,             // nose end, either side of the side pocket's centre (mouth 60)
-        sideRailEnd: 24,
+        cornerNose: 43,           // nose end, from the corner along each cushion (mouth 43·√2)
+        cornerRailEnd: 26,        // rail end, from the corner, on the rail line (on the hole's edge)
+        sideNose: 34,             // nose end, either side of the side pocket's centre (mouth 68)
+        sideRailEnd: 27,
         cornerPocketOffset: 4,    // hole centre (±(HL+4), ±(HW+4))
-        cornerPocketR: 27,        // a ball drops once its centre is inside the hole
+        cornerPocketR: 31,        // a ball drops once its centre is inside the hole
         sidePocketOffset: 16,     // hole centre (0, ±(HW+16))
-        sidePocketR: 24,
+        sidePocketR: 27,
         // Cloth and collisions
         gravity: 3862,            // 9.81 m/s² in table units (1 u = 2.54 mm)
         muSlide: 0.2,             // ball–cloth sliding friction

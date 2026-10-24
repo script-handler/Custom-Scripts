@@ -27,7 +27,7 @@
     //   power  press, then pull back or push along the shot line; under 3% or Esc cancels
     //   ←/→    fine aim while the table has the mouse or Max is open: a tap is one step, a
     //          hold turns on, slow at first and faster the longer it is held (poolAimHoldTick)
-    //   C / L  flip the camera 2D/3D / lock the mouse to the table (a ring marks the virtual pointer)
+    //   C / L  flip the camera 2D/3D / lock the mouse (as an FPS: the aim turns with it, 2D too)
     //   ball in hand: drag the cue ball; it stops at the cushions (and the head string on the break)
     // Tournaments (pool-tour.js, pool-tour-ui.js): poolMode 'tour' while a match is on the
     // table; the bracket is saved after every frame, with a table snapshot after every shot.
@@ -505,7 +505,7 @@
             return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
                 have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
         });
-        return { eq, who, just: S.cueJust, game: S.game, open: list.filter(c => c.open).length, list };
+        return { eq, who, just: S.cueJust, game: S.game, filter: S.cueFilter || 'all', open: list.filter(c => c.open).length, list };
     }
 
     // ── Frames ────────────────────────────────────────────────────────
@@ -1049,21 +1049,36 @@
     const poolIsControl = el => !!(el && el.closest && el.closest('button, input, select, label, a, textarea'));
     function poolDisarm() { poolS.armed = false; poolS.lastX = null; poolS.aimHold = null; }
     const poolTyping = e => { const t = e.target; return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable); };
-    // Mouse lock (L): the cursor hides and a virtual pointer, drawn as a ring, stands in for it, so aim
-    // turns without running off the table. L, not Ctrl: a lone modifier is no user gesture, and the
-    // browser refuses a lock without one.
+    // Mouse lock (L), as an FPS aims: the cursor hides, held at the table's centre, and movement only
+    // turns the aim, in 2D too. An unseen pointer from there serves the power pull, and from the cue
+    // ball, its placing. L, not Ctrl: a lone modifier is no user gesture, and the browser refuses a
+    // lock without one.
+    // Raw movement first (no OS acceleration: one inch is one turn, however fast); without it, the plain lock.
     function poolLockSet(on) {
-        if (!on) { if (document.pointerLockElement === poolS.canvas) document.exitPointerLock(); return; }
-        try { const p = poolS.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+        const S = poolS, go = o => { const p = S.canvas.requestPointerLock(o); return p && p.catch ? p : null; };
+        if (!on) { if (document.pointerLockElement === S.canvas) document.exitPointerLock(); return; }
+        S.lockTry = true;
+        try {
+            const p = go({ unadjustedMovement: true });
+            if (p) p.catch(() => { S.lockTry = false; try { const q = go(); if (q) q.catch(() => {}); } catch (_) {} }); else S.lockTry = false;
+        } catch (_) { S.lockTry = false; try { go(); } catch (_) {} }
     }
     function poolOnLockChange() {
-        const S = poolS, on = document.pointerLockElement === S.canvas, r = S.canvas.getBoundingClientRect(), f = S.ptr || [r.left + r.width / 2, r.top + r.height / 2];
-        S.lock = on ? { x: poolClamp(f[0], r.left, r.right), y: poolClamp(f[1], r.top, r.bottom) } : null;
-        if (!S.lockDot) { S.lockDot = document.createElement('div'); S.lockDot.style.cssText = 'position:fixed;width:14px;height:14px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.6);pointer-events:none;z-index:2147483647'; }
-        if (on) { document.body.appendChild(S.lockDot); poolLockDot(); S.armed = true; S.lastX = null; } else S.lockDot.remove();
+        const S = poolS, on = document.pointerLockElement === S.canvas;
+        S.lockTry = false;
+        S.lock = on ? poolLockAt() : null;
+        if (on) { S.armed = true; S.lastX = null; }
     }
-    function poolOnLockError() { showXPNotification('The browser refused the mouse lock. Click the table, then press L', 'game', 'lock'); }
-    function poolLockDot() { const l = poolS.lock; if (l) { poolS.lockDot.style.left = l.x + 'px'; poolS.lockDot.style.top = l.y + 'px'; } }
+    function poolOnLockError() { if (!poolS.lockTry) showXPNotification('The browser refused the mouse lock. Click the table, then press L', 'game', 'lock'); }
+    // ⚙️ Mouse Lock Aim: a share of the unlocked rate, as nothing stops a locked sweep at a screen edge.
+    // A single reading past POOL_LOCK_SPIKE px is Chrome's known pointer-lock glitch, not a hand: dropped.
+    const POOL_LOCK_GAIN = { slow: 0.25, medium: 0.5, fast: 1 }, POOL_LOCK_SPIKE = 250;
+    // The unseen pointer's start, in client px: the table's centre, or the cue ball's spot (top-down).
+    function poolLockAt(ball) {
+        const S = poolS, r = S.canvas.getBoundingClientRect(), k = r.width / S.W || 1, c = ball && poolCueBall();
+        const q = c && pcProject(pcView(pcOrtho(S.W, S.H, S.cfg)), [c.x, c.y, S.cfg.ballR]);
+        return q ? { x: r.left + q[0] * k, y: r.top + q[1] * k } : { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
     // While locked, events carry the virtual pointer's position and the raw movement (mx).
     const poolPt = e => poolS.lock ? { clientX: poolS.lock.x, clientY: poolS.lock.y, target: poolS.canvas, shiftKey: e.shiftKey, pointerId: e.pointerId, mx: e.movementX || 0 } : e;
 
@@ -1096,12 +1111,14 @@
         S.spinOpen = false;
         // The clock runs while the collection is open; a press on the table (Max) closes it.
         if (S.cues) { S.cues = false; return; }
-        e = poolPt(e);
         if (!poolCanAct() || !S.W) return;
+        // Locked, a press starts from the centre, or (placing) from the ball, which then moves relatively.
+        if (S.lock) S.lock = poolLockAt(S.phase === 'bih');
+        e = poolPt(e);
         const [sx, sy] = poolLocal(e);
         try { S.canvas.setPointerCapture(e.pointerId); } catch (_) {}
         S.armed = true; S.lastX = e.clientX;
-        if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; poolPlace(sx, sy); return; }
+        if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; if (!S.lock) poolPlace(sx, sy); return; }
         if (S.phase !== 'aim') return;
         const st = poolRules().status(S.frame, S.world);
         // Snooker: a press on a colour that may be nominated nominates it (before any call).
@@ -1139,10 +1156,10 @@
         const S = poolS;
         if (!S.W) return;
         if (S.lock) {
+            if (Math.abs(e.movementX || 0) > POOL_LOCK_SPIKE || Math.abs(e.movementY || 0) > POOL_LOCK_SPIKE) return;
             const r = S.canvas.getBoundingClientRect();
             S.lock.x = poolClamp(S.lock.x + (e.movementX || 0), r.left, r.right); S.lock.y = poolClamp(S.lock.y + (e.movementY || 0), r.top, r.bottom);
-            poolLockDot();
-        } else S.ptr = [e.clientX, e.clientY];
+        }
         e = poolPt(e);
         const [sx, sy] = poolLocal(e);
         if (S.drag && S.drag.kind === 'place') { poolPlace(sx, sy); return; }
@@ -1156,12 +1173,12 @@
         const far = sx < -POOL_AIM_REACH || sx > S.W + POOL_AIM_REACH || sy < -POOL_AIM_REACH || sy > S.H + POOL_AIM_REACH;
         if (far || poolIsControl(e.target)) { poolDisarm(); return; }
         // In screen px, so the scaled-down Max view turns no faster than the panel.
-        const dx = S.lock ? e.mx : S.lastX === null ? 0 : e.clientX - S.lastX;
+        const dx = S.lock ? e.mx * (POOL_LOCK_GAIN[userPreferences.poolLockSpeed] || POOL_LOCK_GAIN.medium) : S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
         if (S.phase !== 'aim' || !poolCanAct()) return;
-        // 3D turns with the mouse; 2D points at the target, or with Shift turns finely from there.
+        // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -1265,6 +1282,7 @@
         cuesClose: () => { poolS.cues = false; },
         cueEquip: id => poolCueEquip(id),
         cueNewX: () => { poolS.cueNew = null; poolS.cueView = null; },
+        cueFilter: f => { poolS.cueFilter = f === 'owned' || f === 'locked' ? f : 'all'; poolS.cueView = null; },
         // The footer's mode button and the frame-over dialog's second button open the Game mode sheet.
         mode: () => { const S = poolS; S.sheet = { open: !S.sheet.open, mode: poolMode }; S.spinOpen = false; },
         sheetTab: m => { poolS.sheet.mode = m === 'pvp' || m === 'tour' || m === 'net' ? m : 'cpu'; },
@@ -1451,7 +1469,7 @@
         window.removeEventListener('keyup', poolOnKeyUp, true);
         window.removeEventListener('blur', poolDisarm);
         document.documentElement.removeEventListener('pointerleave', poolDisarm);
-        poolLockSet(false); S.lock = null; if (S.lockDot) S.lockDot.remove();
+        poolLockSet(false); S.lock = null;
         document.removeEventListener('pointerlockchange', poolOnLockChange);
         document.removeEventListener('pointerlockerror', poolOnLockError);
         if (S.scheme && S.scheme.removeEventListener) S.scheme.removeEventListener('change', poolOnThemeChange);

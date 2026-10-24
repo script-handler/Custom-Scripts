@@ -495,16 +495,20 @@
                 : c.open ? '<button type="button" class="ph-btn ph-cue-eq" data-ph-equip="' + c.id + '" aria-label="Equip ' + c.name + '">Equip</button>'
                     : '<span class="ph-cue-tag is-lock ph-label">' + phSvg(PH_CUE_ICON.lock, 14, 2) + 'LOCKED</span>') + '</div>' +
             bars(c) + (c.open && c.id !== eq.id ? level(c) : '') + '</div>';
+        // All, Owned or Locked: the equipped cue heads the first two.
+        const f = m.filter || 'all', shown = m.list.filter(c => f === 'all' || (f === 'owned') === c.open);
+        const chip = (k, t, n) => '<button type="button" class="ph-btn" data-ph-cuef="' + k + '" aria-pressed="' + (f === k) + '">' + t + ' · ' + n + '</button>';
         return '<div class="ph-cues-head"><span class="ph-cues-t"><span class="ph-cues-title">Cue collection</span>' +
             '<span class="ph-cues-sub">' + (m.who ? m.who + '’s cue for this match · from your ' + m.open + ' unlocked' : m.open + ' of ' + m.list.length + ' unlocked · every shot you play, pool and snooker') + '</span></span>' +
             '<button type="button" class="ph-btn" data-ph-cuesx aria-label="Close the cue collection">' + PH_ICON.close + '</button></div>' +
-            '<div class="ph-cues-list" role="list" aria-label="All cues">' +
+            '<div class="ph-cues-filter" role="group" aria-label="Show">' + chip('all', 'All', m.list.length) + chip('owned', 'Owned', m.open) + chip('locked', 'Locked', m.list.length - m.open) + '</div>' +
+            '<div class="ph-cues-list" role="list" aria-label="' + { all: 'All cues', owned: 'Owned cues', locked: 'Locked cues' }[f] + '">' + (f === 'locked' ? '' :
             '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + rarity(eq) + '</span>' +
             '<span class="ph-cue-d">' + eq.blurb + '</span></span><span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span></div>' +
             '<div class="ph-cue-show"><canvas class="ph-cue-cv is-detail" data-cue="' + eq.id + '" data-span="0.48,0.77" aria-hidden="true"></canvas>' +
             '<canvas class="ph-cue-cv is-full" data-cue="' + eq.id + '" aria-hidden="true"></canvas></div>' + bars(eq) + level(eq) +
-            (m.just === eq.id ? '<span class="ph-cue-just" role="status">' + tick + eq.name + ' equipped · ' + (m.who ? m.who + '’s' : 'your') + ' next shot uses it</span>' : '') + '</div>' +
-            m.list.map(card).join('') +
+            (m.just === eq.id ? '<span class="ph-cue-just" role="status">' + tick + eq.name + ' equipped · ' + (m.who ? m.who + '’s' : 'your') + ' next shot uses it</span>' : '') + '</div>') +
+            (shown.map(card).join('') || '<div class="ph-cues-foot">Every cue is yours.</div>') +
             '<div class="ph-cues-foot">The CPU plays a cue for its level: Easy Standard, Normal Tulipwood, Hard Malachite (Century Ash at snooker), Pro Black Crown.</div></div>';
     }
     // Draws every cue in the open collection at its canvas's size.
@@ -830,9 +834,11 @@
         // The cue collection and the "New cue" notice.
         if (hud.cue) hud.cue.addEventListener('click', () => fire('cues'));
         hud.cues.addEventListener('click', e => {
-            const t = e.target.closest && e.target.closest('[data-ph-equip], [data-ph-cuesx]');
+            const t = e.target.closest && e.target.closest('[data-ph-equip], [data-ph-cuesx], [data-ph-cuef]');
             if (!t) return;
-            if (t.hasAttribute('data-ph-cuesx')) fire('cuesClose'); else fire('cueEquip', t.getAttribute('data-ph-equip'));
+            if (t.hasAttribute('data-ph-cuesx')) fire('cuesClose');
+            else if (t.hasAttribute('data-ph-cuef')) fire('cueFilter', t.getAttribute('data-ph-cuef'));
+            else fire('cueEquip', t.getAttribute('data-ph-equip'));
         });
         hud.cues.addEventListener('keydown', e => { if (e.key === 'Escape') { fire('cuesClose'); e.preventDefault(); e.stopPropagation(); } });
         hud.cuenewgo.addEventListener('click', () => fire('cueEquip', hud.cueNewId));
@@ -897,9 +903,12 @@
             const was = !hud.cues.hidden;
             phShow(hud.cues, !!m);
             if (!m) { hud.cues.innerHTML = ''; return; }
-            const top = hud.cues.querySelector('.ph-cues-list'), y = top ? top.scrollTop : 0;
+            // A new filter starts at the top, with focus kept on its button.
+            const top = hud.cues.querySelector('.ph-cues-list'), y = top && hud.cueF === m.filter ? top.scrollTop : 0, a = document.activeElement, fk = a && a.getAttribute && a.getAttribute('data-ph-cuef');
+            hud.cueF = m.filter;
             hud.cues.innerHTML = phCuesHTML(m);
             phCuesDraw(hud.cues, m.game);
+            if (fk) hud.cues.querySelector('[data-ph-cuef="' + fk + '"]').focus();
             if (was) hud.cues.querySelector('.ph-cues-list').scrollTop = y; else hud.cues.querySelector('[data-ph-cuesx]').focus();
         });
         vm.cards.forEach((c, i) => {
@@ -930,8 +939,9 @@
                 });
                 s(k + 'tagHot', c.tagHot, v => r.tag.classList.toggle('is-hot', v));
                 s(k + 'tagPulse', c.tagPulse, v => r.tag.classList.toggle('is-pulse', v));
-                // A name cut off beside the tag gets the short tag (TO SHOOT → SHOOT); measured on change.
-                s(k + 'fit', c.name + '|' + c.tag + '|' + hud.el.clientWidth, () => {
+                // A name cut off beside the tag gets the short tag (TO SHOOT → SHOOT); measured on change,
+                // a theme's font (Cyberpunk's is wider) and a web font finishing its load included.
+                s(k + 'fit', c.name + '|' + c.tag + '|' + hud.el.clientWidth + '|' + getComputedStyle(r.name).fontFamily + '|' + (document.fonts ? document.fonts.status : ''), () => {
                     r.el.classList.remove('is-tight');
                     if (c.tagShort && r.name.scrollWidth > r.name.clientWidth + 1) r.el.classList.add('is-tight');
                 });

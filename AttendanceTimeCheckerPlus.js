@@ -461,6 +461,7 @@
         // While the balls run: 'overhead' eases up to the broadcast view; '3d' stands up
         // and stays in 3D, the whole table in view (POOL_V2_PLAN.md, gap decision 9).
         poolShotCam: 'overhead',
+        poolLockSpeed: 'medium', // mouse lock (L): how fast the aim turns, 'slow' | 'medium' | 'fast' (the unlocked rate)
         // 'adaptive' | 'easy' | 'normal' | 'hard' | 'pro'. Adaptive follows your record against
         // the CPU but never climbs to pro, which makes you call every shot too. Locked per frame.
         poolDifficulty: 'adaptive',
@@ -3159,14 +3160,14 @@
         railWidth: 48,            // cushion + rail, for the off-table fail-safe
         // Pockets and cushion ends. A jaw runs from a cushion's nose end to its rail end and on to the hole.
         cushionWidth: 12,         // nose line to rail line
-        cornerNose: 36,           // nose end, from the corner along each cushion (mouth 36·√2)
-        cornerRailEnd: 22,        // rail end, from the corner, on the rail line
-        sideNose: 30,             // nose end, either side of the side pocket's centre (mouth 60)
-        sideRailEnd: 24,
+        cornerNose: 43,           // nose end, from the corner along each cushion (mouth 43·√2)
+        cornerRailEnd: 26,        // rail end, from the corner, on the rail line (on the hole's edge)
+        sideNose: 34,             // nose end, either side of the side pocket's centre (mouth 68)
+        sideRailEnd: 27,
         cornerPocketOffset: 4,    // hole centre (±(HL+4), ±(HW+4))
-        cornerPocketR: 27,        // a ball drops once its centre is inside the hole
+        cornerPocketR: 31,        // a ball drops once its centre is inside the hole
         sidePocketOffset: 16,     // hole centre (0, ±(HW+16))
-        sidePocketR: 24,
+        sidePocketR: 27,
         // Cloth and collisions
         gravity: 3862,            // 9.81 m/s² in table units (1 u = 2.54 mm)
         muSlide: 0.2,             // ball–cloth sliding friction
@@ -5305,7 +5306,7 @@
             sections: pqStd('carbon', 'chrome', 'carbon', 'circuit', 'carbon', 'chrome'), rings: [[72, 1.6, 'neonCyan'], [90, 1, 'chrome'], [98.5, 1, 'chrome']],
             points: [pqPts(4, 54, 0.62, 'chrome', [['#0A0B0C', 0.6]])], inlays: [pqIn(94.5, 4, 'diamond', 8, 'chrome', 45)],
             sheen: { c: ['#EFFCFF', '#7FE3F5'], s: 9, band: 4, on: 'joint rings points inlays' } },
-        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite · gold · turquoise', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
+        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite · gold · turquoise', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'hard', [5, 9, 13, 18]],
             sections: pqStd('maple', 'goldPol', 'malachite', 'lizardBlk', 'malachite'), rings: [[72, 1.2, 'goldPol'], [90, 1.2, 'goldPol'], [98.5, 1, 'goldPol']],
             points: [pqPts(4, 54, 0.55, 'ebony', [['goldPol', 0.6]], { rot: 45, inlay: { shape: 'window', mat: 'turquoise', size: 9, at: 0.42 } })],
             inlays: [pqIn(94.5, 4, 'window', 10, 'turquoise')], sheen: { c: ['#FFF9E2', '#8FE3B8'], s: 9, band: 4, on: 'joint rings windows inlays' } },
@@ -7084,16 +7085,20 @@
                 : c.open ? '<button type="button" class="ph-btn ph-cue-eq" data-ph-equip="' + c.id + '" aria-label="Equip ' + c.name + '">Equip</button>'
                     : '<span class="ph-cue-tag is-lock ph-label">' + phSvg(PH_CUE_ICON.lock, 14, 2) + 'LOCKED</span>') + '</div>' +
             bars(c) + (c.open && c.id !== eq.id ? level(c) : '') + '</div>';
+        // All, Owned or Locked: the equipped cue heads the first two.
+        const f = m.filter || 'all', shown = m.list.filter(c => f === 'all' || (f === 'owned') === c.open);
+        const chip = (k, t, n) => '<button type="button" class="ph-btn" data-ph-cuef="' + k + '" aria-pressed="' + (f === k) + '">' + t + ' · ' + n + '</button>';
         return '<div class="ph-cues-head"><span class="ph-cues-t"><span class="ph-cues-title">Cue collection</span>' +
             '<span class="ph-cues-sub">' + (m.who ? m.who + '’s cue for this match · from your ' + m.open + ' unlocked' : m.open + ' of ' + m.list.length + ' unlocked · every shot you play, pool and snooker') + '</span></span>' +
             '<button type="button" class="ph-btn" data-ph-cuesx aria-label="Close the cue collection">' + PH_ICON.close + '</button></div>' +
-            '<div class="ph-cues-list" role="list" aria-label="All cues">' +
+            '<div class="ph-cues-filter" role="group" aria-label="Show">' + chip('all', 'All', m.list.length) + chip('owned', 'Owned', m.open) + chip('locked', 'Locked', m.list.length - m.open) + '</div>' +
+            '<div class="ph-cues-list" role="list" aria-label="' + { all: 'All cues', owned: 'Owned cues', locked: 'Locked cues' }[f] + '">' + (f === 'locked' ? '' :
             '<div class="ph-cue-card is-hero' + (m.just === eq.id ? ' is-just' : '') + '"><div class="ph-cue-row is-head"><span class="ph-cue-t"><span class="ph-cue-n">' + eq.name + rarity(eq) + '</span>' +
             '<span class="ph-cue-d">' + eq.blurb + '</span></span><span class="ph-cue-tag ph-label">' + tick + 'EQUIPPED</span></div>' +
             '<div class="ph-cue-show"><canvas class="ph-cue-cv is-detail" data-cue="' + eq.id + '" data-span="0.48,0.77" aria-hidden="true"></canvas>' +
             '<canvas class="ph-cue-cv is-full" data-cue="' + eq.id + '" aria-hidden="true"></canvas></div>' + bars(eq) + level(eq) +
-            (m.just === eq.id ? '<span class="ph-cue-just" role="status">' + tick + eq.name + ' equipped · ' + (m.who ? m.who + '’s' : 'your') + ' next shot uses it</span>' : '') + '</div>' +
-            m.list.map(card).join('') +
+            (m.just === eq.id ? '<span class="ph-cue-just" role="status">' + tick + eq.name + ' equipped · ' + (m.who ? m.who + '’s' : 'your') + ' next shot uses it</span>' : '') + '</div>') +
+            (shown.map(card).join('') || '<div class="ph-cues-foot">Every cue is yours.</div>') +
             '<div class="ph-cues-foot">The CPU plays a cue for its level: Easy Standard, Normal Tulipwood, Hard Malachite (Century Ash at snooker), Pro Black Crown.</div></div>';
     }
     // Draws every cue in the open collection at its canvas's size.
@@ -7419,9 +7424,11 @@
         // The cue collection and the "New cue" notice.
         if (hud.cue) hud.cue.addEventListener('click', () => fire('cues'));
         hud.cues.addEventListener('click', e => {
-            const t = e.target.closest && e.target.closest('[data-ph-equip], [data-ph-cuesx]');
+            const t = e.target.closest && e.target.closest('[data-ph-equip], [data-ph-cuesx], [data-ph-cuef]');
             if (!t) return;
-            if (t.hasAttribute('data-ph-cuesx')) fire('cuesClose'); else fire('cueEquip', t.getAttribute('data-ph-equip'));
+            if (t.hasAttribute('data-ph-cuesx')) fire('cuesClose');
+            else if (t.hasAttribute('data-ph-cuef')) fire('cueFilter', t.getAttribute('data-ph-cuef'));
+            else fire('cueEquip', t.getAttribute('data-ph-equip'));
         });
         hud.cues.addEventListener('keydown', e => { if (e.key === 'Escape') { fire('cuesClose'); e.preventDefault(); e.stopPropagation(); } });
         hud.cuenewgo.addEventListener('click', () => fire('cueEquip', hud.cueNewId));
@@ -7486,9 +7493,12 @@
             const was = !hud.cues.hidden;
             phShow(hud.cues, !!m);
             if (!m) { hud.cues.innerHTML = ''; return; }
-            const top = hud.cues.querySelector('.ph-cues-list'), y = top ? top.scrollTop : 0;
+            // A new filter starts at the top, with focus kept on its button.
+            const top = hud.cues.querySelector('.ph-cues-list'), y = top && hud.cueF === m.filter ? top.scrollTop : 0, a = document.activeElement, fk = a && a.getAttribute && a.getAttribute('data-ph-cuef');
+            hud.cueF = m.filter;
             hud.cues.innerHTML = phCuesHTML(m);
             phCuesDraw(hud.cues, m.game);
+            if (fk) hud.cues.querySelector('[data-ph-cuef="' + fk + '"]').focus();
             if (was) hud.cues.querySelector('.ph-cues-list').scrollTop = y; else hud.cues.querySelector('[data-ph-cuesx]').focus();
         });
         vm.cards.forEach((c, i) => {
@@ -7519,8 +7529,9 @@
                 });
                 s(k + 'tagHot', c.tagHot, v => r.tag.classList.toggle('is-hot', v));
                 s(k + 'tagPulse', c.tagPulse, v => r.tag.classList.toggle('is-pulse', v));
-                // A name cut off beside the tag gets the short tag (TO SHOOT → SHOOT); measured on change.
-                s(k + 'fit', c.name + '|' + c.tag + '|' + hud.el.clientWidth, () => {
+                // A name cut off beside the tag gets the short tag (TO SHOOT → SHOOT); measured on change,
+                // a theme's font (Cyberpunk's is wider) and a web font finishing its load included.
+                s(k + 'fit', c.name + '|' + c.tag + '|' + hud.el.clientWidth + '|' + getComputedStyle(r.name).fontFamily + '|' + (document.fonts ? document.fonts.status : ''), () => {
                     r.el.classList.remove('is-tight');
                     if (c.tagShort && r.name.scrollWidth > r.name.clientWidth + 1) r.el.classList.add('is-tight');
                 });
@@ -9528,7 +9539,7 @@
     //   power  press, then pull back or push along the shot line; under 3% or Esc cancels
     //   ←/→    fine aim while the table has the mouse or Max is open: a tap is one step, a
     //          hold turns on, slow at first and faster the longer it is held (poolAimHoldTick)
-    //   C / L  flip the camera 2D/3D / lock the mouse to the table (a ring marks the virtual pointer)
+    //   C / L  flip the camera 2D/3D / lock the mouse (as an FPS: the aim turns with it, 2D too)
     //   ball in hand: drag the cue ball; it stops at the cushions (and the head string on the break)
     // Tournaments (pool-tour.js, pool-tour-ui.js): poolMode 'tour' while a match is on the
     // table; the bracket is saved after every frame, with a table snapshot after every shot.
@@ -10006,7 +10017,7 @@
             return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
                 have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
         });
-        return { eq, who, just: S.cueJust, game: S.game, open: list.filter(c => c.open).length, list };
+        return { eq, who, just: S.cueJust, game: S.game, filter: S.cueFilter || 'all', open: list.filter(c => c.open).length, list };
     }
 
     // ── Frames ────────────────────────────────────────────────────────
@@ -10550,21 +10561,36 @@
     const poolIsControl = el => !!(el && el.closest && el.closest('button, input, select, label, a, textarea'));
     function poolDisarm() { poolS.armed = false; poolS.lastX = null; poolS.aimHold = null; }
     const poolTyping = e => { const t = e.target; return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable); };
-    // Mouse lock (L): the cursor hides and a virtual pointer, drawn as a ring, stands in for it, so aim
-    // turns without running off the table. L, not Ctrl: a lone modifier is no user gesture, and the
-    // browser refuses a lock without one.
+    // Mouse lock (L), as an FPS aims: the cursor hides, held at the table's centre, and movement only
+    // turns the aim, in 2D too. An unseen pointer from there serves the power pull, and from the cue
+    // ball, its placing. L, not Ctrl: a lone modifier is no user gesture, and the browser refuses a
+    // lock without one.
+    // Raw movement first (no OS acceleration: one inch is one turn, however fast); without it, the plain lock.
     function poolLockSet(on) {
-        if (!on) { if (document.pointerLockElement === poolS.canvas) document.exitPointerLock(); return; }
-        try { const p = poolS.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+        const S = poolS, go = o => { const p = S.canvas.requestPointerLock(o); return p && p.catch ? p : null; };
+        if (!on) { if (document.pointerLockElement === S.canvas) document.exitPointerLock(); return; }
+        S.lockTry = true;
+        try {
+            const p = go({ unadjustedMovement: true });
+            if (p) p.catch(() => { S.lockTry = false; try { const q = go(); if (q) q.catch(() => {}); } catch (_) {} }); else S.lockTry = false;
+        } catch (_) { S.lockTry = false; try { go(); } catch (_) {} }
     }
     function poolOnLockChange() {
-        const S = poolS, on = document.pointerLockElement === S.canvas, r = S.canvas.getBoundingClientRect(), f = S.ptr || [r.left + r.width / 2, r.top + r.height / 2];
-        S.lock = on ? { x: poolClamp(f[0], r.left, r.right), y: poolClamp(f[1], r.top, r.bottom) } : null;
-        if (!S.lockDot) { S.lockDot = document.createElement('div'); S.lockDot.style.cssText = 'position:fixed;width:14px;height:14px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.6);pointer-events:none;z-index:2147483647'; }
-        if (on) { document.body.appendChild(S.lockDot); poolLockDot(); S.armed = true; S.lastX = null; } else S.lockDot.remove();
+        const S = poolS, on = document.pointerLockElement === S.canvas;
+        S.lockTry = false;
+        S.lock = on ? poolLockAt() : null;
+        if (on) { S.armed = true; S.lastX = null; }
     }
-    function poolOnLockError() { showXPNotification('The browser refused the mouse lock. Click the table, then press L', 'game', 'lock'); }
-    function poolLockDot() { const l = poolS.lock; if (l) { poolS.lockDot.style.left = l.x + 'px'; poolS.lockDot.style.top = l.y + 'px'; } }
+    function poolOnLockError() { if (!poolS.lockTry) showXPNotification('The browser refused the mouse lock. Click the table, then press L', 'game', 'lock'); }
+    // ⚙️ Mouse Lock Aim: a share of the unlocked rate, as nothing stops a locked sweep at a screen edge.
+    // A single reading past POOL_LOCK_SPIKE px is Chrome's known pointer-lock glitch, not a hand: dropped.
+    const POOL_LOCK_GAIN = { slow: 0.25, medium: 0.5, fast: 1 }, POOL_LOCK_SPIKE = 250;
+    // The unseen pointer's start, in client px: the table's centre, or the cue ball's spot (top-down).
+    function poolLockAt(ball) {
+        const S = poolS, r = S.canvas.getBoundingClientRect(), k = r.width / S.W || 1, c = ball && poolCueBall();
+        const q = c && pcProject(pcView(pcOrtho(S.W, S.H, S.cfg)), [c.x, c.y, S.cfg.ballR]);
+        return q ? { x: r.left + q[0] * k, y: r.top + q[1] * k } : { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
     // While locked, events carry the virtual pointer's position and the raw movement (mx).
     const poolPt = e => poolS.lock ? { clientX: poolS.lock.x, clientY: poolS.lock.y, target: poolS.canvas, shiftKey: e.shiftKey, pointerId: e.pointerId, mx: e.movementX || 0 } : e;
 
@@ -10597,12 +10623,14 @@
         S.spinOpen = false;
         // The clock runs while the collection is open; a press on the table (Max) closes it.
         if (S.cues) { S.cues = false; return; }
-        e = poolPt(e);
         if (!poolCanAct() || !S.W) return;
+        // Locked, a press starts from the centre, or (placing) from the ball, which then moves relatively.
+        if (S.lock) S.lock = poolLockAt(S.phase === 'bih');
+        e = poolPt(e);
         const [sx, sy] = poolLocal(e);
         try { S.canvas.setPointerCapture(e.pointerId); } catch (_) {}
         S.armed = true; S.lastX = e.clientX;
-        if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; poolPlace(sx, sy); return; }
+        if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; if (!S.lock) poolPlace(sx, sy); return; }
         if (S.phase !== 'aim') return;
         const st = poolRules().status(S.frame, S.world);
         // Snooker: a press on a colour that may be nominated nominates it (before any call).
@@ -10640,10 +10668,10 @@
         const S = poolS;
         if (!S.W) return;
         if (S.lock) {
+            if (Math.abs(e.movementX || 0) > POOL_LOCK_SPIKE || Math.abs(e.movementY || 0) > POOL_LOCK_SPIKE) return;
             const r = S.canvas.getBoundingClientRect();
             S.lock.x = poolClamp(S.lock.x + (e.movementX || 0), r.left, r.right); S.lock.y = poolClamp(S.lock.y + (e.movementY || 0), r.top, r.bottom);
-            poolLockDot();
-        } else S.ptr = [e.clientX, e.clientY];
+        }
         e = poolPt(e);
         const [sx, sy] = poolLocal(e);
         if (S.drag && S.drag.kind === 'place') { poolPlace(sx, sy); return; }
@@ -10657,12 +10685,12 @@
         const far = sx < -POOL_AIM_REACH || sx > S.W + POOL_AIM_REACH || sy < -POOL_AIM_REACH || sy > S.H + POOL_AIM_REACH;
         if (far || poolIsControl(e.target)) { poolDisarm(); return; }
         // In screen px, so the scaled-down Max view turns no faster than the panel.
-        const dx = S.lock ? e.mx : S.lastX === null ? 0 : e.clientX - S.lastX;
+        const dx = S.lock ? e.mx * (POOL_LOCK_GAIN[userPreferences.poolLockSpeed] || POOL_LOCK_GAIN.medium) : S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
         if (S.phase !== 'aim' || !poolCanAct()) return;
-        // 3D turns with the mouse; 2D points at the target, or with Shift turns finely from there.
+        // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -10766,6 +10794,7 @@
         cuesClose: () => { poolS.cues = false; },
         cueEquip: id => poolCueEquip(id),
         cueNewX: () => { poolS.cueNew = null; poolS.cueView = null; },
+        cueFilter: f => { poolS.cueFilter = f === 'owned' || f === 'locked' ? f : 'all'; poolS.cueView = null; },
         // The footer's mode button and the frame-over dialog's second button open the Game mode sheet.
         mode: () => { const S = poolS; S.sheet = { open: !S.sheet.open, mode: poolMode }; S.spinOpen = false; },
         sheetTab: m => { poolS.sheet.mode = m === 'pvp' || m === 'tour' || m === 'net' ? m : 'cpu'; },
@@ -10952,7 +10981,7 @@
         window.removeEventListener('keyup', poolOnKeyUp, true);
         window.removeEventListener('blur', poolDisarm);
         document.documentElement.removeEventListener('pointerleave', poolDisarm);
-        poolLockSet(false); S.lock = null; if (S.lockDot) S.lockDot.remove();
+        poolLockSet(false); S.lock = null;
         document.removeEventListener('pointerlockchange', poolOnLockChange);
         document.removeEventListener('pointerlockerror', poolOnLockError);
         if (S.scheme && S.scheme.removeEventListener) S.scheme.removeEventListener('change', poolOnThemeChange);
@@ -22523,6 +22552,10 @@
             /* A locked cue's goal is the point of its card: it wraps rather than cut off. */
             .pool-hud .is-locked .ph-cue-d { white-space: normal; }
             .pool-hud .ph-cues-head .ph-btn { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
+            .pool-hud .ph-cues-filter { flex-shrink: 0; display: flex; gap: 6px; padding-left: 4px; }
+            .pool-hud .ph-cues-filter .ph-btn { height: 32px; padding: 0 12px; font-size: 11px; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
+            .pool-hud .ph-cues-filter .ph-btn[aria-pressed="true"] { border-color: var(--pool-accent); color: var(--pool-accent); }
+            .pool-hud .ph-cues-filter .ph-btn:hover { background: var(--pool-hover); color: var(--pool-hover-text); }
             .pool-hud .ph-cues-list { flex-grow: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: var(--pool-overlay-line) transparent; }
             .pool-hud .ph-cue-card { flex-shrink: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--pool-radius); border: 1px solid var(--pool-overlay-line); background: rgba(255, 255, 255, 0.04); }
             .pool-hud .ph-cue-card.is-eq, .pool-hud .ph-cue-card.is-hero { border-color: rgba(var(--pool-accent-rgb), 0.45); }
@@ -24998,6 +25031,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             <div class="settings-group" role="tabpanel" data-settings-group="cue" hidden>
                 <div class="settings-subhead">Both games</div>
                 ${sel('poolShotCam', 'Shot Camera', [['overhead', 'Overhead — rise to the top view'], ['3d', 'Stay 3D — stand up, whole table']], { icon: 'g-pool' })}
+                ${sel('poolLockSpeed', 'Mouse Lock Aim (L)', [['slow', 'Slow'], ['medium', 'Medium'], ['fast', 'Fast — as fast as unlocked']], { icon: 'g-pool' })}
                 ${sel('poolGuideLen', 'Guideline', [['full', 'Full'], ['none', 'None']], { icon: 'pro' })}
                 ${sel('poolMaxLayout', 'Max View', [['full', 'Full table — controls on it, between the pockets'], ['bars', 'Table between bars — nothing over the table']], { icon: 'g-pool' })}
                 <div class="settings-subhead">${attIcon('g-pool')} 8-Ball Pool</div>

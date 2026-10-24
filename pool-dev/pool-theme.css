@@ -1364,6 +1364,10 @@
             /* A locked cue's goal is the point of its card: it wraps rather than cut off. */
             .pool-hud .is-locked .ph-cue-d { white-space: normal; }
             .pool-hud .ph-cues-head .ph-btn { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
+            .pool-hud .ph-cues-filter { flex-shrink: 0; display: flex; gap: 6px; padding-left: 4px; }
+            .pool-hud .ph-cues-filter .ph-btn { height: 32px; padding: 0 12px; font-size: 11px; color: var(--pool-overlay-text); background: transparent; border-color: var(--pool-overlay-line); }
+            .pool-hud .ph-cues-filter .ph-btn[aria-pressed="true"] { border-color: var(--pool-accent); color: var(--pool-accent); }
+            .pool-hud .ph-cues-filter .ph-btn:hover { background: var(--pool-hover); color: var(--pool-hover-text); }
             .pool-hud .ph-cues-list { flex-grow: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: var(--pool-overlay-line) transparent; }
             .pool-hud .ph-cue-card { flex-shrink: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; border-radius: var(--pool-radius); border: 1px solid var(--pool-overlay-line); background: rgba(255, 255, 255, 0.04); }
             .pool-hud .ph-cue-card.is-eq, .pool-hud .ph-cue-card.is-hero { border-color: rgba(var(--pool-accent-rgb), 0.45); }

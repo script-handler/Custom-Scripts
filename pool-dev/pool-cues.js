@@ -77,7 +77,7 @@
             sections: pqStd('carbon', 'chrome', 'carbon', 'circuit', 'carbon', 'chrome'), rings: [[72, 1.6, 'neonCyan'], [90, 1, 'chrome'], [98.5, 1, 'chrome']],
             points: [pqPts(4, 54, 0.62, 'chrome', [['#0A0B0C', 0.6]])], inlays: [pqIn(94.5, 4, 'diamond', 8, 'chrome', 45)],
             sheen: { c: ['#EFFCFF', '#7FE3F5'], s: 9, band: 4, on: 'joint rings points inlays' } },
-        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite · gold · turquoise', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'pro', [5, 9, 13, 18]],
+        { id: 'malachite', name: 'Malachite', cond: 'Called It · beat the Pro pool CPU', ach: 'calledIt', blurb: 'Malachite · gold · turquoise', rarity: 'epic', bars: [[5, 7, 6, 5], [7, 9, 9, 8]], need: ['pool', 'hard', [5, 9, 13, 18]],
             sections: pqStd('maple', 'goldPol', 'malachite', 'lizardBlk', 'malachite'), rings: [[72, 1.2, 'goldPol'], [90, 1.2, 'goldPol'], [98.5, 1, 'goldPol']],
             points: [pqPts(4, 54, 0.55, 'ebony', [['goldPol', 0.6]], { rot: 45, inlay: { shape: 'window', mat: 'turquoise', size: 9, at: 0.42 } })],
             inlays: [pqIn(94.5, 4, 'window', 10, 'turquoise')], sheen: { c: ['#FFF9E2', '#8FE3B8'], s: 9, band: 4, on: 'joint rings windows inlays' } },

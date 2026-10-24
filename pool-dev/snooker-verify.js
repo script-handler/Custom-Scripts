@@ -45,14 +45,18 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // Then the woodwork and the cues' rarity looks (the design, 2026-10-15): mitred rail boards lit
 // across, grain, a bevel, a graded apron, pearl sights; before it aa5cc3005b7e7b2d. With them the
 // light's sides follow the design's world (ours mirrored in y): the shade on the top and left.
+// Then pool's pockets widened (the user, 2026-10-24: corner noses 36 → 43, side 30 → 34, holes
+// 27 → 31 and 24 → 27), which moves all seven; with the old pockets the code gave exactly the
+// values before it: table 1d1012657f807af2, breaks ad93085bd4e0dc53, fuzz c5cb3113d060a822, judge
+// b7dd7e7f76a57efe, cpu 0cdfe55ec4e4a8a7, render 2dc82720b2062f08, match 3c7bfff39b137b1b.
 const POOL_ON_MAIN = {
-    table: '1d1012657f807af2',
-    breaks: 'ad93085bd4e0dc53',
-    fuzz: 'c5cb3113d060a822',
-    judge: 'b7dd7e7f76a57efe',
-    cpu: '0cdfe55ec4e4a8a7',
-    render: '2dc82720b2062f08',
-    match: '3c7bfff39b137b1b',
+    table: '2c5111df70b91afc',
+    breaks: '969900b9d7905fc1',
+    fuzz: 'c7dd49c55d77c417',
+    judge: '0ec1f8e1ef04b989',
+    cpu: 'a50a59954429a074',
+    render: '9a7e7ac995c8c81d',
+    match: 'b7632d939f4ecea8',
 };
 const WHAT = {
     table: 'the table geometry (segments, points, pockets)',
