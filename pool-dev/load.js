@@ -81,7 +81,7 @@ const HOST_PARAMS = [
     'document', 'window', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame', 'Date',
     'userPreferences', 'savePreferences', 'getFrameInterval', 'currentGame', 'lbDisplayName',
     'xpSystemReady', 'userXP', 'checkLevelUp', 'saveUserXP', 'showXPNotification', 'updateXPDisplay',
-    'awardGameXP', 'updateGameScoreBtn', 'toggleGameMaxModal',
+    'awardGameXP', 'updateGameScoreBtn', 'toggleGameMaxModal', 'syncNote', 'queueScoreSync',
     'applyCyberTokens', 'applyCyberShape', 'clearCyberTokens', 'clearCyberShape',
 ];
 
@@ -114,7 +114,7 @@ function game(opts) {
         lbDisplayName: opts.name || '',
         xpSystemReady: opts.xpSystemReady !== false,
         userXP,
-        checkLevelUp: noop, saveUserXP: noop, updateXPDisplay: noop,
+        checkLevelUp: noop, saveUserXP: noop, updateXPDisplay: noop, syncNote: noop, queueScoreSync: noop,
         showXPNotification: (msg, kind) => log.notes.push({ msg, kind }),
         awardGameXP: (type, perf) => log.xp.push({ type, perf }),
         updateGameScoreBtn: (g, score, best) => log.scoreBtn.push({ game: g, score, best }),

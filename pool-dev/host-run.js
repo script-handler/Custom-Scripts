@@ -49,6 +49,7 @@ function page() {
         toggleSettingsModal: typeof toggleSettingsModal === 'function' ? toggleSettingsModal : null,
         collectGameModeBests, toggleGameLeaderboard, get xp() { return userXP; },
         unlockAchievement, poolOnPrefChange,
+        syncLedger, syncNote, saveUserXP, get lbSentId() { return lbSentId; },
     };
 `;
     if (!OPEN) script = script.slice(0, end) + probe + script.slice(end);
@@ -939,6 +940,81 @@ async function main() {
         ok('the Join box offers "Already on the leaderboard? Log in" (not a recovery code)', /Already on the leaderboard\? Log in/.test(page()) && !/Restore it|recovery code/i.test(await ev("document.getElementById('total-time-summary').textContent")));
         ok('an old recovery code still restores from the console', /✓ Restored Rina /.test(await ev(`window.atcRestore('${CODE}', ${JSON.stringify(CODE_PW)})`)));
         ok('atcRestoreByClientId is still admin only', (await ev("window.atcRestoreByClientId('acct-1')")) === false);
+        GAMES.bot = null;
+        GAMES.players = [];
+    }
+
+    head('Keys: C flips the camera');
+    {
+        await ev("window.switchGame('pool')");
+        const cam = () => ev('window.__probe.prefs.poolCamera');
+        const press = async (k, code) => { await send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, text: k }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code }); await sleep(120); };
+        await ev('document.activeElement && document.activeElement.blur()');
+        const c0 = await cam();
+        await press('c', 'KeyC');
+        const c1 = await cam();
+        await press('c', 'KeyC');
+        ok('C flips 2D/3D, and back', c1 !== c0 && (await cam()) === c0, [c0, c1]);
+        await ev("(() => { const i = document.createElement('input'); i.id = 'kc-probe'; document.body.appendChild(i); i.focus(); })()");
+        await press('c', 'KeyC');
+        ok('…but not while typing in a field', (await cam()) === c0);
+        await ev("document.getElementById('kc-probe').remove()");
+        // Headless Chrome grants no pointer lock, so the lock is set as pointerlockchange would leave it.
+        const r = await ev("(() => { const S = window.__probe.S, b = S.canvas.getBoundingClientRect(); document.dispatchEvent(new Event('pointerlockchange')); S.lock = { x: b.left + b.width / 2, y: b.top + b.height / 2 }; document.body.appendChild(S.lockDot); return [b.left + b.width / 2, b.top + b.height / 2, b.right, S.aim, S.phase === 'aim' && window.__probe.poolCanAct()]; })()");
+        await mouse('mouseMoved', 300, 300);
+        const x0 = await ev('window.__probe.S.lock.x');
+        await mouse('mouseMoved', 340, 300); await mouse('mouseMoved', 380, 300);
+        const lk = await ev('(() => { const S = window.__probe.S; return { x: S.lock.x, left: parseFloat(S.lockDot.style.left), aim: S.aim }; })()');
+        ok('mouse lock: raw movement drives a virtual pointer, drawn as a ring, kept on the table', Math.abs(lk.x - Math.min(r[2], x0 + 80)) < 0.5 && Math.abs(lk.left - lk.x) < 0.5, [r, x0, lk]);
+        if (r[4]) ok('…and turns the aim', lk.aim !== r[3], [r[3], lk.aim]);
+        await ev("(() => { const S = window.__probe.S; S.lock = null; S.lockDot.remove(); })()");
+    }
+
+    head('Cloud: two-way sync and logout');
+    {
+        // This browser is the account from the login checks; the stand-in bot keeps the higher XP, as sync.yml does.
+        const me = await ev('window.__probe.lbClientId'), xp0 = await ev('JSON.parse(JSON.stringify(window.__probe.xp))'), sent = [];
+        const rec = { clientId: me, displayName: 'Rina Rahman', login: true, level: 1, currentXP: 0, totalXP: xp0.totalXP + 205, gameSessions: xp0.gameSessions || 0,
+            totalWorkDays: xp0.totalWorkDays || 0, achievements: (xp0.achievements || []).slice(), lastAttendanceDate: xp0.lastAttendanceDate, todayKey: xp0.todayKey, lastHourTracked: xp0.lastHourTracked };
+        GAMES.players = [rec];
+        GAMES.bot = (event, p) => {
+            if (event !== 'registry-update' || !p.player) return;
+            sent.push(p.player);
+            const prev = GAMES.players[0];
+            GAMES.players[0] = Object.assign({}, p.player, { login: prev.login, totalXP: Math.max(prev.totalXP, p.player.totalXP), serverSync: new Date().toISOString() });
+        };
+        const local = () => ev('window.__probe.xp.totalXP');
+        const shown = () => ev("(document.getElementById('xp-total') || {}).textContent || ''");
+        await ev('window.__probe.fetchLeaderboard()');
+        ok('the cloud ahead (the screenshot): this browser restores to it on load and refresh', (await local()) === rec.totalXP && /Restored 205 XP from the cloud/.test(await ev('document.body.textContent')), [await local(), rec.totalXP]);
+        ok('…and the Total XP card shows it', (await shown()).replace(/\D/g, '') === String(rec.totalXP), await shown());
+
+        // A game here (+100, in the ledger) while another device earned 300 more: both count.
+        await ev('(() => { const P = window.__probe; P.xp.totalXP += 100; P.xp.gameSessions = (P.xp.gameSessions || 0) + 1; P.syncNote(l => { l.xp += 100; l.sessions++; }); P.saveUserXP(P.xp); })()');
+        GAMES.players[0] = Object.assign({}, GAMES.players[0], { totalXP: GAMES.players[0].totalXP + 300 });
+        const want = rec.totalXP + 400;
+        await click('#total-time-summary .ws-board-sync:not(.ws-board-rcv):not(.ws-board-out)');
+        await waitFor('false', 1500);
+        ok('the sync button restores and uploads in one: cloud + this game', sent.length === 1 && sent[0].totalXP === want && (await local()) === want, [sent.length && sent[0].totalXP, await local(), want]);
+        ok('…and says it uploaded', /Progress uploaded/.test(await ev('document.body.textContent')));
+        ok('…with this upload\'s id among the gist\'s last ones', sent.length === 1 && Array.isArray(sent[0].syncIds) && sent[0].syncIds.includes(sent[0].syncId));
+        await ev('window.__probe.fetchLeaderboard()');
+        ok('once the gist lists it, the ledger is empty', await ev('(() => { const l = window.__probe.syncLedger(); return l.xp === 0 && l.sessions === 0 && l.sent.length === 0; })()'));
+        ok('the CPU and online records travel too', sent.length === 1 && 'poolCpuRecord' in sent[0] && 'snookerNetRecord' in sent[0]);
+
+        // Logout with progress not yet synced: it goes up, the gist confirms, then this browser forgets.
+        await ev('(() => { const P = window.__probe; P.xp.totalXP += 40; P.syncNote(l => { l.xp += 40; }); P.saveUserXP(P.xp); })()');
+        ok('the logout button sits beside the key', await ev("!document.querySelector('#total-time-summary .ws-board-out').hidden"));
+        await click('#total-time-summary .ws-board-out');
+        ok('…and asks first, in plain words', await waitFor("(() => { const m = document.getElementById('acct-modal'); return m && m.classList.contains('active') && /Log out/.test(m.querySelector('.achievements-modal-title').textContent); })()", 3000));
+        // What the page looked like as it unloaded for the reload, kept across it.
+        await ev("window.addEventListener('beforeunload', () => sessionStorage.setItem('logoutSeen', JSON.stringify({ text: (document.getElementById('acct-modal') || {}).textContent || '', cleared: ['userXP', 'atc_lb_profile', 'poolCueRecord', 'atc_sync_ledger', 'atc_games_secret'].every(k => localStorage.getItem(k) === null), plus: window.__probe.gamesUnlocked })))");
+        await click('#acct-modal .rcv-go');
+        await waitFor("!!sessionStorage.getItem('logoutSeen') && !!document.getElementById('total-time-summary') && !!window.__probe", 20000);
+        const seen = JSON.parse((await ev("sessionStorage.getItem('logoutSeen')")) || '{}');
+        ok('logout uploads the unsynced 40 first', /Logged out/.test(seen.text) && sent.length === 2 && sent[1].totalXP === want + 40, [seen.text, sent.map(s => s.totalXP)]);
+        ok('…then clears the account, its progress and Plus here, and reloads', seen.cleared === true && seen.plus === false, seen);
+        ok('…and the page comes back fresh, logged out', await ev('!window.__probe.lbRegistered && (window.__probe.xp.totalXP || 0) === 0'), await ev('[window.__probe.lbRegistered, window.__probe.xp.totalXP]'));
         GAMES.bot = null;
         GAMES.players = [];
     }

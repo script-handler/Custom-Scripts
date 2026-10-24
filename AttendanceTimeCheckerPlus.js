@@ -135,6 +135,7 @@
         laser: ['M10.3 2.5h3.4V15h-3.4z', 'M12 18v3.5M8 19l-2 2M16 19l2 2', 'pink'],
         burst: ['M12 2.5l1.9 4.8 4.8-2.1-2.1 4.8 4.8 1.9-4.8 1.9 2.1 4.8-4.8-2.1-1.9 4.8-1.9-4.8-4.8 2.1 2.1-4.8-4.8-1.9 4.8-1.9-2.1-4.8 4.8 2.1z', '', 'orange'],
         through: ['M12 18a6 6 0 1 0 0-12a6 6 0 0 0 0 12z', 'M2.5 12h3.5M18 12h3.5M19 9.5l2.5 2.5-2.5 2.5', 'ice'],
+        calendar: ['M5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5z', 'M8.5 3v4M15.5 3v4M4 9.5h16M8.3 13h.4M11.8 13h.4M15.3 13h.4M8.3 16.5h.4M11.8 16.5h.4', 'blue'],
     };
     const attDuo = ([b, o, pal]) => { const [l, m, d] = ATT_PAL[pal].split(' ');
         const st = (p, c, w) => `<path d="${p}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -520,7 +521,7 @@
 
     // ⚙️ Shift Duration: the select's options and the length each one means, in one list.
     const SHIFT_DURATIONS = [
-        ['4h', 'Short Leave'], ['8h', 'Standard'], ['9h', 'Overtime'],
+        ['4h', 'Standard Short Leave'], ['5h', 'Overtime Short Leave'], ['8h', 'Standard'], ['9h', 'Overtime'],
         ['10h', 'Corporate Servant'], ['11h', 'Wage Slave'], ['12h', 'Corporate Slave'],
         ['13h', 'Disposable Asset'], ['14h', 'Human Resource'], ['15h', 'Company Property'],
     ];
@@ -768,6 +769,19 @@
     ]);
     function isBlocked(clientId) { return AC_BLOCKLIST.has(clientId); }
 
+    // ☁️ What this browser earned that the gist may not hold yet. Game XP and sessions, achievement XP
+    // and cue wins happen on one device only, so a merge adds them on top of the cloud's figures;
+    // attendance XP is the same on every device, so there the higher side stands. sent: uploads not
+    // yet seen in the gist (by syncId), each holding the ledger as it was sent.
+    const SYNC_LEDGER_KEY = 'atc_sync_ledger';
+    const syncLedger = () => Object.assign({ xp: 0, sessions: 0, ach: {}, cue: {}, sent: [] }, lsJSON(SYNC_LEDGER_KEY, {}));
+    function syncNote(f) { const l = syncLedger(); f(l); localStorage.setItem(SYNC_LEDGER_KEY, JSON.stringify(l)); }
+    // Everything the cloud record restores: what a logout clears, so the next login brings it all back.
+    const ACCOUNT_KEYS = ['userXP', '_xpSig', 'atc_lb_profile', SYNC_LEDGER_KEY, 'snakeHighScore', 'snakeHighScores', 'snakeLevelsBest', 'flappyHighScore', 'tetrisHighScore',
+        'breakoutHighScore', 'aimChaosHighScore', 'reflexHighScores', 'prayerCount', 'customQuotes', 'poolGamesWon', 'poolWinsByMode', 'poolWinsByTier', 'poolRecord',
+        'poolCueRecord', 'poolCpuRecord', 'poolNetRecord', 'snookerRecord', 'snookerWinsByMode', 'snookerWinsByTier', 'snookerHighBreak', 'snookerCpuRecord',
+        'snookerNetRecord', 'ludoGamesWon', 'ludoWinsByTier', 'ludoRecord'];
+
     let lbClientId = null;
     let lbDisplayName = '';
     let lbRegistered = false;
@@ -974,6 +988,9 @@
             snookerRecord: lsJSON('snookerRecord', { p1Wins: 0, p1Losses: 0, p2Wins: 0, p2Losses: 0 }),
             // Frames won with each cue (pool-cues.js): their levels.
             poolCueRecord: lsJSON('poolCueRecord', {}),
+            // CPU W/L drive the adaptive tier; online W/L the net record.
+            poolCpuRecord: lsJSON('poolCpuRecord', null), snookerCpuRecord: lsJSON('snookerCpuRecord', null),
+            poolNetRecord: lsJSON('poolNetRecord', null), snookerNetRecord: lsJSON('snookerNetRecord', null),
             // Ludo W/L vs CPU; also drives the adaptive difficulty tier, so a fresh browser restores it.
             ludoRecord: lsJSON('ludoRecord', { wins: 0, losses: 0 }),
             reflexHighScores: lsJSON('reflexHighScores', null),
@@ -1013,6 +1030,7 @@
 
         try {
             await patchPlayer(snapshot);
+            localStorage.removeItem(SYNC_LEDGER_KEY);
             lbDisplayName = displayName;
             lbRegistered = true;
             saveLeaderboardProfile();
@@ -1026,25 +1044,21 @@
         }
     }
 
-    async function syncMyScore() {
-        if (!lbRegistered || lbFetching) return;
-        // The leaderboard is Plus: the bot ignores syncs without a licensed browser's proof.
-        if (!gamesOpen()) { console.warn('[Sync] The leaderboard is part of Plus. Click the face at the top to activate it.'); return; }
+    // Pull, then push: the gist's record is folded in first (cloudReconcile), so a sync never uploads a
+    // stale lower copy, and it uploads only when this browser holds what the gist lacks. force (logout)
+    // skips the cooldowns. Returns what happened: 'uploaded' (lbSentId), 'restored', 'current',
+    // 'cooldown', 'noPlus', 'busy', or a refusal ('blocked', 'outdated', 'flagged', 'integrity', 'budget', 'failed').
+    let lbSentId = null;
+    async function syncMyScore(opts = {}) {
+        if (!lbRegistered || lbFetching) return 'busy';
         if (isBlocked(lbClientId)) {
             console.warn('[Leaderboard] Sync denied — clientId is on the blocklist.');
-            return;
-        }
-        // Local cooldown — prevents multiple dispatches before gist propagates
-        const msSinceLocalSync = Date.now() - lbLastLocalSyncMs;
-        if (msSinceLocalSync < AC_SYNC_COOLDOWN_MS) {
-            console.warn(`[Sync] Local cooldown: ${Math.ceil((AC_SYNC_COOLDOWN_MS - msSinceLocalSync) / 1000)}s remaining`);
-            return;
+            return 'blocked';
         }
         lbFetching = true;
-        lbLastLocalSyncMs = Date.now();
         try {
             const registry = await fetchRegistry();
-            if (!registry) return;
+            if (!registry) return 'failed';
 
             // Informational only — sync.yml rejects a stale BUILD_TOKEN server-side. This just surfaces
             // a refresh banner before the user wastes a dispatch.
@@ -1052,13 +1066,23 @@
                 console.warn(`[Sync] Outdated build (local: ${BUILD_LABEL}, latest: ${registry.latestBuild}). Sync will be rejected by server.`);
                 showXPNotification(`Script outdated (${BUILD_LABEL} → ${registry.latestBuild}). Refresh your tab!`, 'hourly', 'reset');
                 showBuildUpdateBanner(registry.latestBuild);
-                return;
+                return 'outdated';
             }
             // Local ahead-or-equal falls through: this sync is what advances the gist stamp to BUILD_LABEL.
             const idx = registry.players.findIndex(p => p.clientId === lbClientId);
-            if (idx === -1) return;
+            if (idx === -1) return 'failed';
 
-            const prev = registry.players[idx];
+            const prev = registry.players[idx], merged = prev.flagged ? { upload: true } : cloudReconcile(prev);
+            if (!merged.upload) return merged.restored ? 'restored' : 'current';
+            // The leaderboard is Plus: the bot ignores syncs without a licensed browser's proof.
+            if (!gamesOpen()) { console.warn('[Sync] The leaderboard is part of Plus. Click the face at the top to activate it.'); return 'noPlus'; }
+            // Local cooldown — prevents multiple dispatches before gist propagates
+            const msSinceLocalSync = Date.now() - lbLastLocalSyncMs;
+            if (msSinceLocalSync < AC_SYNC_COOLDOWN_MS && !opts.force) {
+                console.warn(`[Sync] Local cooldown: ${Math.ceil((AC_SYNC_COOLDOWN_MS - msSinceLocalSync) / 1000)}s remaining`);
+                return 'cooldown';
+            }
+            lbLastLocalSyncMs = Date.now();
 
             // Restricted: games were played here without Plus; a sync from a Plus browser lifts it.
             if (prev.restricted) showXPNotification('The leaderboard is part of Plus. Click the face at the top to activate it.', 'hourly', 'block');
@@ -1067,7 +1091,7 @@
             if (prev.flagged) {
                 console.warn('[AntiCheat] Account frozen — sync blocked.');
                 showXPNotification('Sync disabled — account flagged', 'hourly', 'block');
-                return;
+                return 'flagged';
             }
 
             // 2. Integrity hash — detects raw localStorage edits. Refuse-to-sync only: a stale or missing
@@ -1075,18 +1099,17 @@
             if (!_verifyXPIntegrity()) {
                 console.warn('[AntiCheat] XP integrity check FAILED — sync blocked locally (not flagging gist).');
                 showXPNotification('Local integrity check failed — sync blocked', 'hourly', 'warn');
-                return;
+                return 'integrity';
             }
 
             // 3. Cooldown, anchored on serverSync (workflow-stamped) not lastSync (client-supplied),
             // so backdating a snapshot cannot shorten it.
             const prevSyncAt = prev.serverSync || prev.lastSync;
-            if (prevSyncAt) {
+            if (prevSyncAt && !opts.force) {
                 const msSinceLast = Date.now() - new Date(prevSyncAt).getTime();
                 if (msSinceLast < AC_SYNC_COOLDOWN_MS) {
                     console.warn(`[AntiCheat] Sync cooldown: ${Math.ceil((AC_SYNC_COOLDOWN_MS - msSinceLast) / 1000)}s remaining`);
-                    showXPNotification(`Sync cooldown — wait ${Math.ceil((AC_SYNC_COOLDOWN_MS - msSinceLast) / 1000)}s`, 'hourly', 'hourglass');
-                    return;
+                    return 'cooldown';
                 }
             }
 
@@ -1107,18 +1130,27 @@
                 if (xpDelta > maxAllowed) {
                     console.warn(`[AntiCheat] XP gain exceeds activity budget: +${xpDelta} XP vs max ${maxAllowed} (${elapsedDays}d, ${newGames} games, ${newAch} achievements). Sync blocked.`);
                     showXPNotification(`Sync paused — XP gain (${xpDelta}) exceeds what ${elapsedDays}d of activity allows`, 'hourly', 'warn');
-                    return;
+                    return 'budget';
                 }
             }
 
             // Preserve the original joinedAt so re-syncs don't change the join date
             snapshot.joinedAt = prev.joinedAt || new Date().toISOString().split('T')[0];
             snapshot.xpSig = _xpHash(snapshot.totalXP, snapshot.level, snapshot.gameSessions, snapshot.totalWorkDays);
+            // The ids of the last uploads the gist took: how a browser learns its own upload landed.
+            snapshot.syncId = acctRid();
+            snapshot.syncIds = (Array.isArray(prev.syncIds) ? prev.syncIds : []).concat(snapshot.syncId).slice(-20);
 
             // latestBuild is workflow-written only. Only our own record goes over the wire; the server merges.
             await patchPlayer(snapshot);
+            const l = syncLedger();
+            l.sent = l.sent.concat({ id: snapshot.syncId, xp: l.xp, sessions: l.sessions, ach: l.ach, cue: l.cue }).slice(-10);
+            localStorage.setItem(SYNC_LEDGER_KEY, JSON.stringify(l));
+            lbSentId = snapshot.syncId;
+            return 'uploaded';
         } catch (e) {
             console.warn('[Leaderboard] sync error:', e);
+            return 'failed';
         } finally {
             lbFetching = false;
         }
@@ -1240,10 +1272,14 @@
 
         // The W/L records and the wins per cue, each field only raised.
         const seats = ['p1Wins', 'p1Losses', 'p2Wins', 'p2Losses'];
-        [['poolRecord', seats], ['snookerRecord', seats], ['ludoRecord', ['wins', 'losses']], ['poolCueRecord', PQ_SET.map(q => q.id)]].forEach(([key, fields]) => {
+        const wl = ['wins', 'losses'];
+        [['poolRecord', seats], ['snookerRecord', seats], ['ludoRecord', wl], ['poolCpuRecord', wl], ['snookerCpuRecord', wl], ['poolNetRecord', wl], ['snookerNetRecord', wl],
+            ['poolCueRecord', PQ_SET.map(q => q.id)]].forEach(([key, fields]) => {
             const r = rec[key];
             if (r && typeof r === 'object') lsRaise(key, fields, f => r[f], true);
         });
+        // The table caches the cue record; a restored count shows at once.
+        try { poolS.cueRec = null; poolS.cueView = null; } catch (_) {}
 
         // Personalisation — restore only if local is empty/default
         if (rec.customImageURL && rec.customImageURL !== IMAGE_BOX_IDB_REF && !localStorage.getItem('customImageURL')) {
@@ -1281,6 +1317,51 @@
         }
 
         return true;
+    }
+
+    // Folds the gist's record for this account into this browser. Higher wins, and nothing earned here
+    // is dropped: attendance XP stands at the higher side, the ledger (syncLedger) goes on top.
+    // { restored: the cloud brought something, upload: this browser holds what the gist lacks }.
+    const SYNC_DAY_FIELDS = ['consecutiveDays', 'lastAttendanceDate', 'lastShiftCompletedDate', 'lastStreakBonusDate', 'hadStreakReset', 'todayKey', 'todayHours', 'lastHourTracked', 'milestonesReached', 'dayLog'];
+    function cloudReconcile(c) {
+        if (!c || typeof c.totalXP !== 'number' || !xpSystemReady) return { restored: false, upload: false };
+        const l = syncLedger(), ids = Array.isArray(c.syncIds) ? c.syncIds : [], sum = o => Object.values(o).reduce((a, b) => a + b, 0), num = v => parseInt(v, 10) || 0;
+        // An upload the gist lists is in its figures, and so is everything sent before it.
+        const sub = (a, s) => { a.xp -= s.xp; a.sessions -= s.sessions; Object.keys(s.ach).forEach(k => delete a.ach[k]); Object.keys(s.cue).forEach(k => { a.cue[k] = (a.cue[k] || 0) - s.cue[k]; if (a.cue[k] <= 0) delete a.cue[k]; }); };
+        const k = l.sent.map(s => ids.includes(s.id)).lastIndexOf(true);
+        if (k >= 0) { const s = l.sent[k]; l.sent = l.sent.slice(k + 1); [l].concat(l.sent).forEach(a => sub(a, s)); l.xp = Math.max(0, l.xp); l.sessions = Math.max(0, l.sessions); }
+        const cAch = Array.isArray(c.achievements) ? c.achievements : [], mAch = userXP.achievements || [], ach = Array.from(new Set(mAch.concat(cAch)));
+        const pend = l.xp + Object.keys(l.ach).reduce((a, id) => a + (cAch.includes(id) ? 0 : l.ach[id]), 0);
+        const xp = Math.max(c.totalXP, (userXP.totalXP || 0) - l.xp - sum(l.ach)) + pend;
+        const sessions = Math.max(c.gameSessions || 0, (userXP.gameSessions || 0) - l.sessions) + l.sessions;
+        const cueC = c.poolCueRecord || {}, cueL = lsJSON('poolCueRecord', {}), cue = {};
+        new Set(Object.keys(cueC).concat(Object.keys(cueL))).forEach(id => { const p = l.cue[id] || 0; cue[id] = Math.max(num(cueC[id]), num(cueL[id]) - p) + p; });
+        const restored = xp > (userXP.totalXP || 0) || sessions > (userXP.gameSessions || 0) || ach.length > mAch.length
+            || (c.totalWorkDays || 0) > (userXP.totalWorkDays || 0) || Object.keys(cue).some(id => cue[id] > num(cueL[id]));
+        if (restored) {
+            const mine = Object.assign({}, userXP), gain = xp - (userXP.totalXP || 0), day = v => new Date(v || 0).getTime() || 0;
+            applyPlayerRecordToLocal(c);
+            // The newer attendance day's streak and day fields stand; on the same day an hour or
+            // milestone paid on either side is paid, or it would be paid again here.
+            if (day(mine.lastAttendanceDate) >= day(c.lastAttendanceDate)) {
+                SYNC_DAY_FIELDS.forEach(f => { userXP[f] = mine[f]; });
+                const e = c.todayKey === mine.todayKey && mine.dayLog && mine.dayLog[mine.todayKey];
+                if (e) {
+                    e.h = Math.max(e.h, c.lastHourTracked || 0); e.m = Array.from(new Set(e.m.concat(c.milestonesReached || [])));
+                    e.s = e.s || c.lastShiftCompletedDate === c.todayKey; e.b = e.b || c.lastStreakBonusDate === c.todayKey;
+                    userXP.lastHourTracked = e.h; userXP.milestonesReached = e.m.slice();
+                }
+            }
+            Object.assign(userXP, { totalXP: xp, gameSessions: sessions, achievements: ach, totalWorkDays: Math.max(mine.totalWorkDays || 0, c.totalWorkDays || 0),
+                longestStreak: Math.max(mine.longestStreak || 0, userXP.longestStreak || 0) }, deriveLevelFromTotalXP(xp));
+            raiseLongestStreak();
+            saveUserXP(userXP);
+            localStorage.setItem('poolCueRecord', JSON.stringify(cue));
+            try { updateXPDisplay(); updatePrayerDisplay(); } catch (_) {}
+            showXPNotification(gain > 0 ? `Restored ${gain.toLocaleString()} XP from the cloud` : 'Progress restored from the cloud', 'achievement', 'f-cloud');
+        }
+        localStorage.setItem(SYNC_LEDGER_KEY, JSON.stringify(l));
+        return { restored, upload: xp > c.totalXP || sessions > (c.gameSessions || 0) || ach.length > cAch.length || Object.keys(cue).some(id => cue[id] > num(cueC[id])) };
     }
 
     // Merge a cloud record's gameModeBests into localStorage, raising only. Split out because the
@@ -1331,6 +1412,8 @@
         lbDisplayName = displayName || rec.displayName || lbDisplayName || '';
         lbRegistered = true;
         saveLeaderboardProfile();
+        // A login adopts the account as the gist has it: nothing earned here before counts as unsynced.
+        localStorage.removeItem(SYNC_LEDGER_KEY);
         const ok = applyPlayerRecordToLocal(rec);
         if (ok) {
             try { showXPNotification(`Progress restored — Level ${userXP.level}`, 'achievement', 'f-cloud'); } catch (_) {}
@@ -1736,6 +1819,33 @@
     let acctLastLogin = 0;
 
     // Name + password on this computer. step(text) reports progress. Resolves { ok, message }.
+    // Log out: the cloud gets everything first (a merge, then an upload if this browser holds more), and
+    // only once the gist shows that upload does the browser forget the account (ACCOUNT_KEYS) and Plus:
+    // a new secret, so the old login's grant opens nothing here. Settings and the image stay.
+    async function acctLogout(step) {
+        for (let i = 0; lbFetching && i < 30; i++) await acctSleep(500);
+        step('Syncing your progress…');
+        const st = await syncMyScore({ force: true }), id = lbSentId, started = Date.now();
+        if (st === 'uploaded') {
+            let ok = false;
+            for (let i = 0; i < acctPoll.tries && !ok; i++) {
+                await acctSleep(acctPoll.every);
+                step(acctWaitText(Math.round((Date.now() - started) / 1000)));
+                const reg = await fetchRegistry(), own = reg && reg.players.find(p => p.clientId === lbClientId);
+                ok = !!(own && Array.isArray(own.syncIds) && own.syncIds.includes(id));
+            }
+            if (!ok) return { message: 'The cloud has not confirmed your progress yet, so nothing was cleared. Try again in a minute.' };
+        } else if (st !== 'current' && st !== 'restored') {
+            return { message: st === 'noPlus' ? 'Plus is not active here, so new progress cannot be uploaded. Nothing was cleared.'
+                : st === 'outdated' ? 'This script is out of date. Refresh the page, then log out.' : 'Your progress could not be synced, so nothing was cleared. Try again.' };
+        }
+        // Nothing may write progress back before the reload.
+        xpSystemReady = false;
+        ACCOUNT_KEYS.concat(GAMES_SECRET_KEY).forEach(k => localStorage.removeItem(k));
+        gamesTagValue = null; gamesSet(false);
+        setTimeout(() => location.reload(), 1200);
+        return { ok: true, message: 'Logged out. Reloading…' };
+    }
     async function acctLogin(name, password, step) {
         name = acctName(name);
         if (name.length < 2 || typeof password !== 'string' || !password) return { ok: false, message: 'Enter your leaderboard name and your password.' };
@@ -1914,6 +2024,8 @@
             rename: { title: 'Change login name', lead: 'Your login name is also your name on the board. From now on you log in with the new one.',
                 body: field('acct-name', 'New login name', 'text', 'username', lbDisplayName) + field('acct-pw', 'Your password', 'password', 'current-password'),
                 go: 'Save name', after: link('acct-to-change', 'Change password instead') },
+            logout: { title: 'Log out', lead: 'Your progress goes up to the cloud first. Then this computer forgets your account and progress, and Game Mode stays locked until you log in again. Your settings and image stay.',
+                body: '', go: 'Sync and log out', after: '' },
         }[mode];
         modal.setAttribute('aria-label', S.title);
         modal.innerHTML = '<div class="achievements-modal-header"><div class="achievements-modal-title">' + S.title + '</div>' +
@@ -1956,6 +2068,9 @@
                     const r = await acctSetPassword($('acct-pw').value, $('acct-name').value, busy);
                     if (r.ok) done(r.message);
                     else { tell(r.message, r.pending ? '' : 'hot'); if (r.taken) { $('acct-name-box').hidden = false; $('acct-name-line').hidden = true; } }
+                } else if (mode === 'logout') {
+                    const r = await acctLogout(busy);
+                    if (r.ok) done(r.message); else tell(r.message, 'hot');
                 } else if (mode === 'rename') {
                     const r = await acctRename($('acct-name').value, $('acct-pw').value, busy);
                     if (r.ok) done(r.message); else tell(r.message, r.pending ? '' : 'hot');
@@ -1989,6 +2104,10 @@
         try {
             const registry = await fetchRegistry();
             if (!registry) return leaderboardData;
+            // Another device may have moved this account on: fold that in (load and every refresh),
+            // and send up what only this browser holds.
+            const own = lbRegistered && registry.players.find(p => p.clientId === lbClientId);
+            if (own && !own.flagged && cloudReconcile(own).upload) queueScoreSync();
             const hasBlocked = registry.players.some(p => isBlocked(p.clientId));
             if (hasBlocked) { lbFetching = false; purgeBlockedPlayers().catch(() => {}); lbFetching = true; }
             leaderboardData = registry.players
@@ -9409,6 +9528,7 @@
     //   power  press, then pull back or push along the shot line; under 3% or Esc cancels
     //   ←/→    fine aim while the table has the mouse or Max is open: a tap is one step, a
     //          hold turns on, slow at first and faster the longer it is held (poolAimHoldTick)
+    //   C / L  flip the camera 2D/3D / lock the mouse to the table (a ring marks the virtual pointer)
     //   ball in hand: drag the cue ball; it stops at the cushions (and the head string on the break)
     // Tournaments (pool-tour.js, pool-tour-ui.js): poolMode 'tour' while a match is on the
     // table; the bracket is saved after every frame, with a table snapshot after every shot.
@@ -9828,6 +9948,9 @@
         rec[id] = (rec[id] || 0) + 1;
         poolStoreWrite(POOL_CUE_KEY, rec);
         S.cueRec = rec; S.cueView = null;
+        // Cue wins live on this device until a sync: count them for the merge and send them up.
+        syncNote(l => { l.cue[id] = (l.cue[id] || 0) + 1; });
+        queueScoreSync();
         if (had < 5 && pqMastered(rec) >= 5) poolCueUnlocked('collector');
         const lv = pqLevel(rec[id], q), steps = pqSteps(q);
         if (lv > was) return lv >= 5 ? q.name + ' mastered' : q.name + ' reached level ' + lv;
@@ -9972,6 +10095,7 @@
         const xpGained = n * per;
         userXP.currentXP += xpGained;
         userXP.totalXP += xpGained;
+        syncNote(l => { l.xp += xpGained; });
         checkLevelUp();
         saveUserXP(userXP);
         showXPNotification('+' + xpGained + ' XP (' + (n === 1 ? '1 pot' : n + ' pots') + ')', 'game', poolRules().icon);
@@ -10425,6 +10549,24 @@
     const poolClamp = (v, a, b) => Math.max(a, Math.min(b, v));
     const poolIsControl = el => !!(el && el.closest && el.closest('button, input, select, label, a, textarea'));
     function poolDisarm() { poolS.armed = false; poolS.lastX = null; poolS.aimHold = null; }
+    const poolTyping = e => { const t = e.target; return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable); };
+    // Mouse lock (L): the cursor hides and a virtual pointer, drawn as a ring, stands in for it, so aim
+    // turns without running off the table. L, not Ctrl: a lone modifier is no user gesture, and the
+    // browser refuses a lock without one.
+    function poolLockSet(on) {
+        if (!on) { if (document.pointerLockElement === poolS.canvas) document.exitPointerLock(); return; }
+        try { const p = poolS.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+    }
+    function poolOnLockChange() {
+        const S = poolS, on = document.pointerLockElement === S.canvas, r = S.canvas.getBoundingClientRect(), f = S.ptr || [r.left + r.width / 2, r.top + r.height / 2];
+        S.lock = on ? { x: poolClamp(f[0], r.left, r.right), y: poolClamp(f[1], r.top, r.bottom) } : null;
+        if (!S.lockDot) { S.lockDot = document.createElement('div'); S.lockDot.style.cssText = 'position:fixed;width:14px;height:14px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.6);pointer-events:none;z-index:2147483647'; }
+        if (on) { document.body.appendChild(S.lockDot); poolLockDot(); S.armed = true; S.lastX = null; } else S.lockDot.remove();
+    }
+    function poolOnLockError() { showXPNotification('The browser refused the mouse lock. Click the table, then press L', 'game', 'lock'); }
+    function poolLockDot() { const l = poolS.lock; if (l) { poolS.lockDot.style.left = l.x + 'px'; poolS.lockDot.style.top = l.y + 'px'; } }
+    // While locked, events carry the virtual pointer's position and the raw movement (mx).
+    const poolPt = e => poolS.lock ? { clientX: poolS.lock.x, clientY: poolS.lock.y, target: poolS.canvas, shiftKey: e.shiftKey, pointerId: e.pointerId, mx: e.movementX || 0 } : e;
 
     // Power: only movement along the shot line counts, back or forward; full power fits the canvas.
     function poolShotAxis() {
@@ -10455,6 +10597,7 @@
         S.spinOpen = false;
         // The clock runs while the collection is open; a press on the table (Max) closes it.
         if (S.cues) { S.cues = false; return; }
+        e = poolPt(e);
         if (!poolCanAct() || !S.W) return;
         const [sx, sy] = poolLocal(e);
         try { S.canvas.setPointerCapture(e.pointerId); } catch (_) {}
@@ -10496,6 +10639,12 @@
     function poolOnMove(e) {
         const S = poolS;
         if (!S.W) return;
+        if (S.lock) {
+            const r = S.canvas.getBoundingClientRect();
+            S.lock.x = poolClamp(S.lock.x + (e.movementX || 0), r.left, r.right); S.lock.y = poolClamp(S.lock.y + (e.movementY || 0), r.top, r.bottom);
+            poolLockDot();
+        } else S.ptr = [e.clientX, e.clientY];
+        e = poolPt(e);
         const [sx, sy] = poolLocal(e);
         if (S.drag && S.drag.kind === 'place') { poolPlace(sx, sy); return; }
         if (S.drag && S.drag.kind === 'power') {
@@ -10508,7 +10657,7 @@
         const far = sx < -POOL_AIM_REACH || sx > S.W + POOL_AIM_REACH || sy < -POOL_AIM_REACH || sy > S.H + POOL_AIM_REACH;
         if (far || poolIsControl(e.target)) { poolDisarm(); return; }
         // In screen px, so the scaled-down Max view turns no faster than the panel.
-        const dx = S.lastX === null ? 0 : e.clientX - S.lastX;
+        const dx = S.lock ? e.mx : S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
         if (S.phase !== 'aim' || !poolCanAct()) return;
         // 3D turns with the mouse; 2D points at the target, or with Shift turns finely from there.
@@ -10564,9 +10713,13 @@
             e.preventDefault(); e.stopImmediatePropagation();
             return;
         }
+        // C flips the camera between 2D and 3D; L locks the mouse to the table, or lets it go.
+        if ((e.code === 'KeyC' || e.code === 'KeyL') && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e)) {
+            if (e.code === 'KeyC') poolOn.camera(userPreferences.poolCamera === '2d' ? '3d' : '2d'); else poolLockSet(!S.lock);
+            e.preventDefault(); return;
+        }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
-            const tag = e.target && e.target.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (poolTyping(e)) return;
             e.preventDefault();
             // A tap is one fine step; holding turns on in poolAimHoldTick, so the OS's key
             // repeat is ignored.
@@ -10769,6 +10922,8 @@
         window.addEventListener('keyup', poolOnKeyUp, true);
         window.addEventListener('blur', poolDisarm);
         document.documentElement.addEventListener('pointerleave', poolDisarm);
+        document.addEventListener('pointerlockchange', poolOnLockChange);
+        document.addEventListener('pointerlockerror', poolOnLockError);
         if (window.matchMedia) {
             S.scheme = window.matchMedia('(prefers-color-scheme: dark)');
             if (S.scheme.addEventListener) S.scheme.addEventListener('change', poolOnThemeChange);
@@ -10797,6 +10952,9 @@
         window.removeEventListener('keyup', poolOnKeyUp, true);
         window.removeEventListener('blur', poolDisarm);
         document.documentElement.removeEventListener('pointerleave', poolDisarm);
+        poolLockSet(false); S.lock = null; if (S.lockDot) S.lockDot.remove();
+        document.removeEventListener('pointerlockchange', poolOnLockChange);
+        document.removeEventListener('pointerlockerror', poolOnLockError);
         if (S.scheme && S.scheme.removeEventListener) S.scheme.removeEventListener('change', poolOnThemeChange);
         S.scheme = null;
         S.drag = null; S.power = S.phase === 'strike' ? S.power : 0;
@@ -16865,24 +17023,10 @@
 
         updateXPDisplay();
 
-        // Auto-recovery: a registered client returning fully wiped (Level 1, 0 XP) pulls the
-        // authoritative copy from the gist. Legitimate Level 1 accounts are unaffected. If the
-        // clientId itself was lost, run window.atcRestoreByClientId('their-original-id') once to re-bind.
+        // The cloud copy is folded in by initLeaderboard's first fetch (cloudReconcile), wiped or not.
+        // If the clientId itself was lost, run window.atcRestoreByClientId('their-original-id') once to re-bind.
         try { loadLeaderboardProfile(); } catch (_) {}
-        if (lbRegistered && lbClientId && (userXP.level || 1) <= 1 && (userXP.totalXP || 0) === 0) {
-            restoreFromGist().then(ok => {
-                if (ok) {
-                    showXPNotification(`Restored Level ${userXP.level} from cloud`, 'achievement', 'f-cloud');
-                }
-                try { revalidateAchievements(); } catch (_) {}
-            }).catch(err => {
-                console.warn('[Restore] auto-restore failed:', err);
-                try { revalidateAchievements(); } catch (_) {}
-            });
-        } else {
-            // No restore needed — still revalidate to catch any missing achievements
-            try { revalidateAchievements(); } catch (_) {}
-        }
+        try { revalidateAchievements(); } catch (_) {}
     }
 
     function calculateXPForNextLevel(level) {
@@ -17213,6 +17357,7 @@
         if (!silent) {
             userXP.currentXP += xpReward;
             userXP.totalXP += xpReward;
+            syncNote(l => { l.ach[achievementKey] = xpReward; });
             checkLevelUp();
             showAchievementToast(achievementKey, xpReward);
             // The cue it earns (pool-cues.js), noticed here and on the table.
@@ -17514,6 +17659,7 @@
             userXP.currentXP += xpGained;
             userXP.totalXP += xpGained;
             userXP.gameSessions = (userXP.gameSessions || 0) + 1;
+            syncNote(l => { l.xp += xpGained; l.sessions++; });
 
             checkLevelUp();
 
@@ -18297,7 +18443,7 @@
             .ws-at { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding-bottom: 4px; font-size: 11px; color: var(--att-muted); }
             .ws-at b { font: 700 22px var(--att-display); color: var(--att-ink); font-variant-numeric: tabular-nums; }
             .ws-path { height: 32px; display: flex; justify-content: space-between; align-items: center; }
-            .ws-path:empty { display: none; }
+            .ws-path:empty, #total-time-summary.game-mode-off .ws-path:empty { display: none; }
             .ws-slot { width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; }
             .ws-slot .att-ico { opacity: .4; }
             .ws-slot.is-past .att-ico { opacity: .85; }
@@ -24576,7 +24722,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     }
 
     // The mood face for the time worked: the design's mood path (attMood), or none when hidden.
-    const moodIdFor = worked => userPreferences.emojiSet === 'none' ? '' : attMood(worked, getShiftSeconds()).id;
+    const moodIdFor = worked => userPreferences.emojiSet === 'none' ? 'calendar' : attMood(worked, getShiftSeconds()).id;
     const moodHtml = id => id ? attIcon(id, '1em') : '';
 
     // ABOUT (design: Attendance widget · revamped, B1 About): the (i) button opens a dialog over the
@@ -25783,7 +25929,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 if (document.hidden) insertAndCalculate();
                 if (!host.querySelector('.pip-placeholder')) showPipPlaceholder(host); // a full re-render wiped it
                 const cs = getComputedStyle(host), shift = getShiftSeconds(), worked = Math.max(0, lastTotalWorkedTime), left = shift - worked;
-                const m = attMood(worked, shift), pct = Math.round(Math.min(1, worked / shift) * 100), id = userPreferences.emojiSet === 'none' ? '' : m.id;
+                const m = attMood(worked, shift), pct = Math.round(Math.min(1, worked / shift) * 100), id = userPreferences.emojiSet === 'none' ? 'calendar' : m.id;
                 ATT_PIP_VARS.forEach(k => b.style.setProperty('--att-' + k, cs.getPropertyValue('--att-' + k)));
                 b.style.setProperty('--tone', `var(--att-${m.tone})`); b.classList.toggle('biz', host.classList.contains('biz-theme'));
                 b.style.setProperty('--fill', m.kind === 'shift' ? 'var(--att-accent)' : 'var(--tone)');
@@ -25843,7 +25989,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         const slot = (id, k) => { const now = k === m.i && kind === 'shift';
             return `<span class="ws-slot${now ? ' is-now' : k < m.i ? ' is-past' : ''}" style="--x: ${x(inAt + (k + 0.5) * per)}" title="${moodName(id)} · ${hhmm(inAt + k * per)}–${hhmm(inAt + (k + 1) * per)}">${attIcon(id, now ? '24px' : '18px')}</span>`; };
         const r = {
-            key: (hide ? '' : m.id) + '|' + m.i + '|' + H, mood: hide ? '' : m.id, pct,
+            key: (hide ? 'calendar' : m.id) + '|' + m.i + '|' + H, mood: hide ? 'calendar' : m.id, pct,
             vars: `--ws-tone: var(--att-${m.tone}); --ws-fill: ${kind === 'shift' ? 'var(--att-accent)' : 'var(--ws-tone)'}; --ws-dot: ${!live ? 'var(--att-muted)' : kind === 'shift' ? 'var(--att-ok)' : 'var(--ws-tone)'}`,
             lineOff: `${H}h ${name} shift · ` + (list.length ? 'check-in ' + list[0].checkIn : 'not checked in yet'),
             sessions: list.length + (list.length === 1 ? ' session' : ' sessions'), multi: list.length > 1,
@@ -25913,8 +26059,9 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 const keys = (Array.isArray(r.p.achievements) ? r.p.achievements : []).filter(k => ACHIEVEMENTS[k]).join(',');
                 return `<button type="button" class="ws-row${me ? ' is-me' : ''}" data-ach-name="${attr(name)}" data-ach-keys="${keys}" aria-label="${attr(name + ', rank ' + (i + 1) + ', ' + r.v.toLocaleString())}"><i>${i + 1}</i><em>${escapeHtml(lbInitials(r.p.displayName))}</em><span>${escapeHtml(name)}</span><b>${r.v.toLocaleString()}</b></button>`;
             }).join('') || `<div class="ws-board-empty">${lbFetching ? 'Loading the board…' : 'No scores on this board yet.'}</div>`;
-        const list = box.querySelector('.ws-board-rows'), sync = box.querySelector('.ws-board-sync:not(.ws-board-rcv)'), rcv = box.querySelector('.ws-board-rcv');
+        const list = box.querySelector('.ws-board-rows'), sync = box.querySelector('.ws-board-sync:not(.ws-board-rcv):not(.ws-board-out)'), rcv = box.querySelector('.ws-board-rcv'), out = box.querySelector('.ws-board-out');
         if (sync) sync.hidden = !lbRegistered;
+        if (out) out.hidden = !lbRegistered;
         if (rcv) {
             // The key: this account's password; a dot until one is set.
             const own = leaderboardData.find(p => p.clientId === lbClientId), bare = !!own && !own.login;
@@ -26260,7 +26407,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 <div id="aim-results"></div>
 
                 <section class="ws-card ws-board" aria-label="Leaderboard">
-                    <div class="ws-board-head"><span>${attIcon('g-board')} Leaderboard</span><span class="ws-board-tools"><span class="ws-board-sub">Total XP</span><button type="button" class="ws-board-sync ws-board-rcv" onclick="window.atcAccountDialog()" title="Password" aria-label="Password" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"></path></svg></button><button type="button" class="ws-board-sync" onclick="window.lbSync()" title="Sync and refresh" aria-label="Sync and refresh">${attIcon('f-cloud', '18px')}</button></span></div>
+                    <div class="ws-board-head"><span>${attIcon('g-board')} Leaderboard</span><span class="ws-board-tools"><span class="ws-board-sub">Total XP</span><button type="button" class="ws-board-sync ws-board-rcv" onclick="window.atcAccountDialog()" title="Password" aria-label="Password" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"></path></svg></button><button type="button" class="ws-board-sync ws-board-out" onclick="window.atcAccountDialog('logout')" title="Log out" aria-label="Log out" hidden>${achSvg('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9', 16, 2)}</button><button type="button" class="ws-board-sync" onclick="window.lbSync()" title="Sync and refresh" aria-label="Sync and refresh">${attIcon('f-cloud', '18px')}</button></span></div>
                     <div class="ws-board-rows"></div>
                 </section>
             </div>
@@ -26555,15 +26702,20 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 renderMiniBoard();
             } else if (btn) { btn.disabled = false; btn.innerHTML = attIcon('rocket') + ' Join Now'; }
         };
+        // Restore and upload in one: the cloud's progress comes down, this browser's goes up.
         window.lbSync = async () => {
             showXPNotification('Syncing scores...', 'hourly', 'f-cloud');
-            await syncMyScore();
+            const st = await syncMyScore();
             await fetchLeaderboard();
             // Ensure local entry reflects latest localStorage scores (avoids stale API cache)
             const myEntry = leaderboardData.find(p => p.clientId === lbClientId);
             if (myEntry) Object.assign(myEntry, lbOwnEntry());
             renderMiniBoard();
-            showXPNotification('Leaderboard updated!', 'hourly', 'check');
+            // A restore says so itself, and the refusals already said why.
+            const say = { uploaded: ['Progress uploaded. The board catches up in about 30 seconds.', 'check'], current: ['Up to date with the cloud', 'check'],
+                cooldown: ['Synced moments ago. The rest goes up in a couple of minutes.', 'hourglass'], noPlus: ['The leaderboard is part of Plus. Click the face at the top to activate it.', 'block'],
+                busy: ['A sync is already running', 'hourglass'], failed: ['Could not reach the cloud. Try again.', 'cross'] }[st];
+            if (say) showXPNotification(say[0], 'hourly', say[1]);
         };
 
         function updateGameTitle(gameKey) {

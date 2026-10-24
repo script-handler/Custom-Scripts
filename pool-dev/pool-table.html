@@ -143,6 +143,8 @@ function awardGameXP(type, perf) {
         new Date().toLocaleTimeString() + '  ' + type + ' ' + (perf.won ? 'won' : 'lost') + ': +' + (perf.xp || 0) + ' XP' + (perf.tier ? ' (' + perf.tier + ')' : '') +
         (perf.highBreak ? ', best break ' + perf.highBreak : '');
 }
+// The host's cloud ledger and sync queue, and its toasts: no cloud here.
+function syncNote() {} function queueScoreSync() {} function showXPNotification(msg) { console.log('[toast] ' + msg); }
 function lsJSON(key, fallback) {
     try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (_) { return fallback; }
 }
