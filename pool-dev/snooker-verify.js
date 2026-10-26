@@ -49,14 +49,18 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // 27 → 31 and 24 → 27), which moves all seven; with the old pockets the code gave exactly the
 // values before it: table 1d1012657f807af2, breaks ad93085bd4e0dc53, fuzz c5cb3113d060a822, judge
 // b7dd7e7f76a57efe, cpu 0cdfe55ec4e4a8a7, render 2dc82720b2062f08, match 3c7bfff39b137b1b.
+// Then the corners came back to noses 39, rail ends 24, holes 29 (the user, 2026-10-26: wider than
+// two balls side by side); at 43 / 26 / 31 the code gave table 2c5111df70b91afc, breaks
+// 969900b9d7905fc1, fuzz c7dd49c55d77c417, judge 0ec1f8e1ef04b989, cpu a50a59954429a074, render
+// 9a7e7ac995c8c81d, match b7632d939f4ecea8.
 const POOL_ON_MAIN = {
-    table: '2c5111df70b91afc',
-    breaks: '969900b9d7905fc1',
-    fuzz: 'c7dd49c55d77c417',
-    judge: '0ec1f8e1ef04b989',
-    cpu: 'a50a59954429a074',
-    render: '9a7e7ac995c8c81d',
-    match: 'b7632d939f4ecea8',
+    table: '5bd733503d768ea2',
+    breaks: 'ffd797cb08eacfc5',
+    fuzz: '17590ecc164a4932',
+    judge: '3f7cb57ff43b72e2',
+    cpu: '545e1b0238ea0a97',
+    render: 'bc97179947f65b1e',
+    match: '99206f5cc2ca549d',
 };
 const WHAT = {
     table: 'the table geometry (segments, points, pockets)',

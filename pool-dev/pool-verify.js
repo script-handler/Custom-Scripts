@@ -1394,6 +1394,26 @@ head('Table cloth, per game');
     ok('snooker\'s Custom is its own pair', P.poolFelt().felt[0] === '#3060E0');
     Object.keys(U).forEach(k => delete U[k]); Object.assign(U, JSON.parse(keep)); P.poolS.game = game;
 }
+{
+    // ⚙️ Cloth Speed: rolling resistance only, the default today's, online the game's own.
+    const P = L.game({ seed: 12 }), U = P.host.userPreferences, S = P.poolS;
+    P.poolNewFrame(1);
+    ok('pool racks on napped wool by default, the physics default', S.world.cfg.muRoll === 0.016 && S.world.cfg.muRoll === L.physics().PP_DEFAULTS.muRoll);
+    U.poolCloth = 'tournament'; P.poolOnPrefChange('poolCloth');
+    ok('a pick changes the table now', S.world.cfg.muRoll === 0.010);
+    P.poolNewFrame(1);
+    ok('…and racks on it after', S.world.cfg.muRoll === 0.010 && S.world.cfg.muSlide === 0.2);
+    U.poolCloth = 'shag'; P.poolOnPrefChange('poolCloth');
+    ok('an unknown pick plays the default', S.world.cfg.muRoll === 0.016);
+    U.poolCloth = 'worsted'; P.poolMode = 'net'; P.poolNewFrame(1);
+    ok('online plays the default, whatever is picked', S.world.cfg.muRoll === 0.016);
+    P.poolOnPrefChange('poolCloth');
+    ok('…a pick mid-match too', S.world.cfg.muRoll === 0.016);
+    P.poolMode = 'cpu'; P.poolSetVariant('snooker');
+    ok('snooker has its own, its default the physics default', S.world.cfg.muRoll === 0.011);
+    U.snookerCloth = 'championship'; P.poolOnPrefChange('snookerCloth');
+    ok('…and its own pick', S.world.cfg.muRoll === 0.009);
+}
 
 head('Match rules (2 Players and Online)');
 {

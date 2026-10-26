@@ -158,12 +158,12 @@ are final"). The physics table is rebuilt to it, and the renderer draws the same
 
 | | corner | side |
 |---|---|---|
-| hole (capture circle) | centre (±504, ±254), r 31 (was 27) | centre (0, ±266), r 27 (was 24) |
-| cushion nose ends | 43 u from the corner along each cushion (mouth 43·√2 ≈ 60.8 u; was 36, 50.9 u) | 34 u either side of centre (mouth 68 u; was 30, 60 u) |
-| cushion rail ends | 26 u from the corner, at the rail line (HW + 12) (was 22) | 27 u from centre, at the rail line (was 24) |
+| hole (capture circle) | centre (±504, ±254), r 29 (was 27, then 31) | centre (0, ±266), r 27 (was 24) |
+| cushion nose ends | 39 u from the corner along each cushion (mouth 39·√2 ≈ 55.2 u; was 36, 50.9 u, then 43, 60.8 u) | 34 u either side of centre (mouth 68 u; was 30, 60 u) |
+| cushion rail ends | 24 u from the corner, at the rail line (HW + 12) (was 22, then 26) | 27 u from centre, at the rail line (was 24) |
 | jaw | nose end → rail end, continued to the hole edge | same |
 
-The rail ends sit on the hole edges (31.05 vs 31, 27.3 vs 27), so each jaw closes its
+The rail ends sit on the hole edges (29.1 vs 29, 27.3 vs 27), so each jaw closes its
 throat against its hole. **Widened 2026-10-24** (the user: pool felt tighter than snooker). At R 14
 the design's pockets took a narrower line than snooker's in ball diameters (corner 1.00 vs 1.29,
 side 1.41 vs 1.58, side at 45° 0.84 vs 1.05); now a little wider than snooker's, as real tables
@@ -2898,6 +2898,8 @@ It is still 1,256 under where C0 started. `verify-all` passes 2574; `host-run` 1
 | 2026-10-05 | **Achievement icons are designed by the user in Claude Design from the prompt in Appendix D**: stroke glyphs in the cue icons' family, with a medallion per XP tier | The user asked for sleek, unique icons like the cue ones. All 39 are still emoji, and three pairs clash: 🎯 Day One and Sharpshooter, 🧱 Wallflower and Block Master, 👑 Veteran and Grand Serpent, plus the Maximum cue's crown |
 | 2026-10-05 | **Snooker: a CPU free ball now explains itself** (reported: "after a foul the CPU played the black, not the blue, and no foul was given") | The rules were right: 569 simulated fouls with blue, pink and black left gave 27 CPU shots off the order, every one a legal free ball (the black nominated, scored as the blue, re-spotted, the blue still on). But the "CPU takes the free ball" notice timed out before the CPU struck, and the pot itself said nothing. The notice now says "Any colour may stand in for the blue" and stays until the strike; a potted free ball says "Free ball · the black counts as the blue · 5 points · the black is re-spotted, the blue is still on" |
 | 2026-10-13 | **Cues get rarity, scaled as 8 Ball Pool's; ⚙️ Aim Guide is Full or None** | The user: a mastered Century Ash (power 5, spin 5) was a small jump, and every cue kept one bar high and the rest basic; the reference shows Legendary masters at 37–40 of 40. Long / Medium / Short let a player shorten or keep a line the cue already stretches, so in cross play two players with one cue saw different lines |
+| 2026-10-26 | **⚙️ Cloth Speed, per game: rolling resistance only. Pool napped 0.016 (the default, today's), worsted 0.012, tournament 0.010; snooker club 0.014, standard 0.011 (the default), championship 0.009. Online plays the default** | The user: balls stop too quickly. Measured: at 0.016 a ball rolls its last table length to rest in 5.7 s, where Dr. Dave's lag test puts a competition table at about 7 s (μr ≈ 0.010; real cloth 0.005–0.015). The 2026-09-25 feel number stays the default, so the CPU tiers and fingerprints hold; the CPU plans with the table's muRoll, so it plays any cloth. Online both tabs must run the same physics and the server forwards only known challenge fields, so a room's cloth would need a server change |
+| 2026-10-26 | **Pool's corners narrowed again: noses 43 → 39 u, rail ends 26 → 24, holes r 31 → 29; the sides stay** | The user: the corners looked wider than two balls side by side, and were (60.8 u against 56). Now 55.2 u, just under two balls; the sides felt right. All seven pool fingerprints move again |
 | 2026-10-24 | **Pool's pockets widened: corner noses 36 → 43 u, side 30 → 34, holes r 27 → 31 and 24 → 27, rail ends 22 → 26 and 24 → 27** | The user: pool felt tighter than snooker. Measured, it was: at R 14 (24 % over a real ball) the design's pockets took 1.00 ball diameters at a corner against snooker's 1.29. Now 1.34 (side 1.72, at 45° 1.06), a little wider than snooker's, as real tables are. The rail ends move onto the bigger holes' edges. balance-check (60 frames a cell): every tier within noise, hard 73 % vs skilled and 95 % vs casual, pro above hard. All seven pool fingerprints move; with the old pockets the code still gave the old ones |
 | 2026-10-24 | **Malachite levels on Hard+ wins, not Pro** | The user: too much for its place. It now asks what Carbon Fin does: [5, 9, 13, 18] Hard or Pro pool wins |
 | 2026-10-24 | **The cue collection filters: All, Owned, Locked** | The user. Owned and All keep the equipped cue on top; Locked leaves it out. A new filter starts at the top of the list, focus kept on its button |

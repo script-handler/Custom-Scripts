@@ -47,21 +47,22 @@ ok('6 cushion runs, 12 jaws', T.segments.filter(s => s.kind === 'cushion').lengt
 ok('every jaw ends exactly on its pocket\'s capture circle', T.pockets.every(p =>
     p.jaws.length === 2 && p.jaws.every(j => near(Math.hypot(j[2] - p.x, j[3] - p.y), p.r, 1e-9))));
 ok('every nose and jaw tip is a collider', T.points.length === 24);
-// The design's pockets (Table.dc.html), widened 7 u a corner end and 4 u a side end (the user,
-// 2026-10-24: at R 14 they took a narrower line than snooker's; now a little wider, as real tables are).
-ok('corner mouths are 43·√2 ≈ 60.8 u', T.pockets.filter(p => p.kind === 'corner').every(p =>
-    near(Math.hypot(p.mouth[0] - p.mouth[2], p.mouth[1] - p.mouth[3]), 43 * Math.SQRT2, 1e-9)));
+// The design's pockets (Table.dc.html), widened 3 u a corner end and 4 u a side end (the user,
+// 2026-10-24: at R 14 they took a narrower line than snooker's). The corners first went 7 u, wider
+// than two balls side by side, and came back to 39 (the user, 2026-10-26).
+ok('corner mouths are 39·√2 ≈ 55.2 u', T.pockets.filter(p => p.kind === 'corner').every(p =>
+    near(Math.hypot(p.mouth[0] - p.mouth[2], p.mouth[1] - p.mouth[3]), 39 * Math.SQRT2, 1e-9)));
 ok('side mouths are 68 u', T.pockets.filter(p => p.kind === 'side').every(p =>
     near(Math.abs(p.mouth[0] - p.mouth[2]), 68, 1e-9)));
 ok('holes sit where the table draws them', T.pockets.every(p => p.kind === 'corner'
-    ? near(Math.abs(p.x), HL + 4, 1e-9) && near(Math.abs(p.y), HW + 4, 1e-9) && p.r === 31
+    ? near(Math.abs(p.x), HL + 4, 1e-9) && near(Math.abs(p.y), HW + 4, 1e-9) && p.r === 29
     : p.x === 0 && near(Math.abs(p.y), HW + 16, 1e-9) && p.r === 27));
 {
     // Each jaw runs from a nose end through the design's rail end (on the rail line).
     const CU = w0.cfg.cushionWidth;
     const railEnds = [];
     [-1, 1].forEach(sx => [-1, 1].forEach(sy => {
-        railEnds.push([sx * (HL - 26), sy * (HW + CU)], [sx * (HL + CU), sy * (HW - 26)]);
+        railEnds.push([sx * (HL - 24), sy * (HW + CU)], [sx * (HL + CU), sy * (HW - 24)]);
     }));
     [-1, 1].forEach(sx => [-1, 1].forEach(sy => railEnds.push([sx * 27, sy * (HW + CU)])));
     // On the jaw's line (zero distance along its normal) and within its length.
@@ -304,7 +305,7 @@ const potted = w => w.log.filter(e => e.type === 'pocket').map(e => e.ball);
     };
     // Offsets are in start y; the line runs at 45°, so the sideways offset is ×0.71.
     [500, 2600].forEach(speed => {
-        const res = [0, 10, 22, 24, 28, 31].map(o => corner(o, speed));
+        const res = [0, 10, 18, 20, 24, 28].map(o => corner(o, speed));
         ok(`${speed} u/s: lines near the centre drop cleanly`, res[0] === 'drop' && res[1] === 'drop', res.join(' '));
         ok(`${speed} u/s: a line that clips the jaw can still drop`, res.slice(2, 4).includes('jaw-drop'), res.join(' '));
         ok(`${speed} u/s: a line onto the jaw rattles out`, res[4] === 'rattle', res.join(' '));

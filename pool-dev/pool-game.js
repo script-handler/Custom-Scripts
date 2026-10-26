@@ -15,7 +15,7 @@
     //   poolWinsByTier()      CPU wins by each frame's locked tier (leaderboard, achievements)
     //   poolSetVariant(game)  'pool' | 'snooker': parks this frame, brings the other's back
     //   poolToggleVariant()   the header's switch, remembered (poolVariant)
-    //   poolOnPrefChange(p)   a ⚙️ setting changed (CPU difficulty, shot clock, snooker's reds)
+    //   poolOnPrefChange(p)   a ⚙️ setting changed (CPU difficulty, shot clock, cloth, snooker's reds)
     //   poolRenderTitle(el)   the panel header: the game's name behind the 🎱 | 🔴 switch
     //   poolCueUnlocked(id)   unlockAchievement ran: the cue it earns (or null), noticed on the table
     //   poolMode, poolGamesWon, poolMaximized, poolRecord, poolCpuTier
@@ -76,7 +76,11 @@
             // Mouse aim, degrees per screen px: [with Shift, without] (3D; 2D turns only with Shift).
             aimMouse: [0.02, 0.12],
             record: () => poolRecord,
-            world: () => ppCreateWorld(),
+            // ⚙️ Cloth Speed: rolling resistance. A ball rolling its last table length to rest takes
+            // 5.7 s on napped wool (the feel number, POOL_V2_PLAN.md), 6.5 on club worsted, 7.2 on
+            // tournament worsted (Dr. Dave: real cloth 0.005–0.015, 7 s a competition table).
+            clothPref: 'poolCloth', cloth: 'napped', cloths: { napped: 0.016, worsted: 0.012, tournament: 0.010 },
+            world: () => ppCreateWorld({ muRoll: poolClothMu(POOL_GAMES.pool) }),
             rack: (w, rng) => ppRack(w, rng),
             // Inside the kitchen, not on its line, so a press on the ball never rounds past it.
             cueHome: w => [w.table.headX - 80, 0],
@@ -159,7 +163,9 @@
             ringPref: 'snookerRing',
             rackPref: 'snookerReds',
             aimClear: true,
-            world: () => psCreateWorld(),
+            // ⚙️ Cloth Speed: last length to rest in 7.2 s (club), 8.1 (the default), 9.0 (heated championship).
+            clothPref: 'snookerCloth', cloth: 'standard', cloths: { club: 0.014, standard: 0.011, championship: 0.009 },
+            world: () => psCreateWorld({ muRoll: poolClothMu(POOL_GAMES.snooker) }),
             rack: (w, rng) => psRack(w, rng, POOL_GAMES.snooker.framesReds()),
             cueHome: w => psCueHome(w),
             newFrame: o => psNewFrame({ breaker: o.breaker, reds: POOL_GAMES.snooker.framesReds(), seed: o.seed }),
@@ -271,6 +277,8 @@
         prevMode: 'cpu', pending: 0, rev: 0, checked: false });
     // A quick frame's shot clock: ⚙️'s pick for this game (0 is off), else the game's own.
     function poolQuickClock() { const R = poolRules(), v = userPreferences[R.clockPref]; return R.clocks.indexOf(v) >= 0 ? v : R.clock; }
+    // A game's cloth: ⚙️'s pick, but online the game's own, as both tabs must play the same physics.
+    const poolClothMu = g => g.cloths[poolMode === 'net' ? g.cloth : userPreferences[g.clothPref]] || g.cloths[g.cloth];
 
     let poolMode = 'cpu';                    // 'cpu' | 'pvp' | 'tour' | 'net' (online, pool-net.js)
     let poolGamesWon = 0;                    // all-time wins, as stored by savePoolHighScore
@@ -1640,12 +1648,14 @@
         poolSyncChrome();
     }
     // ⚙️ settings: the CPU difficulty (now if nothing has been hit, else next frame), the shot
-    // clock (now), snooker's reds (a fresh rack, if nothing has been hit). Others are ignored.
+    // clock and the cloth (now), snooker's reds (a fresh rack, if nothing has been hit). Others are ignored.
     function poolOnPrefChange(pref) {
         const S = poolS, R = poolRules();
         if (!S.frame) return;
         if (pref === 'poolCue') { S.cueView = null; poolCueClock(); poolSyncChrome(); return; }
         if (pref === R.diffPref) { if (poolMode === 'cpu' && poolFrameFresh()) poolLockTier(); return; }
+        // ⚙️ Cloth Speed, now: the next shot rolls on it (online keeps the game's own).
+        if (pref === R.clothPref) { S.world.cfg.muRoll = poolClothMu(R); return; }
         // ⚙️ Shot Clock, now: the turn under way keeps what it has left, within the new limit
         // (from Off, it starts full). A tournament keeps its own.
         if (pref === R.clockPref) {
