@@ -123,7 +123,15 @@
         return q.need[0] === 'snooker' ? T + ' snooker wins' : t === 'easy' ? 'CPU wins' : T + ' wins';
     }
     // Each bar above or below 4 moves its stat a step: Standard (4/4/4/4) is the game as it was.
-    const PQ_STEP = [0.025, 0.125, 0.05, 0.05];
+    // Steps felt at every level (the user, 2026-10-27: 2.5 % power a bar went unnoticed): +5 % top
+    // speed, +12.5 % guideline (half a ball, the cue ball's path too), +7 % spin reach, +10 % shot
+    // clock. A 10 is +30 % power, +75 % aim, +42 % spin, +60 % time.
+    const PQ_STEP = [0.05, 0.125, 0.07, 0.1];
+    // What a level adds, from bars a to bars b: "+5% power · +0.5 ball guideline". The guideline is
+    // 4 ball diameters at aim 4 (POOL_GUIDE_FULL).
+    const PQ_GAIN = [n => '+' + Math.round(n * PQ_STEP[0] * 100) + '% power', n => '+' + n * PQ_STEP[1] * 4 + ' ball guideline',
+        n => '+' + Math.round(n * PQ_STEP[2] * 100) + '% spin', n => '+' + Math.round(n * PQ_STEP[3] * 100) + '% shot clock'];
+    const pqGains = (a, b) => [0, 1, 2, 3].filter(i => b[i] > a[i]).map(i => PQ_GAIN[i](b[i] - a[i])).join(' · ');
     // Every level-up adds at least one bar point. (Rounding the straight line from level 1 to 5
     // lost some: a bar gaining 1 moved only at level 3.) The cue's gains are dealt out one at a
     // time, round-robin, its biggest first; level n has round(total × (n − 1) / 4) of them.

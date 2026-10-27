@@ -635,7 +635,11 @@ async function main() {
             return { n: cards.length, locked: cards.filter(c => c.classList.contains('is-locked')).length, hero: !!p.querySelector('.is-hero'), pressed: p.querySelector('[aria-pressed="true"]').getAttribute('data-ph-cuef'),
                 focus: document.activeElement && document.activeElement.getAttribute('data-ph-cuef') }; })()`);
     };
-    const vOwned = await view('owned'), vLocked = await view('locked');
+    const vOwned = await view('owned');
+    await shot('cue-owned', '#pool-root .ph-cues');
+    const next = await ev(`(document.querySelector('#pool-root .ph-cues .is-hero .ph-cue-next') || {}).textContent || ''`);
+    ok('the equipped cue says what its next level adds', /^Level 2: \+\d+% power/.test(next), next);
+    const vLocked = await view('locked');
     await shot('cue-filter-locked', '#pool-root .ph-cues');
     const vAll = await view('all');
     ok('the collection filters: Owned shows only owned cues under the equipped one, Locked only locked ones, All every cue',

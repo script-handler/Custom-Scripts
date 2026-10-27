@@ -668,11 +668,12 @@
             const sp = Math.hypot(ob.vx, ob.vy);
             if (sp > 1e-6) out.obj = { x: ob.x, y: ob.y, dx: ob.vx / sp, dy: ob.vy / sp };
         }
-        // Follow the cue ball alone: where its spin takes it, not later collisions (and far cheaper).
+        // Follow the cue ball alone: where its spin takes it, not later collisions (and far cheaper),
+        // far enough for the longest drawn path (3.5 diameters at a 10 aim's 1.75, pool).
         W2.balls = [c];
         let len = 0, px = c.x, py = c.y;
         out.after.push([px, py]);
-        for (let i = 0; i < 240 && len < 160; i++) {
+        for (let i = 0; i < 240 && len < 200; i++) {
             ppStep(W2, 1 / 120);
             const b = cueOf(W2);
             if (b.state === 'pocketed') break;
@@ -722,6 +723,7 @@
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode, table units (default 4 ball diameters; 0 draws no paths),
+    //   pathK: the cue's aim, stretching the cue ball's path in full mode (default 1),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
     //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
     //   drops: [{ ball, pocket, t }],
@@ -800,7 +802,7 @@
                 pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
             }
             if (g.after.length > 1 && L > 0) {
-                const path = pgTrim(g.after, (short ? 1.5 : g.cushion ? 3.5 : 2.5) * D + R);
+                const path = pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R);
                 // Start the line at the ghost ball's edge.
                 let k = 0, acc = 0;
                 while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }

@@ -5355,7 +5355,15 @@
         return q.need[0] === 'snooker' ? T + ' snooker wins' : t === 'easy' ? 'CPU wins' : T + ' wins';
     }
     // Each bar above or below 4 moves its stat a step: Standard (4/4/4/4) is the game as it was.
-    const PQ_STEP = [0.025, 0.125, 0.05, 0.05];
+    // Steps felt at every level (the user, 2026-10-27: 2.5 % power a bar went unnoticed): +5 % top
+    // speed, +12.5 % guideline (half a ball, the cue ball's path too), +7 % spin reach, +10 % shot
+    // clock. A 10 is +30 % power, +75 % aim, +42 % spin, +60 % time.
+    const PQ_STEP = [0.05, 0.125, 0.07, 0.1];
+    // What a level adds, from bars a to bars b: "+5% power · +0.5 ball guideline". The guideline is
+    // 4 ball diameters at aim 4 (POOL_GUIDE_FULL).
+    const PQ_GAIN = [n => '+' + Math.round(n * PQ_STEP[0] * 100) + '% power', n => '+' + n * PQ_STEP[1] * 4 + ' ball guideline',
+        n => '+' + Math.round(n * PQ_STEP[2] * 100) + '% spin', n => '+' + Math.round(n * PQ_STEP[3] * 100) + '% shot clock'];
+    const pqGains = (a, b) => [0, 1, 2, 3].filter(i => b[i] > a[i]).map(i => PQ_GAIN[i](b[i] - a[i])).join(' · ');
     // Every level-up adds at least one bar point. (Rounding the straight line from level 1 to 5
     // lost some: a bar gaining 1 moved only at level 3.) The cue's gains are dealt out one at a
     // time, round-robin, its biggest first; level n has round(total × (n − 1) / 4) of them.
@@ -6313,11 +6321,12 @@
             const sp = Math.hypot(ob.vx, ob.vy);
             if (sp > 1e-6) out.obj = { x: ob.x, y: ob.y, dx: ob.vx / sp, dy: ob.vy / sp };
         }
-        // Follow the cue ball alone: where its spin takes it, not later collisions (and far cheaper).
+        // Follow the cue ball alone: where its spin takes it, not later collisions (and far cheaper),
+        // far enough for the longest drawn path (3.5 diameters at a 10 aim's 1.75, pool).
         W2.balls = [c];
         let len = 0, px = c.x, py = c.y;
         out.after.push([px, py]);
-        for (let i = 0; i < 240 && len < 160; i++) {
+        for (let i = 0; i < 240 && len < 200; i++) {
             ppStep(W2, 1 / 120);
             const b = cueOf(W2);
             if (b.state === 'pocketed') break;
@@ -6367,6 +6376,7 @@
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode, table units (default 4 ball diameters; 0 draws no paths),
+    //   pathK: the cue's aim, stretching the cue ball's path in full mode (default 1),
     //   bih: { x, y, valid, reason } | null, zone: 'kitchen' | 'D' | null (or legacy kitchen),
     //   call: { called } | null, ring: the nominated ball's id (snooker; ⚙️ Ball Ring off: null) | null,
     //   drops: [{ ball, pocket, t }],
@@ -6445,7 +6455,7 @@
                 pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
             }
             if (g.after.length > 1 && L > 0) {
-                const path = pgTrim(g.after, (short ? 1.5 : g.cushion ? 3.5 : 2.5) * D + R);
+                const path = pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R);
                 // Start the line at the ghost ball's edge.
                 let k = 0, acc = 0;
                 while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
@@ -7076,7 +7086,8 @@
             (c.top[i] !== c.bars[i] ? ', ' + c.top[i] + ' at level ' + (c.level + 1) : '') + '"><span class="ph-label">' + b + '</span><span class="ph-cue-segs">' +
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => '<i' + (k < c.bars[i] ? ' class="on"' : k < c.top[i] ? ' class="up"' : '') + '></i>').join('') +
             '</span><span class="ph-num">' + c.bars[i] + '</span></span>').join('') + '</div>';
-        const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>';
+        const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>' +
+            (c.next ? '<span class="ph-cue-next">Level ' + (c.level + 1) + ': ' + c.next + '</span>' : '');
         const rarity = c => '<span class="ph-cue-rar ph-label" data-rarity="' + c.rarity + '">' + c.rarityName + '</span>';
         const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' + c.rarityName + ', ' +
             (c.eq ? 'equipped' : c.open ? 'unlocked' : 'locked. ' + c.cond) + '">' +
@@ -9975,7 +9986,7 @@
         queueScoreSync();
         if (had < 5 && pqMastered(rec) >= 5) poolCueUnlocked('collector');
         const lv = pqLevel(rec[id], q), steps = pqSteps(q);
-        if (lv > was) return lv >= 5 ? q.name + ' mastered' : q.name + ' reached level ' + lv;
+        if (lv > was) return (lv >= 5 ? q.name + ' mastered' : q.name + ' reached level ' + lv) + ': ' + pqGains(pqStats(id, 0, was).bars, pqStats(id, 0, lv).bars);
         return q.name + ': ' + (rec[id] - steps[lv - 1]) + ' of ' + q.need[2][lv - 1] + ' ' + pqNeedText(q) + ' to level ' + (lv + 1);
     }
     // From the host's unlockAchievement (an achievement id), or a fifth mastery: the table
@@ -10022,11 +10033,11 @@
     function poolCueModel() {
         const S = poolS, rec = poolCueRec(), seat = poolPickSeat(), eq = poolSeatCueId(seat), who = poolSeatMine(seat) ? null : poolNames()[seat];
         const list = PQ_SET.map(q => {
-            const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q);
+            const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q), top = pqStats(q.id, 0, Math.min(5, st.level + 1)).bars;
             const cond = q.id === 'collector' ? q.cond + ' · ' + Math.min(5, pqMastered(rec)) + ' of 5' : q.cond;
             // Progress within the level: "4 of 7 Hard+ wins to level 3".
             return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
-                have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
+                have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top, next: pqGains(st.bars, top) };
         });
         return { eq, who, just: S.cueJust, game: S.game, filter: S.cueFilter || 'all', open: list.filter(c => c.open).length, list };
     }
@@ -10471,7 +10482,7 @@
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
                 aim: aiming ? { angle: S.aim, power: S.power, gap } : null, cue, cueT,
-                guide: aiming ? S.guide : null, guideMode: S.guideMode, guideLen: poolGuideLen(),
+                guide: aiming ? S.guide : null, guideMode: S.guideMode, guideLen: poolGuideLen(), pathK: poolHumanStats().aim,
                 illegal: !!(S.guide && S.guide.hit > 0 && !poolLegalTarget(S.guide.hit)),
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
                 zone: S.phase === 'bih' ? S.frame.ballInHand : null,
@@ -22604,6 +22615,8 @@
             .pool-hud .ph-cue-segs i.on { background: var(--pool-accent); }
             .pool-hud .ph-cue-bar .ph-num { width: 16px; text-align: right; font-size: 11px; font-weight: 600; }
             .pool-hud .ph-cue-just { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--pool-accent-lite); }
+            /* What the next level adds, under the progress line. */
+            .pool-hud .ph-cue-next { display: block; font-size: 11px; font-weight: 600; color: var(--pool-accent-lite); }
             /* Cyberpunk's panel colour is see-through: the collection sits on its screen instead. */
             .retro-theme .pool-hud .ph-cues { background: var(--pool-screen); }
             .retro-theme .pool-hud .ph-cues, .retro-theme .pool-hud .ph-cue-card, .retro-theme .pool-hud .ph-cue-cv, .retro-theme .pool-hud .ph-cue-show,

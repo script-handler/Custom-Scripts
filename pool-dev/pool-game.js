@@ -460,7 +460,7 @@
         queueScoreSync();
         if (had < 5 && pqMastered(rec) >= 5) poolCueUnlocked('collector');
         const lv = pqLevel(rec[id], q), steps = pqSteps(q);
-        if (lv > was) return lv >= 5 ? q.name + ' mastered' : q.name + ' reached level ' + lv;
+        if (lv > was) return (lv >= 5 ? q.name + ' mastered' : q.name + ' reached level ' + lv) + ': ' + pqGains(pqStats(id, 0, was).bars, pqStats(id, 0, lv).bars);
         return q.name + ': ' + (rec[id] - steps[lv - 1]) + ' of ' + q.need[2][lv - 1] + ' ' + pqNeedText(q) + ' to level ' + (lv + 1);
     }
     // From the host's unlockAchievement (an achievement id), or a fifth mastery: the table
@@ -507,11 +507,11 @@
     function poolCueModel() {
         const S = poolS, rec = poolCueRec(), seat = poolPickSeat(), eq = poolSeatCueId(seat), who = poolSeatMine(seat) ? null : poolNames()[seat];
         const list = PQ_SET.map(q => {
-            const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q);
+            const wins = rec[q.id] || 0, st = pqStats(q.id, wins), open = poolCueOpen(q), steps = pqSteps(q), top = pqStats(q.id, 0, Math.min(5, st.level + 1)).bars;
             const cond = q.id === 'collector' ? q.cond + ' · ' + Math.min(5, pqMastered(rec)) + ' of 5' : q.cond;
             // Progress within the level: "4 of 7 Hard+ wins to level 3".
             return { id: q.id, name: q.name, blurb: q.blurb, rarity: q.rarity, rarityName: PQ_RARITY[q.rarity][0], cond, open, eq: q.id === eq, isNew: q.id === S.cueNew, level: st.level, wins,
-                have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top: pqStats(q.id, 0, Math.min(5, st.level + 1)).bars };
+                have: wins - steps[st.level - 1], need: q.need[2][st.level - 1], counts: pqNeedText(q), bars: st.bars, top, next: pqGains(st.bars, top) };
         });
         return { eq, who, just: S.cueJust, game: S.game, filter: S.cueFilter || 'all', open: list.filter(c => c.open).length, list };
     }
@@ -956,7 +956,7 @@
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
                 aim: aiming ? { angle: S.aim, power: S.power, gap } : null, cue, cueT,
-                guide: aiming ? S.guide : null, guideMode: S.guideMode, guideLen: poolGuideLen(),
+                guide: aiming ? S.guide : null, guideMode: S.guideMode, guideLen: poolGuideLen(), pathK: poolHumanStats().aim,
                 illegal: !!(S.guide && S.guide.hit > 0 && !poolLegalTarget(S.guide.hit)),
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
                 zone: S.phase === 'bih' ? S.frame.ballInHand : null,

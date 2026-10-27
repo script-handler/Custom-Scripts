@@ -483,7 +483,8 @@
             (c.top[i] !== c.bars[i] ? ', ' + c.top[i] + ' at level ' + (c.level + 1) : '') + '"><span class="ph-label">' + b + '</span><span class="ph-cue-segs">' +
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => '<i' + (k < c.bars[i] ? ' class="on"' : k < c.top[i] ? ' class="up"' : '') + '></i>').join('') +
             '</span><span class="ph-num">' + c.bars[i] + '</span></span>').join('') + '</div>';
-        const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>';
+        const level = c => '<span class="ph-cue-lv">' + (c.level >= 5 ? 'Level 5 · mastered · ' + c.wins + ' wins' : 'Level ' + c.level + ' · ' + c.have + ' of ' + c.need + ' ' + c.counts + ' to level ' + (c.level + 1)) + '</span>' +
+            (c.next ? '<span class="ph-cue-next">Level ' + (c.level + 1) + ': ' + c.next + '</span>' : '');
         const rarity = c => '<span class="ph-cue-rar ph-label" data-rarity="' + c.rarity + '">' + c.rarityName + '</span>';
         const card = c => '<div class="ph-cue-card' + (c.eq ? ' is-eq' : '') + (c.open ? '' : ' is-locked') + '" role="listitem" aria-label="' + c.name + ', ' + c.rarityName + ', ' +
             (c.eq ? 'equipped' : c.open ? 'unlocked' : 'locked. ' + c.cond) + '">' +

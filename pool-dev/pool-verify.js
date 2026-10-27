@@ -1294,11 +1294,11 @@ head('Cues (pool-cues.js, pool-game.js)');
     // Power and spin, on the shot and in the strike.
     S.phase = 'aim'; S.tip = { x: 0.6, y: 0 };
     const shot = P.poolHumanShot(100), cfg = S.cfg;
-    ok('Power: Ember (7) hits 7.5 % harder at full power, and its cap allows it', near(shot.speed, cfg.maxSpeed * 1.075) && shot.cap === shot.speed);
-    ok('Spin: Ember (3) reaches 5 % less far from the centre', near(shot.tipX, 0.57) && near(shot.tipMax, cfg.maxTip * 0.95));
+    ok('Power: Ember (7) hits 15 % harder at full power, and its cap allows it', near(shot.speed, cfg.maxSpeed * 1.15) && shot.cap === shot.speed);
+    ok('Spin: Ember (3) reaches 7 % less far from the centre', near(shot.tipX, 0.558) && near(shot.tipMax, cfg.maxTip * 0.93));
     const w = P.ppCloneWorld(S.world); w.log = [];
     P.ppStrike(w, Object.assign({}, shot, { speed: 1e6, tipX: 2 }));
-    ok('ppStrike holds the cue\'s cap and reach in place of the table\'s', near(w.log[0].speed, cfg.maxSpeed * 1.075) && near(w.log[0].tipX, cfg.maxTip * 0.95));
+    ok('ppStrike holds the cue\'s cap and reach in place of the table\'s', near(w.log[0].speed, cfg.maxSpeed * 1.15) && near(w.log[0].tipX, cfg.maxTip * 0.93));
     // Aim and time.
     P.host.userXP.achievements.push('level25');
     P.poolCueEquip('rosewood6');
@@ -1306,7 +1306,7 @@ head('Cues (pool-cues.js, pool-game.js)');
     P.host.userPreferences.poolGuideLen = 'none';
     ok('…and None stays none', P.poolGuideLen() === 0);
     P.host.userPreferences.poolGuideLen = 'full';
-    ok('Time: its 6 gives the turn 10 % more clock; the table\'s own setting stays 30', P.poolTurnClock() === 33 && S.clockTotal === 30);
+    ok('Time: its 6 gives the turn 20 % more clock; the table\'s own setting stays 30', P.poolTurnClock() === 36 && S.clockTotal === 30);
     // The CPU.
     P.poolCpuTier = 'pro'; S.frame.turn = 2;
     ok('the CPU plays its tier\'s cue: Pro is Black Crown at level 5', P.poolCueStats().id === 'crown' && P.poolCueStats().level === 5);
@@ -1332,7 +1332,9 @@ head('Cues (pool-cues.js, pool-game.js)');
     Q.poolNewFrame(1);
     ok('Collector stays locked with 4 mastered, and says how far', !Q.poolCueOpen(Q.pqById('collector')) && Q.poolCueModel().list.find(c => c.id === 'collector').cond === 'Master 5 cues · 4 of 5');
     Q.poolEndFrame({ winner: 1 });
-    ok('the fifth mastered cue unlocks it, with the "New cue" notice', Q.poolCueOpen(Q.pqById('collector')) && Q.poolS.cueNew === 'collector' && Q.poolS.cueLine === 'Rosewood Six mastered');
+    ok('the fifth mastered cue unlocks it, with the "New cue" notice', Q.poolCueOpen(Q.pqById('collector')) && Q.poolS.cueNew === 'collector' && Q.poolS.cueLine === 'Rosewood Six mastered: +0.5 ball guideline · +10% shot clock');
+    ok('a cue\'s card says what its next level adds, a mastered one nothing', Q.poolCueModel().list.find(c => c.id === 'malachite').next === '+5% power · +7% spin · +10% shot clock' &&
+       Q.poolCueModel().list.find(c => c.id === 'rosewood6').next === '');
     ok('unlockAchievement\'s id finds its cue, and others find none', Q.poolCueUnlocked('snookerMaximum').id === 'crown' && Q.poolCueUnlocked('flapMaster') === null);
     ok('equipping a locked cue does nothing', (Q.poolCueEquip('malachite'), Q.poolCueId() === 'rosewood6'));
     // The win goes to the cue that played most of your shots: one changed late doesn't take it.
@@ -1355,7 +1357,7 @@ head('Cues (pool-cues.js, pool-game.js)');
     T.frame.turn = 2;
     G.poolCueEquip('rosewood6');
     ok('Player 2 picks on their turn: their seat changes, your setting does not', G.poolSeatCueId(2) === 'rosewood6' && G.poolSeatCueId(1) === 'ember' && G.host.userPreferences.poolCue === 'ember');
-    ok('…and it plays: their aim line, their clock', G.poolGuideLen() === 154 && G.poolTurnClock() === 33 && G.poolCueStats().id === 'rosewood6');
+    ok('…and it plays: their aim line, their clock', G.poolGuideLen() === 154 && G.poolTurnClock() === 36 && G.poolCueStats().id === 'rosewood6');
     ok('…the collection says whose cue it sets', G.poolCueView().who === G.poolNames()[2] && G.poolCueView().eq === 'rosewood6');
     T.frame.turn = 1;
     G.poolCueEquip('tulipwood');
