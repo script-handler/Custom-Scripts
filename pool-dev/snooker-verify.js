@@ -54,14 +54,16 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // 969900b9d7905fc1, fuzz c7dd49c55d77c417, judge 0ec1f8e1ef04b989, cpu a50a59954429a074, render
 // 9a7e7ac995c8c81d, match b7632d939f4ecea8.
 // Then the cue steps grew (the user, 2026-10-27: level-ups went unnoticed), and with them the CPU's
-// cues: only the match moves; with the old steps it gave 99206f5cc2ca549d.
+// cues: only the match moves; with the old steps it gave 99206f5cc2ca549d. Then the cushions' playing
+// edge drawn in 2D and their shadows tapered at the pockets (the user, 2026-10-27: the side pockets'
+// mouths could not be judged): only the render moves; before it bc97179947f65b1e.
 const POOL_ON_MAIN = {
     table: '5bd733503d768ea2',
     breaks: 'ffd797cb08eacfc5',
     fuzz: '17590ecc164a4932',
     judge: '3f7cb57ff43b72e2',
     cpu: '545e1b0238ea0a97',
-    render: 'bc97179947f65b1e',
+    render: '7fc9682570378984',
     match: '9a523e40b537abab',
 };
 const WHAT = {

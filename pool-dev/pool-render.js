@@ -243,16 +243,31 @@
         const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, t = (f[0] - mx) * nx + (f[1] - my) * ny;
         return Math.abs(t) < 1e-3 ? null : ctx.createLinearGradient(mx, my, mx + nx * t, my + ny * t);
     }
-    // The shadow on the cloth below each cushion's nose.
+    // The shadow on the cloth below each cushion's nose. Its ends taper at 45° toward the pockets:
+    // squared off, they read as the pocket's edge (the user, 2026-10-27).
     function pgDrawCushionShadows(ctx, view, cfg, cush, light) {
         cush.forEach(c => {
             const side = pgCushionSide(cfg, c), v = PG_INWARD[side], sh = PG_SHADE[side === 'N' || side === 'W' ? 'far' : 'near'];
-            const a = [c.nose[0][0], c.nose[0][1], 0], b = [c.nose[1][0], c.nose[1][1], 0];
-            const g = pgBandGradient(ctx, view, a, b, v[0] * sh.w, v[1] * sh.w, 0);
+            const a = [c.nose[0][0], c.nose[0][1], 0], b = [c.nose[1][0], c.nose[1][1], 0], u = pgUnit(b[0] - a[0], b[1] - a[1]), w = sh.w;
+            const g = pgBandGradient(ctx, view, a, b, v[0] * w, v[1] * w, 0);
             if (!g) return;
             sh.stops.forEach(([at, op]) => g.addColorStop(at, pgRgba(light.shade, op)));
-            pgFill(ctx, [pcPoly(view, [a, b, [b[0] + v[0] * sh.w, b[1] + v[1] * sh.w, 0], [a[0] + v[0] * sh.w, a[1] + v[1] * sh.w, 0]])], g);
+            pgFill(ctx, [pcPoly(view, [a, b, [b[0] + (v[0] - u[0]) * w, b[1] + (v[1] - u[1]) * w, 0], [a[0] + (v[0] + u[0]) * w, a[1] + (v[1] + u[1]) * w, 0]])], g);
         });
+    }
+    // 2D: the playing edge, each cushion's nose, rounded ends and jaws, as a dark line (the user,
+    // 2026-10-27: on a pale cloth the jaws melted into it and a pocket's mouth could not be judged).
+    // The rail line, where a cushion top meets the wood, is left alone.
+    function pgDrawCushionEdges(ctx, view, cfg, cush) {
+        const T = pgRailZ(cfg) - 1e-6;
+        ctx.save();
+        ctx.beginPath();
+        cush.forEach(c => c.top.forEach((p, i) => {
+            const q = c.top[(i + 1) % c.top.length], s = p[2] < T || q[2] < T ? pcSeg(view, p, q) : null;
+            if (s) { ctx.moveTo(s[0][0], s[0][1]); ctx.lineTo(s[1][0], s[1][1]); }
+        }));
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.stroke();
+        ctx.restore();
     }
     // Cushion tops: each lit across its depth, nose to rail; flat where the gradient can't be had.
     function pgDrawCushionTops(ctx, view, cfg, cush, mat) {
@@ -470,7 +485,8 @@
             pgDrawCushionTops(ctx, view, cfg, cush, mat);
             return;
         }
-        // 2D: the hole from above, its floor inside it.
+        // 2D: the cushions' playing edge, then the hole from above, its floor inside it.
+        pgDrawCushionEdges(ctx, view, cfg, cush);
         table.pockets.forEach(p => {
             const aperture = P(pgCirc(p.x, p.y, p.r, TZ + 0.3, 36));
             if (aperture.length < 3) return;
