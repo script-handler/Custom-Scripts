@@ -442,8 +442,8 @@ function playFrame(P, maxTicks) {
     const type = w => [...w].forEach(k => P.poolHawkKey({ key: k, target: null }));
     const pathLen = pts => pts.reduce((s, p, i) => s + (i ? Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
     P.host.userPreferences.poolGuideLen = 'none';
-    type('hawk eye'); const half = P.poolHawk();
-    type('xhawkeye'); S.guideKey = ''; P.poolRefreshGuide();
+    type('dead shot'); const half = P.poolHawk();
+    type('xdeadshot'); S.guideKey = ''; P.poolRefreshGuide();
     const hawk = P.poolShotPath(v);
     ok('Hawkeye: the word turns it on (a near miss does not), kept in this browser, and None still draws the paths',
        !half && P.poolHawk() && P.store.poolHawk === '1' && hawk.segs.length > none.segs.length && hawk.dots.length >= 2 && S.guide.objPath && S.guide.objPath.length > 1);
@@ -457,7 +457,7 @@ function playFrame(P, maxTicks) {
     P.poolMode = 'net';
     ok('…but not in an online match', !P.poolHawk());
     P.poolMode = 'cpu';
-    type('hawkeye');
+    type('deadshot');
     ok('…and typing it again turns it off', !P.poolHawk() && !('poolHawk' in P.store));
     P.host.userPreferences.poolGuideLen = 'full';
     const K = L.game({ seed: 5 });

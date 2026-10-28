@@ -35,9 +35,7 @@
 
     const POOL_CLOCK_S = 30;                 // shot clock for human turns, in seconds
     const POOL_AIM_REACH = 240;              // px past the table's edge the aim keeps following
-    // Power drag dead zone: this far either side of the press (behind the cue or in front of it)
-    // the power stays at 0%, and a release at 0% cancels, so a stroke is easy to call off. 20, not
-    // 14: a hand easing back to cancel overshot it and played a soft shot (the user, 2026-10-28).
+    // Power drag dead zone (px either side of the press): power stays 0%, and a release there cancels.
     const POOL_DEAD_PX = 20;
     const POOL_STRIKE_MS = 90;               // the cue's forward stroke before the ball launches
     const POOL_TOAST_MS = 2200;
@@ -937,11 +935,8 @@
     // ball there. The old Long, Medium and Short read as Full.
     const POOL_GUIDE_FULL = 4;
     const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * 2 * poolS.cfg.ballR * poolHumanStats().aim));
-    // Hawkeye, a hidden switch (the user, 2026-10-28): typing the word on the table turns max guides
-    // on or off. Both balls are followed after the contact, off the cushions, for up to two table
-    // lengths (or until they stop or drop), whatever the cue or ⚙️ Guideline. Not in Settings, kept in this browser
-    // only, and dead online so a match against a person stays fair.
-    const POOL_HAWK_WORD = 'hawkeye', POOL_HAWK_LS = 'poolHawk', POOL_HAWK_REACH = 4;
+    // Hawkeye: hidden cheat code "deadshot" toggles max guides (both balls followed off cushions). Local only, off online.
+    const POOL_HAWK_WORD = 'deadshot', POOL_HAWK_LS = 'poolHawk', POOL_HAWK_REACH = 4;
     let poolHawkOn = (() => { try { return localStorage.getItem(POOL_HAWK_LS) === '1'; } catch (e) { return false; } })();
     let poolHawkTyped = '';
     const poolHawk = () => poolHawkOn && poolMode !== 'net';
@@ -953,7 +948,7 @@
         poolHawkOn = !poolHawkOn;
         try { if (poolHawkOn) localStorage.setItem(POOL_HAWK_LS, '1'); else localStorage.removeItem(POOL_HAWK_LS); } catch (e2) { /* this tab only */ }
         if (!poolS.toast && poolS.phase !== 'over') {
-            poolShowToast({ kind: 'notice', title: 'Hawkeye ' + (poolHawkOn ? 'on' : 'off'), sub: poolHawkOn && poolMode === 'net' ? 'Not in online matches' : '' });
+            poolShowToast({ kind: 'notice', title: poolHawkOn ? 'Cheat Activated' : 'Cheat Deactivated', sub: poolHawkOn && poolMode === 'net' ? 'Not in online matches' : '' });
         }
     }
     function poolDraw(dt) {
@@ -979,8 +974,7 @@
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
-            // Hawkeye: both balls' followed paths in full. Its length is never 0, which reads as ⚙️ Guideline
-            // None and would hide the cue ball's path off a cushion.
+            // Hawkeye: full paths; never 0, which reads as Guideline None and hides the cue ball's path.
             const guideLen = poolHawk() ? POOL_HAWK_REACH * S.cfg.halfLength : poolGuideLen();
             pgRender(S.ctx, {
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
