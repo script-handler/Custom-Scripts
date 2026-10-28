@@ -82,14 +82,14 @@ const HOST_PARAMS = [
     'userPreferences', 'savePreferences', 'getFrameInterval', 'currentGame', 'lbDisplayName',
     'xpSystemReady', 'userXP', 'checkLevelUp', 'saveUserXP', 'showXPNotification', 'updateXPDisplay',
     'awardGameXP', 'updateGameScoreBtn', 'toggleGameMaxModal', 'syncNote', 'queueScoreSync',
-    'applyCyberTokens', 'applyCyberShape', 'clearCyberTokens', 'clearCyberShape',
+    'applyCyberTokens', 'applyCyberShape', 'clearCyberTokens', 'clearCyberShape', 'sfxPlay',
 ];
 
 // opts: { store, prefs, name, seed, xpSystemReady, realDate }   realDate: the real clock (online timing)
 function game(opts) {
     opts = opts || {};
     const store = opts.store || {};
-    const log = { xp: [], notes: [], scoreBtn: [], maxModal: [], saves: 0 };
+    const log = { xp: [], notes: [], scoreBtn: [], maxModal: [], saves: 0, sfx: [] };
     const localStorage = {
         getItem: k => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
         setItem: (k, v) => { store[k] = String(v); },
@@ -120,6 +120,8 @@ function game(opts) {
         updateGameScoreBtn: (g, score, best) => log.scoreBtn.push({ game: g, score, best }),
         toggleGameMaxModal: cfg => { log.maxModal.push(cfg); modalOpen = !modalOpen; return modalOpen; },
         applyCyberTokens: noop, applyCyberShape: noop, clearCyberTokens: noop, clearCyberShape: noop,
+        // The host's sound bank, recorded so the suites hear what played.
+        sfxPlay: (n, k, g) => log.sfx.push({ n, k, g }),
     };
     const src = FILES.map(read).join('\n');
     const names = [...src.matchAll(PREFIX)].map(m => m[1]);

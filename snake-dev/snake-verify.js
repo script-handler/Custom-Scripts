@@ -941,7 +941,8 @@ ok('the leaderboard is the left-column panel: player rows that carry their achie
 
 // Every ranked game needs a button, or its board is unreachable now that the
 // panel section is gone.
-const LB_GAMES = ['snake', 'tetris', 'breakout', 'flappy', 'aim', 'reflex', 'pool', 'ludo'];
+// RefleX's boards are AimLab's Screen and Target tabs, behind the aim button.
+const LB_GAMES = ['snake', 'tetris', 'breakout', 'flappy', 'aim', 'pool', 'ludo'];
 LB_GAMES.forEach(g => {
     ok(g + ' has a scoreboard button wired to its board',
        has("${gameScoreBtn('" + g + "'"));
@@ -949,7 +950,7 @@ LB_GAMES.forEach(g => {
 // The overlay must follow the mode actually being played, not a remembered
 // preference that may have drifted from it.
 ok('the overlay reads the live mode for every multi-mode game',
-   /function gameLbMode\(game\)[\s\S]{0,500}?return snakeMode[\s\S]{0,200}?return reflexMode[\s\S]{0,200}?poolMode/.test(src));
+   /function gameLbMode\(game\)[\s\S]{0,500}?return snakeMode[\s\S]{0,200}?return aimReactLbMode\(\)[\s\S]{0,120}?return aimLbMode\(\)[\s\S]{0,200}?poolMode/.test(src));
 // Career-win games have no per-frame scoreboard function to hang off, and
 // Ludo's lives inside the byte-identical engine block and can't be edited.
 // Pool's button is filled by pool-game.js (poolRefreshScoreBtn): the tier being played.
@@ -986,8 +987,8 @@ ok('the old "Best: …" label pairs are gone',
 // that panel opens — which no static grep for structure would notice. Assert
 // every identifier the new scoreboard code reads is actually declared.
 [
-    ['reflexReactionTimes', 'let'], ['reflexMode', 'let'], ['reflexGameModes', 'const'],
-    ['aimScore', 'let'], ['flappyScore', 'let'], ['flappyHighScore', 'let'],
+    // AimLab (aim-dev/) holds both aim and RefleX's reaction state in aimS; the scenarios in AIM_SCEN.
+    ['aimS', 'const'], ['AIM_SCEN', 'const'], ['flappyScore', 'let'], ['flappyHighScore', 'let'],
     ['tetrisScore', 'let'], ['tetrisLines', 'let'], ['tetrisLevel', 'let'],
     ['tetrisHighScore', 'let'], ['breakoutScore', 'let'], ['breakoutHighScore', 'let'],
     // Pool v2's header shows only the wins in the mode being played; the balls-potted
@@ -1000,10 +1001,10 @@ ok('the old "Best: …" label pairs are gone',
 ['loadAimHighScore', 'loadReflexHighScores', 'loadPoolWinsByMode', 'ludoLoadWins']
     .forEach(fn => ok('scoreboard helper "' + fn + '" is defined',
                       new RegExp('function\\s+' + fn + '\\b|const \\[' + fn + '\\b').test(src)));
-// RefleX's chip reads .icon and .name off the mode config.
-ok('every RefleX mode config has the fields the chip renders',
-   /screen:\s*\{[\s\S]{0,200}?name:[\s\S]{0,60}?icon:/.test(src) &&
-   /target:\s*\{[\s\S]{0,200}?name:[\s\S]{0,60}?icon:/.test(src));
+// AimLab's chip reads .name off the scenario and its icon from AIM_ICON, for both reaction scenarios.
+ok('every Reaction scenario has the fields the chip renders',
+   /screen:\s*\{\s*name:/.test(src) && /target:\s*\{\s*name:/.test(src) &&
+   /const AIM_ICON = \{[\s\S]{0,900}?screen:[\s\S]{0,120}?target:/.test(src));
 ok('collectGameModeBests exists', has('function collectGameModeBests()'));
 ok('the snapshot carries gameModeBests and the ruleset version',
    /gameModeBests: collectGameModeBests\(\)/.test(src) && has('rulesetVersion'));
@@ -1125,7 +1126,7 @@ head('Leaderboard board values (behavioural)');
     if (!modeFn) { ok('gameLbMode could be lifted out', false); return; }
     const mk = (snakeMode, reflexMode, poolMode, ludoCpuTier, poolCpuTier) => new Function(
         'snakeMode', 'reflexMode', 'poolMode', 'ludoCpuTier', 'poolCpuTier',
-        boards + '\n' + modeFn + '\nreturn gameLbMode;')(snakeMode, reflexMode, poolMode, ludoCpuTier, poolCpuTier || 'normal');
+        'const aimReactLbMode = () => reflexMode;\n' + boards + '\n' + modeFn + '\nreturn gameLbMode;')(snakeMode, reflexMode, poolMode, ludoCpuTier, poolCpuTier || 'normal');
 
     const gm = mk('levels', 'target', 'pvp', 'hard');
     ok('the snake board follows the mode being played', gm('snake') === 'levels');
@@ -1341,22 +1342,22 @@ head('RefleX per-mode storage (behavioural)');
        junk.load().screen.best === Infinity);
 })();
 
-head('RefleX host wiring');
+head('RefleX host wiring (now AimLab Reaction)');
 
 // The reported symptom: the title said "Target Mode" while the chip beneath it
-// and the board behind the score button were still Screen. updateReflexDisplay()
-// only repaints the play area — the chip, the button and the overlay all hang
-// off updateReflexScoreDisplay().
-ok('switching RefleX mode refreshes the chip, button and open board',
-   /function toggleReflexMode\(\)[\s\S]{0,700}?updateReflexScoreDisplay\(\)/.test(src));
-ok('the RefleX score button feeds the shared overlay',
-   /function updateReflexScoreDisplay\(\)[\s\S]{0,900}?updateGameScoreBtn\('reflex'/.test(src));
+// and the board behind the score button were still Screen. In AimLab a scenario
+// change goes through aimQuit(), which refreshes the button and the open board.
+ok('switching the Reaction scenario refreshes the button and open board',
+   /case 'scen':[\s\S]{0,120}?aimQuit\(\)/.test(src) && /function aimQuit\(\)[\s\S]{0,300}?aimSyncScoreBtn\(\)/.test(src));
+// One AimLab button: its Screen and Target tabs show the reaction best, in ms.
+ok('the Reaction score button feeds the shared overlay',
+   /function aimSyncScoreBtn\(\)[\s\S]{0,900}?updateGameScoreBtn\('aim', res && res\.id === m \? res\.best/.test(src));
 ok('updateGameScoreBtn re-renders an open board',
    /function updateGameScoreBtn\([\s\S]{0,1400}?refreshGameLeaderboard\(game\)/.test(src));
 // A finished run with no recorded reaction leaves both figures at 0, and RefleX
 // ranks ascending — storing that would plant an unbeatable 0ms at the top.
 ok('a run with no reactions cannot set a 0ms record',
-   /function finishReflexGame\(\)[\s\S]{0,1400}?if \(reflexReactionTimes\.length > 0\)/.test(src));
+   /function aimReactFinish\(\)[\s\S]{0,1600}?sm\.avg > 0 && sm\.avg < hs\[id\]\.avg[\s\S]{0,120}?sm\.best > 0 && sm\.best < hs\[id\]\.best/.test(src));
 
 head('Streak invariant');
 

@@ -2889,6 +2889,76 @@ It is still 1,256 under where C0 started. `verify-all` passes 2574; `host-run` 1
 
 ---
 
+## Sound design for pool and snooker (built 2026-10-28)
+
+Logged 2026-10-28, after AimLab shipped with sound, and **built the same day**, with the defaults below. The user asked to build it in one go, so these were decided then:
+- **Character:** realistic table sounds, the same in every theme, as the table looks.
+- **Default:** on, at Medium.
+- **Budget:** about +90 lines in the userscript.
+
+What was built:
+- **The shared bank.** It lives in the host, next to `toggleGameMaxModal`:
+  - `sfxPlay(name, k, game)` is built on `sfxTone` and `sfxNoise`.
+  - At most 10 voices play at once.
+  - It is silent while the tab is hidden.
+  - ⚙️ *Game Sounds* (High / Medium / Low / Off) controls it for every game.
+- **The pool hooks.** `pool-game.js` reads the physics log in `poolSfxLog`, keeps the four loudest contacts per step, and scales each by how hard it was. It also plays:
+  - foul, century and maximum, in `poolSettle`
+  - running out of time, in `poolTimeout`
+  - the last five seconds, ticking, in `poolTick`
+  - win or lose, in `poolEndFrame`
+  - champion, in `poolOn.champion`
+- **Never on a replayed table** (`netReplay`).
+- **AimLab moved onto the same bank.** Its own Sound toggle still applies, on top of the master.
+- **Tests.** `pool-verify` covers it in *Sound*: 8 checks, using a recorded `sfxPlay` in `load.js`.
+
+The plan as first written follows.
+
+### Can the userscript play sound?
+
+Yes. AimLab already does (`aimBeep` in `aim-dev/aim-ui.js`). It synthesises tones with the Web Audio API: no audio files and no permission prompts.
+
+The only browser rule is autoplay. An `AudioContext` stays suspended until the first click or keypress on the page, and every game starts on a click, so this costs nothing.
+
+This is a different case from the Cyberpunk audio visualizer, which was removed (see *Why the audio visualizer was removed* in `CYBERPUNK_HUD_PLAN.md`):
+- The visualizer had to **read** the machine's audio, which needs a mic or screen-share grant.
+- Sound effects only **write** audio, which needs no grant.
+
+### Scope: one sound per event the table already reports
+
+| Event | Source in the engine | Sound |
+|---|---|---|
+| Cue strike | the strike phase, with `S.power` | A tip-on-ball tick. Pitch and gain rise with power; a miscue gets a dull scrape |
+| Ball on ball | `ppSimulate` contacts | A clack whose gain scales with the impact speed. Kiss shots (very slow contacts) are nearly silent. At most a few per frame |
+| Cushion | rail contacts | A soft, low thud, also scaled by impact speed |
+| Pot | a ball dropping into a pocket | A drop sound. Snooker has a rattle variant for a ball that hits the jaws and stays out |
+| Foul and turn change | the rules' verdicts | A short low buzz for a foul and a neutral two-note chime for a turn change |
+| Shot clock | the last 5 s | One tick per second, the same moment the clock bar turns hot |
+| End of frame | the frame-over screens | A stinger for a win, a softer one for a loss. Snooker's century and maximum get their own |
+| Tournament | the champion screen | A short fanfare, kept restrained to match the design |
+
+### Approach
+
+- **One shared sound module for every game.** Lift `aimBeep` and its `AudioContext` into the host, alongside `toggleGameMaxModal`, with:
+  - one ⚙️ *Game sounds* switch and a master volume
+  - a cap on how many sounds can play at once
+  - automatic silence while the tab is hidden
+
+  AimLab's own *Sound* toggle becomes a per-game override of that switch.
+- **Synthesised, not sampled.** Oscillators plus short noise bursts through a filter can produce the clack, thud and drop sounds. This adds roughly 150–250 lines and no assets. Base64 samples would sound more real but cost about 5–20 KB each, which spends the line budget faster.
+- **Online play needs no network changes.** Each client plays sounds from its own simulation, and the two simulations already replay identically.
+- **Testing:**
+  - A stub `AudioContext` in `pool-dev/load.js`, so `pool-verify` can assert that each event produces its sound, and that ten simultaneous collisions stay under the cap.
+  - The real-Chrome run (`host-run.js`) checks that sound starts only after the first click.
+
+### Before building
+
+1. **Choose the sound character:** realistic (felt, phenolic balls) or stylised to match each theme. For example, Cyberpunk could have its own synth palette.
+2. **Decide the default:** on or off. AimLab defaults to on.
+3. **Budget:** about +250 lines in the userscript, which is at 27,413.
+
+---
+
 ## Decision log
 
 | Date | Decision | Reason |

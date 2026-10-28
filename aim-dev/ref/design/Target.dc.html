@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:100%;height:100%;pointer-events:none">
+<sc-if value="{{ hasGhost }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ g }}px;height:{{ g }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px dashed {{ ghostC }};box-sizing:border-box"></div>
+</sc-if>
+<sc-if value="{{ isHit }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ ringD }}px;height:{{ ringD }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ c }};opacity:{{ ringOp }};box-sizing:border-box"></div>
+<div style="position:absolute;left:50%;top:50%;width:{{ flashD }}px;height:{{ flashD }}px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(closest-side, {{ flashC }}, transparent);opacity:{{ flashOp }}"></div>
+<sc-for list="{{ parts }}" as="pt" hint-placeholder-count="8">
+<div style="position:absolute;left:50%;top:50%;width:{{ pt.w }}px;height:2.5px;border-radius:2px;background:{{ pt.c }};opacity:{{ pt.op }};transform:translate(-50%,-50%) translate({{ pt.x }}px,{{ pt.y }}px) rotate({{ pt.a }}deg)"></div>
+</sc-for>
+</sc-if>
+<div style="position:absolute;left:50%;top:50%;width:{{ s }}px;height:{{ s }}px;border-radius:50%;box-sizing:border-box;transform:translate(-50%,-50%) scale({{ sc }});opacity:{{ op }};background:{{ fill }};box-shadow:{{ shadow }};border:{{ border }}">
+<sc-if value="{{ isDisc }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ innerD }}px;height:{{ innerD }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ innerC }};box-sizing:border-box"></div>
+<div style="position:absolute;left:50%;top:50%;width:{{ dotD }}px;height:{{ dotD }}px;transform:translate(-50%,-50%);border-radius:50%;background:{{ dotC }};box-shadow:{{ dotSh }}"></div>
+</sc-if>
+</div>
+<sc-if value="{{ hasRing }}" hint-placeholder-val="{{ false }}">
+<svg width="{{ rs }}" height="{{ rs }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);overflow:visible">
+<circle cx="{{ rh }}" cy="{{ rh }}" r="{{ rr }}" style="fill:none;stroke:{{ trackC }};stroke-width:3"></circle>
+<circle cx="{{ rh }}" cy="{{ rh }}" r="{{ rr }}" style="fill:none;stroke:{{ ringC }};stroke-width:3;stroke-linecap:round;stroke-dasharray:{{ dash }}"></circle>
+</svg>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:120,&quot;height&quot;:120},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;disc&quot;,&quot;sphere&quot;],&quot;default&quot;:&quot;disc&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:44,&quot;tsType&quot;:&quot;number&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;phase&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hit&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ring&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;},&quot;ghost&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;bp&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.35,&quot;tsType&quot;:&quot;number&quot;},&quot;sc&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;op&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;color&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#FF5D73&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const hx = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgba = (h, a) => { const [r, g, b] = hx(h); return `rgba(${r},${g},${b},${a})`; };
+const mix = (a, b, t) => { const x = hx(a), y = hx(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, s = +p.size || 44, th = p.theme || 'dark', cy = th === 'cyber';
+    const c = p.color || (cy ? '#FF2E63' : '#FF5D73');
+    const sphere = p.kind === 'sphere', phase = p.phase || 'live', hit = phase === 'hit';
+    const bp = p.bp != null ? +p.bp : 0.35;
+    let sc = p.sc != null ? +p.sc : 1, op = p.op != null ? +p.op : 1;
+    if (hit) { sc = 0.7 + bp * 0.3; op = sphere ? 0 : 0.28 * (1 - bp); }
+    let fill, shadow, border = 'none';
+    if (sphere) {
+      fill = `radial-gradient(circle at 34% 30%, #FFFFFF 0%, ${mix(c, '#ffffff', .55)} 9%, ${c} 38%, ${mix(c, '#000000', .45)} 76%, ${mix(c, '#000000', .72)} 100%)`;
+      shadow = cy ? `0 0 ${s * .4}px ${rgba(c, .55)}` : `inset ${-s * .05}px ${-s * .07}px ${s * .14}px rgba(255,255,255,.10), 0 ${s * .08}px ${s * .3}px rgba(0,0,0,.35)`;
+    } else if (cy) {
+      fill = `radial-gradient(circle, ${rgba(c, .30)} 0 20%, ${rgba(c, .10)} 21% 100%)`;
+      border = `2px solid ${c}`;
+      shadow = `0 0 ${s * .32}px ${rgba(c, .6)}, inset 0 0 ${s * .22}px ${rgba(c, .35)}`;
+    } else {
+      fill = `radial-gradient(circle at 50% 38%, ${mix(c, '#ffffff', .2)} 0%, ${c} 58%, ${mix(c, '#000000', .16)} 100%)`;
+      shadow = `inset 0 0 0 2px rgba(255,255,255,.55), 0 0 0 3px ${rgba(c, .22)}, 0 ${s * .12}px ${s * .38}px ${rgba(c, .38)}`;
+    }
+    const ring = p.ring != null ? +p.ring : -1, rs = Math.round(s * 1.6), rr = rs / 2 - 2, len = 2 * Math.PI * rr;
+    const ringC = th === 'light' ? '#0B84E8' : th === 'cyber' ? '#00F0FF' : '#4FACFE';
+    const parts = [];
+    if (hit) for (let i = 0; i < 8; i++) {
+      const a = i * 45 + 22.5, rad = s * (0.72 + bp * 0.6);
+      parts.push({ x: +(Math.cos(a * Math.PI / 180) * rad).toFixed(1), y: +(Math.sin(a * Math.PI / 180) * rad).toFixed(1), a, w: +(s * (0.16 - bp * 0.07)).toFixed(1), c: i % 2 ? c : (th === 'light' ? mix(c, '#000000', .1) : '#FFFFFF'), op: +(1 - bp * 0.7).toFixed(2) });
+    }
+    const g = +p.ghost || 0;
+    return {
+      s, sc, op, fill, shadow, border, c,
+      isDisc: !sphere && !hit, isHit: hit, parts,
+      innerD: Math.round(s * .56), innerC: cy ? rgba(c, .8) : 'rgba(255,255,255,.38)',
+      dotD: Math.max(3, Math.round(s * .15)), dotC: cy ? c : '#FFFFFF', dotSh: cy ? `0 0 6px ${c}` : '0 0 0 1px rgba(0,0,0,.08)',
+      hasGhost: g > 0, g, ghostC: rgba(c, .5),
+      ringD: Math.round(s * (1.1 + bp * 0.9)), ringOp: +(0.8 * (1 - bp) + .05).toFixed(2),
+      flashD: Math.round(s * 1.5), flashC: th === 'light' ? rgba(c, .45) : 'rgba(255,255,255,.65)', flashOp: +(1 - bp).toFixed(2),
+      hasRing: ring >= 0, rs, rh: rs / 2, rr, trackC: th === 'light' ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.16)', ringC,
+      dash: `${(len * Math.max(0, ring)).toFixed(1)} ${len.toFixed(1)}`
+    };
+  }
+}
+</script>
+</body>
+</html>

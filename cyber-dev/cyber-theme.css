@@ -411,7 +411,7 @@
             }
 
             /* MAIN CONTAINER — never a filter: it would become the containing block
-               for the position:fixed #aim-results and .lb-ach-popover. */
+               for the position:fixed .lb-ach-popover. */
 
             .attendance-summary.retro-theme {
                 background:
@@ -1264,7 +1264,7 @@
 
             /* SIDE PANELS — border-radius only, never clip-path or filter: these hold
                game canvases, trays, popovers and the two position:fixed elements
-               (#aim-results, .lb-ach-popover). */
+               (.lb-ach-popover). */
 
             .attendance-summary.retro-theme .snake-game-container,
             .attendance-summary.retro-theme .quotes-container,

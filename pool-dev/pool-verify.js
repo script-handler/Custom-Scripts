@@ -95,7 +95,7 @@ ok('⚙️ offers the shot camera: Overhead or Stay 3D', /sel\('poolShotCam', [^
     ok('userPreferences defaults the clocks and 2 Players\' names', /poolClock: 30,/.test(src) && /snookerClock: 45,/.test(src) && /poolP1Name: '',/.test(src) && /poolP2Name: '',/.test(src));
     ok('the pool panel\'s title goes through poolRenderTitle', /if \(gameKey === 'pool' && typeof poolRenderTitle === 'function'\) poolRenderTitle\(el\);/.test(src));
 }
-ok('applyPreferences tells pool the theme changed', /applyGameMode\(\);\n[^\n]*\n\s+if \(typeof poolOnThemeChange === 'function'\) poolOnThemeChange\(\);\n    \}/.test(src));
+ok('applyPreferences tells pool the theme changed', /applyGameMode\(\);\n[^\n]*\n\s+if \(typeof poolOnThemeChange === 'function'\) poolOnThemeChange\(\);\n(?:[^\n]*aimOnThemeChange\(\);\n)?    \}/.test(src.replace(/\r\n/g, '\n')));
 {
     const m = /function toggleGameMaxModal\(cfg\) \{[\s\S]*?\n    \}\n/.exec(src);
     const fn = m ? m[0] : '';
@@ -1465,6 +1465,37 @@ head('Match rules (2 Players and Online)');
     const off = G.phSheetHelp('net', { state: 'off', err: "Can't reach the server. Open https://10.0.0.5:7777/ once and accept its certificate, then Connect" });
     ok('Online\'s help has the whole error, its link live, and turns the ⓘ red', off.hot && /<a href="https:\/\/10\.0\.0\.5:7777\/"/.test(off.html) && /then Connect/.test(off.html));
     ok('…while the status line keeps its first sentence', G.phNetStatus({ state: 'off', err: "Can't reach the server. Open it" }).text === "Can't reach the server");
+}
+
+// ── Sound: the table's events reach the host's bank (sfxPlay) ──
+head('Sound');
+{
+    const G = L.game({ seed: 5 }), S = G.poolS;
+    G.poolNewFrame(1);
+    playFrame(G);
+    const heard = new Set(G.log.sfx.map(e => e.n));
+    ok('a frame strikes, clacks, hits cushions and pots', ['strike', 'clack', 'cushion', 'pocket'].every(n => heard.has(n)), [...heard]);
+    ok('…and ends on a win or a loss', heard.has('win') || heard.has('lose'));
+    ok('every intensity is 0–1, and each sound names the game', G.log.sfx.every(e => (e.k === undefined || (e.k >= 0 && e.k <= 1)) && e.g === S.game));
+    // A break's burst of contacts: at most four a step, the loudest first.
+    const B = L.game({ seed: 9 }), T = B.poolS;
+    B.poolNewFrame(1); B.prPlaceCue(T.world, T.world.table.headX - 60, 0); T.placed = true; T.phase = 'aim';
+    T.power = 100; T.phase = 'strike'; T.strikeT = 999; B.poolTick(16);
+    let worst = 0;
+    for (let i = 0; i < 400 && T.phase === 'moving'; i++) { const n0 = B.log.sfx.length; B.poolStepMoving(); worst = Math.max(worst, B.log.sfx.length - n0 - (T.phase !== 'moving' ? 2 : 0)); }
+    ok('a step plays at most four contacts', worst <= 4, worst);
+    ok('a full-power break strikes loud', B.log.sfx[0].n === 'strike' && B.log.sfx[0].k > 0.9, B.log.sfx[0]);
+    // The shot clock's last five seconds tick, the last one higher; running out is a foul.
+    const C = L.game({ seed: 3 }), U = C.poolS;
+    C.poolNewFrame(1); C.prPlaceCue(U.world, U.world.table.headX - 60, 0); U.placed = true; U.phase = 'aim';
+    U.clockLeft = 7; C.log.sfx.length = 0;
+    for (let i = 0; i < 160 && U.phase === 'aim' && U.frame.turn === 1; i++) C.poolTick(50);
+    const ticks = C.log.sfx.filter(e => e.n === 'clock');
+    ok('the last five seconds tick, the last one higher', ticks.length === 5 && ticks[4].k === 1 && ticks[0].k === 0.5, ticks);
+    ok('running out of time sounds the foul', C.log.sfx.some(e => e.n === 'foul'));
+    // A replayed table (online catch-up) is silent.
+    const n0 = C.log.sfx.length; U.netReplay = true; C.poolSfx('clack', 1); U.netReplay = false;
+    ok('a replayed table plays nothing', C.log.sfx.length === n0);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

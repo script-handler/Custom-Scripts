@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:100%;height:100%;pointer-events:none;opacity:{{ op }}">
+<sc-for list="{{ bars }}" as="b" hint-placeholder-count="4">
+<div style="position:absolute;left:calc(50% + {{ b.x }}px);top:calc(50% + {{ b.y }}px);width:{{ b.w }}px;height:{{ b.h }}px;background:{{ color }};box-shadow:{{ sh }};border-radius:{{ br }}px"></div>
+</sc-for>
+<sc-if value="{{ isCircle }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ cd }}px;height:{{ cd }}px;transform:translate(-50%,-50%);border-radius:50%;border:{{ T }}px solid {{ color }};box-shadow:{{ sh }}, inset {{ sh }};box-sizing:border-box"></div>
+</sc-if>
+<sc-if value="{{ showDot }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ D }}px;height:{{ D }}px;transform:translate(-50%,-50%);border-radius:50%;background:{{ color }};box-shadow:{{ sh }}"></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:64,&quot;height&quot;:64},&quot;cfg&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;},&quot;scale&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const c = Object.assign({ xs: 'crossdot', color: '#4CF0B0', len: 6, thick: 2, gap: 4, outline: true, ow: 1, dot: true, ds: 2, op: 1, open: 0 }, p.cfg || {});
+    const k = +(p.scale || 1), r = n => Math.round(n * 2) / 2;
+    const L = r(c.len * k), T = r(c.thick * k), G = r((c.gap + (c.open || 0)) * k);
+    const bars = [];
+    if (c.xs === 'cross' || c.xs === 'crossdot' || c.xs === 't') {
+      bars.push({ x: G, y: -T / 2, w: L, h: T }, { x: -G - L, y: -T / 2, w: L, h: T }, { x: -T / 2, y: G, w: T, h: L });
+      if (c.xs !== 't') bars.push({ x: -T / 2, y: -G - L, w: T, h: L });
+    }
+    const showDot = c.xs === 'dot' || c.xs === 'crossdot' || ((c.xs === 'circle' || c.xs === 't') && c.dot);
+    return {
+      bars, color: c.color, op: c.op, br: c.outline ? 0 : 0.5,
+      sh: c.outline ? `0 0 0 ${r(c.ow * k)}px rgba(0,0,0,.85)` : '0 0 0 0 transparent',
+      isCircle: c.xs === 'circle', cd: r(2 * (G + L * .6)), T,
+      showDot, D: r((c.xs === 'dot' ? Math.max(c.ds, 3) : c.ds) * k)
+    };
+  }
+}
+</script>
+</body>
+</html>

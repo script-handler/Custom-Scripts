@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:{{ w }}px;height:{{ h }}px;line-height:1.3;overflow:hidden;border-radius:{{ rad }}px;clip-path:{{ clip }};background:{{ bg }};font-family:{{ t.font }};color:{{ t.text }};cursor:none;isolation:isolate;-webkit-font-smoothing:antialiased">
+<sc-if value="{{ is3d }}" hint-placeholder-val="{{ false }}">
+<svg width="{{ w }}" height="{{ h }}" style="position:absolute;left:0;top:0;display:block">
+<polygon points="{{ room.ceil }}" style="fill:{{ rc.ceil }}"></polygon>
+<polygon points="{{ room.left }}" style="fill:{{ rc.side }}"></polygon>
+<polygon points="{{ room.right }}" style="fill:{{ rc.side }}"></polygon>
+<polygon points="{{ room.floor }}" style="fill:{{ rc.floor }}"></polygon>
+<polygon points="{{ room.back }}" style="fill:{{ rc.back }}"></polygon>
+<path d="{{ room.wgrid }}" style="fill:none;stroke:{{ rc.wgrid }};stroke-width:1"></path>
+<path d="{{ room.grid }}" style="fill:none;stroke:{{ rc.grid }};stroke-width:1"></path>
+<path d="{{ room.edges }}" style="fill:none;stroke:{{ rc.edge }};stroke-width:1.2"></path>
+</svg>
+<div style="position:absolute;left:0;top:0;width:100%;height:{{ room.by1 }}px;background:radial-gradient(38% 60% at 50% 24%, {{ rc.light }}, transparent 75%);pointer-events:none"></div>
+<div style="position:absolute;inset:0;background:{{ t.vign }};pointer-events:none"></div>
+<sc-for list="{{ shadows }}" as="sh" hint-placeholder-count="2">
+<div style="position:absolute;left:{{ sh.l }}px;top:{{ sh.t }}px;width:{{ sh.w }}px;height:{{ sh.h }}px;border-radius:50%;background:radial-gradient(closest-side, {{ t.shadowC }}, transparent);opacity:{{ sh.op }}"></div>
+</sc-for>
+</sc-if>
+<sc-if value="{{ hasTrail }}" hint-placeholder-val="{{ false }}">
+<svg width="{{ w }}" height="{{ h }}" style="position:absolute;left:0;top:0;overflow:visible">
+<path d="{{ trail.past }}" style="fill:none;stroke:{{ t.accent }};stroke-width:2.5;stroke-linecap:round;opacity:.45"></path>
+<path d="{{ trail.next }}" style="fill:none;stroke:{{ t.muted }};stroke-width:1.5;stroke-dasharray:2 6;stroke-linecap:round;opacity:.7"></path>
+</svg>
+</sc-if>
+<sc-if value="{{ hasAnn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:{{ ann.edge }}px;border:1px dashed {{ t.annot }};opacity:.45;border-radius:{{ ann.edgeR }}px"></div>
+<sc-if value="{{ ann.hasHud }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;right:0;top:0;width:116px;height:64px;background:repeating-linear-gradient(45deg, {{ ann.hatch }} 0 2px, transparent 2px 7px);border-left:1px dashed {{ t.annot }};border-bottom:1px dashed {{ t.annot }};box-sizing:border-box"></div>
+</sc-if>
+<sc-for list="{{ ann.halos }}" as="ha" hint-placeholder-count="3">
+<div style="position:absolute;left:{{ ha.l }}px;top:{{ ha.t }}px;width:{{ ha.d }}px;height:{{ ha.d }}px;border-radius:50%;border:1px dashed {{ ha.c }};background:{{ ha.f }};box-sizing:border-box"></div>
+</sc-for>
+<svg width="{{ w }}" height="{{ h }}" style="position:absolute;left:0;top:0;overflow:visible">
+<path d="{{ ann.lines }}" style="fill:none;stroke:{{ t.annot }};stroke-width:1.2;stroke-dasharray:3 4"></path>
+<path d="{{ ann.dims }}" style="fill:none;stroke:{{ ann.dimC }};stroke-width:1.5"></path>
+</svg>
+</sc-if>
+<sc-for list="{{ misses }}" as="m" hint-placeholder-count="1">
+<div style="position:absolute;left:{{ m.l }}px;top:{{ m.t }}px;width:{{ m.d }}px;height:{{ m.d }}px;border-radius:50%;border:1.5px solid {{ m.c }};opacity:{{ m.op }};box-sizing:border-box;display:flex;align-items:center;justify-content:center">
+<div style="width:3px;height:3px;border-radius:50%;background:{{ m.c }}"></div>
+</div>
+</sc-for>
+<sc-for list="{{ tgs }}" as="g" hint-placeholder-count="3">
+<dc-import name="Target" kind="{{ g.kind }}" size="{{ g.s }}" theme="{{ th }}" phase="{{ g.phase }}" sc="{{ g.sc }}" op="{{ g.op }}" ring="{{ g.ring }}" ghost="{{ g.ghost }}" bp="{{ g.bp }}" style="position:absolute;left:{{ g.l }}px;top:{{ g.t }}px;width:{{ g.b }}px;height:{{ g.b }}px" hint-size="60px,60px"></dc-import>
+</sc-for>
+<sc-for list="{{ vanish }}" as="vn" hint-placeholder-count="1">
+<div style="position:absolute;left:{{ vn.x }}px;top:{{ vn.y }}px;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="width:{{ vn.d }}px;height:{{ vn.d }}px;border-radius:50%;border:1.5px dashed {{ t.red }};opacity:.7;box-sizing:border-box"></div>
+<div style="font-size:9px;font-weight:700;letter-spacing:.16em;color:{{ t.redText }}">MISS</div>
+</div>
+</sc-for>
+<sc-if value="{{ hasXh }}" hint-placeholder-val="{{ true }}">
+<dc-import name="Crosshair" cfg="{{ xh }}" scale="{{ xhK }}" style="position:absolute;left:{{ xhL }}px;top:{{ xhT }}px;width:{{ xhB }}px;height:{{ xhB }}px" hint-size="64px,64px"></dc-import>
+</sc-if>
+<sc-for list="{{ pops }}" as="pp" hint-placeholder-count="1">
+<div style="position:absolute;left:{{ pp.x }}px;top:{{ pp.y }}px;transform:translate(-50%,-100%) scale({{ ui }});transform-origin:50% 100%;display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none">
+<div style="font-size:18px;font-weight:800;letter-spacing:-.01em;color:{{ t.text }};text-shadow:{{ t.popSh }};font-variant-numeric:tabular-nums">{{ pp.t }}</div>
+<div style="font-size:9.5px;font-weight:700;letter-spacing:.12em;color:{{ t.acText }};text-shadow:{{ t.popSh }};white-space:nowrap">{{ pp.sub }}</div>
+</div>
+</sc-for>
+<sc-if value="{{ hasAnn }}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{ ann.labels }}" as="lb" hint-placeholder-count="4">
+<div style="position:absolute;left:{{ lb.x }}px;top:{{ lb.y }}px;transform:translate(-50%,-50%);padding:3px 6px;border-radius:5px;background:{{ t.labelBg }};color:{{ lb.c }};font:600 9.5px/1.2 'JetBrains Mono',ui-monospace,monospace;white-space:nowrap;letter-spacing:.02em">{{ lb.t }}</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{ hasChip }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:{{ edgeP }}px;top:{{ edgeP }}px;height:30px;padding:0 10px;display:flex;align-items:center;gap:8px;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};transform:scale({{ ui }});transform-origin:0 0">
+<span style="font-size:8.5px;font-weight:600;letter-spacing:.14em;color:{{ t.muted }}">{{ chip.l }}</span>
+<span style="font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;color:{{ chip.c }}">{{ chip.v }}</span>
+</div>
+</sc-if>
+<sc-if value="{{ hud2 }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;right:8px;top:8px;display:flex;gap:6px">
+<div style="width:44px;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.card }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:{{ t.text }};cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round"><path d="M7.5 5v10M12.5 5v10"></path></svg>
+</div>
+<div style="width:44px;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.card }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:{{ t.text }};cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4"></path></svg>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ hud3 }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;right:10px;top:10px;height:30px;padding:0 10px;display:flex;align-items:center;gap:7px;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};font-size:11px;color:{{ t.muted }}">
+<span style="padding:1px 5px;border:1px solid {{ t.border }};border-radius:4px;background:{{ t.key }};font-size:9.5px;font-weight:700;color:{{ t.text }}">Esc</span>
+<span>Pause</span>
+</div>
+</sc-if>
+<sc-if value="{{ custom }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:{{ edgeP }}px;bottom:{{ edgeP }}px;height:24px;padding:0 9px;display:flex;align-items:center;gap:6px;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:999px;font-size:10px;font-weight:600;color:{{ t.muted }};letter-spacing:.02em">
+<span style="width:6px;height:6px;border-radius:50%;border:1.5px solid {{ t.muted }};box-sizing:border-box"></span>Custom · not ranked
+</div>
+</sc-if>
+<sc-if value="{{ ovIdle }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;transform:scale({{ ui }});margin-top:-18px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="font-size:9.5px;letter-spacing:.2em;font-weight:600;color:{{ t.muted }}">{{ idle.kicker }}</div>
+<div style="font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1">{{ idle.name }}</div>
+<div style="font-size:12px;color:{{ t.muted }}">{{ idle.meta }}</div>
+</div>
+<div style="position:relative;width:148px;height:148px;display:flex;align-items:center;justify-content:center">
+<div style="position:absolute;inset:0;border-radius:50%;border:1px solid {{ t.ring }}"></div>
+<div style="position:absolute;inset:20px;border-radius:50%;border:1px solid {{ t.ring }}"></div>
+<div style="position:absolute;left:50%;top:-6px;width:1px;height:14px;background:{{ t.ring }}"></div>
+<div style="position:absolute;left:50%;bottom:-6px;width:1px;height:14px;background:{{ t.ring }}"></div>
+<div style="position:absolute;top:50%;left:-6px;height:1px;width:14px;background:{{ t.ring }}"></div>
+<div style="position:absolute;top:50%;right:-6px;height:1px;width:14px;background:{{ t.ring }}"></div>
+<div style="width:84px;height:84px;border-radius:{{ playR }};clip-path:{{ t.clipC }};background:{{ t.primary }};color:{{ t.onPrimary }};display:flex;align-items:center;justify-content:center;box-shadow:{{ t.playGlow }};cursor:pointer">
+<svg width="20" height="20" style="transform:scale(1.8) translateX(1px);fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round"><path d="M6.5 4.2 15.8 10 6.5 15.8Z"></path></svg>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:{{ t.muted }}">Click to start<span style="padding:1px 6px;border:1px solid {{ t.border }};border-radius:5px;background:{{ t.key }};font-size:10px;font-weight:600;color:{{ t.text }}">Space</span></div>
+</div>
+<div style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%) scale({{ ui }});transform-origin:50% 100%;height:30px;padding:0 12px;display:flex;align-items:center;gap:8px;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:999px;font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums">
+<span style="font-size:8.5px;letter-spacing:.16em;font-weight:600;color:{{ t.muted }}">LAST</span><span style="font-weight:600">{{ idle.last }}</span><span style="color:{{ t.muted }}">{{ idle.best }}</span>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovCount }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ t.scrim }}"></div>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:14px;transform:scale({{ ui }})">
+<div style="position:relative;width:132px;height:132px;display:flex;align-items:center;justify-content:center">
+<svg width="132" height="132" style="position:absolute;left:0;top:0;transform:rotate(-90deg)">
+<circle cx="66" cy="66" r="60" style="fill:none;stroke:{{ t.ring }};stroke-width:4"></circle>
+<circle cx="66" cy="66" r="60" style="fill:none;stroke:{{ t.accent }};stroke-width:4;stroke-linecap:round;stroke-dasharray:251 377"></circle>
+</svg>
+<div style="font-size:76px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums">2</div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-size:15px;font-weight:600">Get ready</div>
+<div style="font-size:11.5px;color:{{ t.muted }}">Chaos · 30 s · aim at the first target</div>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovUnlock }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ t.scrim }}"></div>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="width:250px;padding:22px 20px 18px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:{{ t.r }}px;clip-path:{{ t.clip }};backdrop-filter:blur(14px);box-shadow:0 18px 50px rgba(0,0,0,.35);transform:scale({{ ui }});cursor:pointer">
+<div style="width:56px;height:56px;border-radius:50%;background:{{ t.primary }};color:{{ t.onPrimary }};display:flex;align-items:center;justify-content:center">
+<svg width="20" height="20" style="transform:scale(1.35);fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"><path d="M10 3c-3 0-4.5 2-4.5 4.5v5C5.5 15 7 17 10 17s4.5-2 4.5-4.5v-5C14.5 5 13 3 10 3ZM10 6v2.5"></path></svg>
+</div>
+<div style="font-size:16px;font-weight:700">Click to lock mouse</div>
+<div style="font-size:12px;line-height:1.45;color:{{ t.muted }}">Mouse turns the camera. The crosshair stays centred.</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:{{ t.muted }}"><span style="padding:1px 6px;border:1px solid {{ t.border }};border-radius:5px;background:{{ t.key }};font-size:10px;font-weight:700;color:{{ t.text }}">Esc</span>to release and pause</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovPause }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ t.scrim }};backdrop-filter:blur(5px)"></div>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="width:260px;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;background:{{ t.card }};border:1px solid {{ t.border }};border-radius:{{ t.r }}px;clip-path:{{ t.clip }};box-shadow:0 18px 50px rgba(0,0,0,.35);transform:scale({{ ui }})">
+<div style="display:flex;flex-direction:column;gap:4px">
+<div style="font-size:9.5px;letter-spacing:.2em;font-weight:600;color:{{ t.muted }}">PAUSED</div>
+<div style="font-size:22px;font-weight:700;letter-spacing:-.02em">Chaos · 14.2 s left</div>
+<div style="font-size:12px;color:{{ t.muted }};font-variant-numeric:tabular-nums">260 pts · 87% accuracy</div>
+</div>
+<div style="height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.primary }};color:{{ t.onPrimary }};display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round"><path d="M6.5 4.2 15.8 10 6.5 15.8Z"></path></svg>Resume
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div style="height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3"></path></svg>Restart
+</div>
+<div style="height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:{{ t.redText }};cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"></path></svg>Quit
+</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:{{ t.muted }}"><span style="padding:1px 6px;border:1px solid {{ t.border }};border-radius:5px;background:{{ t.key }};font-size:10px;font-weight:700;color:{{ t.text }}">Esc</span>to resume</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovWait }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;transform:scale({{ ui }})">
+<div style="position:relative;width:96px;height:96px">
+<div style="position:absolute;inset:0;border-radius:50%;border:1px solid {{ rx.ring }}"></div>
+<div style="position:absolute;inset:16px;border-radius:50%;border:1px solid {{ rx.ring }}"></div>
+<div style="position:absolute;inset:34px;border-radius:50%;background:{{ rx.ring }}"></div>
+</div>
+<div style="font-size:24px;font-weight:600;letter-spacing:-.01em;color:{{ rx.text }}">Wait for green…</div>
+<div style="font-size:12px;color:{{ rx.muted }}">Round 3 of 5 · don’t click yet</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovGo }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px;transform:scale({{ ui }});color:{{ t.goText }}">
+<div style="font-size:128px;font-weight:900;letter-spacing:-.05em;line-height:.9">GO</div>
+<div style="font-size:14px;font-weight:700;letter-spacing:.16em">CLICK ANYWHERE</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovTime }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;transform:scale({{ ui }})">
+<div style="font-size:9.5px;letter-spacing:.2em;font-weight:600;color:{{ rx.muted }}">ROUND 3 OF 5</div>
+<div style="display:flex;align-items:baseline;gap:6px;color:{{ rx.text }}"><span style="font-size:80px;font-weight:800;letter-spacing:-.04em;line-height:.9;font-variant-numeric:tabular-nums">214</span><span style="font-size:24px;font-weight:600;color:{{ t.acText }}">ms</span></div>
+<div style="height:26px;padding:0 10px;display:flex;align-items:center;gap:6px;border-radius:999px;background:{{ rx.chip }};font-size:12px;font-weight:600;color:{{ t.good }};font-variant-numeric:tabular-nums">−14 ms vs your average</div>
+<div style="font-size:11.5px;color:{{ rx.muted }}">Next round in 0.3 s</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovSoon }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;transform:scale({{ ui }});text-align:center">
+<div style="width:56px;height:56px;border-radius:50%;border:2px solid {{ rx.soonText }};color:{{ rx.soonText }};display:flex;align-items:center;justify-content:center;box-sizing:border-box">
+<svg width="20" height="20" style="transform:scale(1.2);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M10 4.5v7M10 15v.5"></path></svg>
+</div>
+<div style="font-size:36px;font-weight:800;letter-spacing:-.03em;line-height:1;color:{{ rx.soonText }}">Too soon</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:{{ rx.soonText }}">False start 2 of 3
+<div style="display:flex;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:{{ rx.soonText }}"></span><span style="width:9px;height:9px;border-radius:50%;background:{{ rx.soonText }}"></span><span style="width:9px;height:9px;border-radius:50%;border:1.5px solid {{ rx.soonText }};box-sizing:border-box"></span></div>
+</div>
+<div style="font-size:12px;line-height:1.45;color:{{ rx.soonMuted }}">Wait for green. Round re-arms in 1.2 s.<br>A third false start ends the run.</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovARes }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ t.scrim }};backdrop-filter:blur(8px)"></div>
+<sc-if value="{{ ar.isBest }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:0;width:340px;height:240px;transform:translateX(-50%);background:radial-gradient(closest-side, {{ t.bestGlow }}, transparent);pointer-events:none"></div>
+</sc-if>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="width:{{ resW }}px;box-sizing:border-box;padding:16px;display:flex;flex-direction:column;gap:12px;transform:scale({{ ui }})">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+<div style="font-size:9.5px;letter-spacing:.18em;font-weight:600;color:{{ t.muted }}">{{ ar.kicker }}</div>
+<sc-if value="{{ ar.isBest }}" hint-placeholder-val="{{ false }}">
+<div style="height:24px;padding:0 10px;display:flex;align-items:center;gap:5px;border-radius:999px;clip-path:{{ t.clipC }};background:{{ t.primary }};color:{{ t.onPrimary }};font-size:10px;font-weight:800;letter-spacing:.14em">
+<svg width="20" height="20" style="transform:scale(.7);margin:0 -4px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M6.5 3.5h7v4a3.5 3.5 0 0 1-7 0ZM6.5 5H4.2a2.4 2.4 0 0 0 2.6 3M13.5 5h2.3a2.4 2.4 0 0 1-2.6 3M10 11v3M7 16.5h6"></path></svg>NEW BEST</div>
+</sc-if>
+<sc-if value="{{ ar.notBest }}" hint-placeholder-val="{{ true }}">
+<div style="height:22px;padding:0 9px;display:flex;align-items:center;border-radius:999px;border:1px solid {{ t.border }};font-size:10px;font-weight:600;color:{{ t.muted }}">{{ ar.tag }}</div>
+</sc-if>
+</div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+<div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:58px;font-weight:800;letter-spacing:-.04em;line-height:.85;font-variant-numeric:tabular-nums;background:{{ ar.scoreBg }};-webkit-background-clip:{{ ar.bgClip }};background-clip:{{ ar.bgClip }};color:{{ ar.scoreC }}">{{ ar.score }}</span><span style="font-size:15px;font-weight:600;color:{{ t.muted }}">pts</span></div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-variant-numeric:tabular-nums">
+<span style="font-size:11px;color:{{ t.muted }}">{{ ar.cmpL }}</span>
+<span style="font-size:16px;font-weight:700;color:{{ ar.cmpC }}">{{ ar.cmpV }}</span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;font-size:8.5px;letter-spacing:.16em;font-weight:600;color:{{ t.muted }}"><span>HITS PER SECOND</span><span>0 – 30 s</span></div>
+<div style="height:38px;display:flex;align-items:flex-end;gap:2px">
+<sc-for list="{{ ar.spark }}" as="sp" hint-placeholder-count="30">
+<div style="flex:1;height:{{ sp.h }}px;border-radius:2px 2px 0 0;background:{{ sp.c }}"></div>
+</sc-for>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+<sc-for list="{{ ar.stats }}" as="st" hint-placeholder-count="6">
+<div style="height:50px;padding:8px 9px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
+<div style="font-size:8px;letter-spacing:.12em;font-weight:600;color:{{ t.muted }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ st.l }}</div>
+<div style="display:flex;align-items:baseline;gap:2px;font-variant-numeric:tabular-nums"><span style="font-size:17px;font-weight:700;color:{{ st.c }}">{{ st.v }}</span><span style="font-size:10px;font-weight:600;color:{{ t.muted }}">{{ st.u }}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:8px">
+<div style="flex:1.25;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.primary }};color:{{ t.onPrimary }};display:flex;align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:600;cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3"></path></svg>Play again
+</div>
+<div style="flex:1;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer">Change scenario</div>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ ovRRes }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:{{ t.scrim }};backdrop-filter:blur(8px)"></div>
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+<div style="width:{{ resW }}px;box-sizing:border-box;padding:16px;display:flex;flex-direction:column;gap:12px;transform:scale({{ ui }})">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+<div style="font-size:9.5px;letter-spacing:.18em;font-weight:600;color:{{ rr.kickC }}">{{ rr.kicker }}</div>
+<div style="height:22px;padding:0 9px;display:flex;align-items:center;border-radius:999px;border:1px solid {{ rr.tagB }};font-size:10px;font-weight:600;color:{{ rr.tagC }}">{{ rr.tag }}</div>
+</div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+<div style="display:flex;flex-direction:column;gap:4px">
+<div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:{{ rr.bigSize }}px;font-weight:800;letter-spacing:-.04em;line-height:.85;font-variant-numeric:tabular-nums;color:{{ rr.bigC }}">{{ rr.big }}</span><span style="font-size:15px;font-weight:600;color:{{ t.muted }}">{{ rr.bigU }}</span></div>
+<div style="font-size:11.5px;color:{{ t.muted }}">{{ rr.sub }}</div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-variant-numeric:tabular-nums">
+<span style="font-size:11px;color:{{ t.muted }}">{{ rr.cmpL }}</span>
+<span style="font-size:16px;font-weight:700;color:{{ rr.cmpC }}">{{ rr.cmpV }}</span>
+</div>
+</div>
+<div style="position:relative;height:118px;display:flex;align-items:flex-end;gap:8px;padding:0 2px;border-bottom:1px solid {{ t.border }}">
+<sc-if value="{{ rr.hasAvg }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;left:0;right:0;bottom:{{ rr.avgY }}px;border-top:1px dashed {{ t.acText }};opacity:.8"></div>
+
+</sc-if>
+<sc-for list="{{ rr.bars }}" as="rb" hint-placeholder-count="5">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%">
+<div style="font-size:10px;font-weight:700;color:{{ rb.lc }};font-variant-numeric:tabular-nums">{{ rb.v }}</div>
+<div style="width:100%;max-width:44px;height:{{ rb.h }}px;border-radius:{{ rb.r }};background:{{ rb.bg }};border:{{ rb.bd }};box-sizing:border-box"></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:8px;margin-top:-6px">
+<sc-for list="{{ rr.bars }}" as="rb" hint-placeholder-count="5">
+<div style="flex:1;text-align:center;font-size:8.5px;font-weight:600;letter-spacing:.12em;color:{{ t.muted }}">{{ rb.n }}</div>
+</sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+<sc-for list="{{ rr.stats }}" as="st" hint-placeholder-count="3">
+<div style="height:50px;padding:8px 9px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
+<div style="font-size:8px;letter-spacing:.12em;font-weight:600;color:{{ t.muted }};white-space:nowrap">{{ st.l }}</div>
+<div style="display:flex;align-items:baseline;gap:2px;font-variant-numeric:tabular-nums"><span style="font-size:17px;font-weight:700;color:{{ st.c }}">{{ st.v }}</span><span style="font-size:10px;font-weight:600;color:{{ t.muted }}">{{ st.u }}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:8px">
+<div style="flex:1.25;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.primary }};color:{{ t.onPrimary }};display:flex;align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:600;cursor:pointer">
+<svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"><path d="M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3"></path></svg>{{ rr.again }}
+</div>
+<div style="flex:1;height:44px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer">Change scenario</div>
+</div>
+</div>
+</div>
+</sc-if>
+<div style="position:absolute;inset:0;border-radius:{{ rad }}px;box-shadow:inset 0 0 0 1px {{ t.vpBorder }};pointer-events:none"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:368,&quot;height&quot;:438},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scene&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;countdown&quot;,&quot;chaos2d&quot;,&quot;chaos3d&quot;,&quot;unlocked&quot;,&quot;paused&quot;,&quot;tracking&quot;,&quot;flick&quot;,&quot;shrink&quot;,&quot;rIdle&quot;,&quot;rWait&quot;,&quot;rGo&quot;,&quot;rTime&quot;,&quot;rSoon&quot;,&quot;rT2d&quot;,&quot;rT3d&quot;,&quot;ares&quot;,&quot;abest&quot;,&quot;rres&quot;,&quot;rfail&quot;,&quot;sp2d&quot;,&quot;sp3d&quot;],&quot;default&quot;:&quot;chaos2d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;2d&quot;,&quot;3d&quot;],&quot;default&quot;:&quot;2d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;w&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:368,&quot;tsType&quot;:&quot;number&quot;},&quot;h&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:438,&quot;tsType&quot;:&quot;number&quot;},&quot;big&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;hud&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;custom&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;xh&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}">
+const R1 = n => Math.round(n * 10) / 10;
+const hx = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgba = (h, a) => { const [r, g, b] = hx(h); return `rgba(${r},${g},${b},${a})`; };
+const PRI = 'linear-gradient(135deg,#7048FF 0%,#3D5CF5 52%,#2563EB 100%)';
+const TOK = {
+  dark: { text: '#F4F2FA', muted: '#A9A6BC', glass: 'rgba(255,255,255,.08)', border: 'rgba(255,255,255,.16)', accent: '#4FACFE', acText: '#6CBBFF', red: '#FF5D73', redText: '#FF8396', good: '#3DDC97', primary: PRI, onPrimary: '#FFFFFF', font: "'Inter',system-ui,sans-serif", r: 14, rc: 12, clip: 'none', clipC: 'none', scrim: 'rgba(6,7,12,.6)', card: 'rgba(22,20,34,.8)', ring: 'rgba(255,255,255,.09)', vpBorder: 'rgba(255,255,255,.12)', key: 'rgba(255,255,255,.1)', popSh: '0 1px 8px rgba(0,0,0,.6)', playGlow: '0 0 0 6px rgba(112,72,255,.16), 0 12px 32px rgba(61,92,245,.45)', bestGlow: 'rgba(112,72,255,.35)', labelBg: 'rgba(8,8,14,.82)', annot: '#7CC4FF',
+    arena: 'radial-gradient(rgba(255,255,255,.075) 1px, transparent 1.5px) 0 0/22px 22px, radial-gradient(95% 80% at 50% 30%, #1B1729 0%, #0C0B13 68%, #07080B 100%)',
+    wait: 'radial-gradient(85% 75% at 50% 42%, #1E2850 0%, #0F142B 70%, #0A0D1C 100%)', go: 'radial-gradient(85% 75% at 50% 42%, #34E07F 0%, #19B45A 70%, #14974B 100%)', goText: '#03230F', soon: 'radial-gradient(85% 75% at 50% 42%, #4E1527 0%, #2A0A13 70%, #1D060C 100%)',
+    rx: { text: '#DFE6FF', muted: '#A3AED6', ring: 'rgba(160,180,255,.16)', chip: 'rgba(61,220,151,.14)', soonText: '#FF8EA0', soonMuted: '#E8B0BA' },
+    room: { ceil: '#0C0B12', side: '#15131E', back: '#1D1A2A', floor: '#100F18', grid: 'rgba(146,128,255,.26)', wgrid: 'rgba(255,255,255,.045)', edge: 'rgba(255,255,255,.10)', light: 'rgba(160,140,255,.22)' }, vign: 'radial-gradient(120% 100% at 50% 45%, transparent 55%, rgba(0,0,0,.5) 100%)', shadowC: 'rgba(0,0,0,.9)' },
+  light: { text: '#0F172A', muted: '#475569', glass: 'rgba(255,255,255,.7)', border: 'rgba(15,23,42,.11)', accent: '#4FACFE', acText: '#0369A1', red: '#FF5D73', redText: '#BE123C', good: '#15803D', primary: PRI, onPrimary: '#FFFFFF', font: "'Inter',system-ui,sans-serif", r: 14, rc: 12, clip: 'none', clipC: 'none', scrim: 'rgba(241,244,249,.72)', card: 'rgba(255,255,255,.9)', ring: 'rgba(15,23,42,.08)', vpBorder: 'rgba(15,23,42,.08)', key: 'rgba(15,23,42,.06)', popSh: '0 1px 6px rgba(255,255,255,.9)', playGlow: '0 0 0 6px rgba(112,72,255,.12), 0 12px 28px rgba(61,92,245,.3)', bestGlow: 'rgba(112,72,255,.2)', labelBg: 'rgba(15,23,42,.86)', annot: '#7CC4FF',
+    arena: 'radial-gradient(rgba(15,23,42,.10) 1px, transparent 1.5px) 0 0/22px 22px, radial-gradient(95% 80% at 50% 30%, #FFFFFF 0%, #F1F4F9 68%, #E7ECF4 100%)',
+    wait: 'radial-gradient(85% 75% at 50% 42%, #E9EEFB 0%, #D4DEF3 100%)', go: 'radial-gradient(85% 75% at 50% 42%, #34E07F 0%, #19B45A 70%, #14974B 100%)', goText: '#03230F', soon: 'radial-gradient(85% 75% at 50% 42%, #FFE7EB 0%, #FBCFD7 100%)',
+    rx: { text: '#1E2A55', muted: '#4A5785', ring: 'rgba(30,42,85,.14)', chip: 'rgba(21,128,61,.1)', soonText: '#9F1239', soonMuted: '#7F2A3D' },
+    room: { ceil: '#E2E6EF', side: '#D7DDE8', back: '#EEF1F7', floor: '#CDD5E3', grid: 'rgba(61,92,245,.28)', wgrid: 'rgba(15,23,42,.05)', edge: 'rgba(15,23,42,.12)', light: 'rgba(255,255,255,.8)' }, vign: 'radial-gradient(120% 100% at 50% 45%, transparent 60%, rgba(15,23,42,.14) 100%)', shadowC: 'rgba(15,23,42,.4)' },
+  cyber: { text: '#E8FDFF', muted: '#8CB8BF', glass: 'rgba(0,240,255,.05)', border: 'rgba(0,240,255,.36)', accent: '#00F0FF', acText: '#00F0FF', red: '#FF2E63', redText: '#FF6B8F', good: '#39FF88', primary: '#00F0FF', onPrimary: '#021014', font: "'JetBrains Mono',ui-monospace,monospace", r: 0, rc: 0, clip: 'polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)', clipC: 'polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)', scrim: 'rgba(1,6,9,.72)', card: 'rgba(3,15,20,.92)', ring: 'rgba(0,240,255,.16)', vpBorder: 'rgba(0,240,255,.32)', key: 'rgba(0,240,255,.12)', popSh: '0 0 10px rgba(0,240,255,.6)', playGlow: '0 0 24px rgba(0,240,255,.55)', bestGlow: 'rgba(0,240,255,.25)', labelBg: 'rgba(0,12,16,.9)', annot: '#00F0FF',
+    arena: 'repeating-linear-gradient(0deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px), linear-gradient(rgba(0,240,255,.075) 1px, transparent 1px) 0 0/24px 24px, linear-gradient(90deg, rgba(0,240,255,.075) 1px, transparent 1px) 0 0/24px 24px, radial-gradient(95% 80% at 50% 35%, #08161C 0%, #04090C 100%)',
+    wait: 'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, #06202E 0%, #030C12 100%)', go: 'repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, #5BFFA0 0%, #22E070 100%)', goText: '#02200D', soon: 'repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, #2E0714 0%, #120207 100%)',
+    rx: { text: '#BFF8FF', muted: '#7FB3BB', ring: 'rgba(0,240,255,.22)', chip: 'rgba(57,255,136,.1)', soonText: '#FF6B8F', soonMuted: '#D99AAB' },
+    room: { ceil: '#02070A', side: '#041015', back: '#06161C', floor: '#030B0F', grid: 'rgba(0,240,255,.42)', wgrid: 'rgba(0,240,255,.08)', edge: 'rgba(0,240,255,.5)', light: 'rgba(0,240,255,.12)' }, vign: 'radial-gradient(120% 100% at 50% 45%, transparent 55%, rgba(0,0,0,.6) 100%)', shadowC: 'rgba(0,0,0,.8)' }
+};
+const smooth = pts => { let d = `M${pts[0].map(R1)}`; for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2; const c1 = [R1(p1[0] + (p2[0] - p0[0]) / 6), R1(p1[1] + (p2[1] - p0[1]) / 6)], c2 = [R1(p2[0] - (p3[0] - p1[0]) / 6), R1(p2[1] - (p3[1] - p1[1]) / 6)]; d += `C${c1} ${c2} ${p2.map(R1)}`; } return d; };
+function buildRoom(w, h) {
+  const vx = w / 2, vy = h * .4, s = .36, bx0 = vx - s * vx, bx1 = vx + s * (w - vx), by0 = vy - s * vy, by1 = vy + s * (h - vy);
+  const P = a => a.map(q => q.map(R1).join(',')).join(' ');
+  let grid = '', wg = '';
+  for (let i = 0; i <= 12; i++) { const x = w * i / 12, bx = vx + s * (x - vx); grid += `M${R1(x)} ${h}L${R1(bx)} ${R1(by1)}`; }
+  for (let z = 1.12; 1 / z > s + .01; z += .22) { const f = 1 / z, y = vy + f * (h - vy), x0 = vx - f * vx, x1 = vx + f * (w - vx), yt = vy - f * vy; grid += `M${R1(x0)} ${R1(y)}L${R1(x1)} ${R1(y)}`; wg += `M${R1(x0)} ${R1(yt)}L${R1(x0)} ${R1(y)}M${R1(x1)} ${R1(yt)}L${R1(x1)} ${R1(y)}`; }
+  const bw = bx1 - bx0, bh = by1 - by0;
+  for (let i = 1; i < 8; i++) { const x = bx0 + bw * i / 8; wg += `M${R1(x)} ${R1(by0)}L${R1(x)} ${R1(by1)}`; }
+  for (let i = 1; i < 5; i++) { const y = by0 + bh * i / 5; wg += `M${R1(bx0)} ${R1(y)}L${R1(bx1)} ${R1(y)}`; }
+  const edges = `M0 0L${R1(bx0)} ${R1(by0)}M${w} 0L${R1(bx1)} ${R1(by0)}M0 ${h}L${R1(bx0)} ${R1(by1)}M${w} ${h}L${R1(bx1)} ${R1(by1)}M${R1(bx0)} ${R1(by0)}H${R1(bx1)}V${R1(by1)}H${R1(bx0)}Z`;
+  return { vy, by1: R1(by1), ceil: P([[0, 0], [w, 0], [bx1, by0], [bx0, by0]]), floor: P([[0, h], [w, h], [bx1, by1], [bx0, by1]]), left: P([[0, 0], [bx0, by0], [bx0, by1], [0, h]]), right: P([[w, 0], [bx1, by0], [bx1, by1], [w, h]]), back: P([[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]]), grid, wgrid: wg, edges };
+}
+const T3 = [{ x: .27, y: .40, s: 40, f: .62 }, { x: .72, y: .33, s: 31, f: .48 }, { x: .63, y: .65, s: 52, f: .8 }];
+const SC = {
+  idle: { bg: 'arena', ov: 'idle' },
+  rIdle: { bg: 'arena', ov: 'idle' },
+  countdown: { bg: 'arena', ov: 'count' },
+  chaos2d: { bg: 'arena', hud: 2, tg: [{ x: .22, y: .42, s: 46 }, { x: .77, y: .62, s: 46 }, { x: .40, y: .82, s: 46, sc: .78, op: .7 }], hit: { x: .6, y: .24, s: 46, bp: .3 }, xh: { x: .6, y: .24, open: 3 }, miss: [{ x: .13, y: .7, op: .55 }, { x: .86, y: .3, op: .25 }], pop: { x: .6, y: .24, t: '+15', sub: '×1.5 · STREAK 6' } },
+  chaos3d: { bg: 'room', hud: 3, tg: T3, hit: { x: .5, y: .5, s: 40, bp: .3 }, xh: 'c', pop: { x: .5, y: .5, t: '+20', sub: '×2.0 · STREAK 9' } },
+  unlocked: { bg: 'room', tg: T3, xh: 'c', ov: 'unlock' },
+  paused: { bg: 'arena', tg: [{ x: .22, y: .42, s: 46 }, { x: .77, y: .62, s: 46 }, { x: .4, y: .82, s: 46 }], xh: { x: .55, y: .3 }, ov: 'pause' },
+  tracking: { bg: 'arena', hud: 2, tg: [{ x: .6, y: .42, s: 50, ring: .72 }], xh: { x: .607, y: .43 }, trail: [[.08, .78], [.2, .62], [.33, .55], [.47, .56], [.6, .42]], next: [[.6, .42], [.7, .3], [.84, .33], [.9, .48]], chip: { l: 'ON TARGET', v: '72%', acc: 1 } },
+  flick: { bg: 'arena', hud: 2, tg: [{ x: .8, y: .3, s: 26 }], hit: { x: .27, y: .68, s: 26, bp: .4 }, xh: { x: .27, y: .68, open: 3 }, pop: { x: .27, y: .68, t: '+10', sub: 'TTK 286 MS' }, chip: { l: 'AVG TTK', v: '342 ms' } },
+  shrink: { bg: 'arena', hud: 2, tg: [{ x: .24, y: .34, s: 50, ghost: 56 }, { x: .7, y: .5, s: 30, ghost: 56 }, { x: .38, y: .76, s: 14, ghost: 56 }], vanish: [{ x: .8, y: .8 }], xh: { x: .52, y: .58 }, chip: { l: 'LIFETIME', v: '1.1 s' } },
+  rWait: { bg: 'wait', ov: 'wait' }, rGo: { bg: 'go', ov: 'go' }, rTime: { bg: 'wait', ov: 'time' }, rSoon: { bg: 'soon', ov: 'soon' },
+  rT2d: { bg: 'arena', hud: 2, tg: [{ x: .68, y: .38, s: 56 }], xh: { x: .34, y: .64 }, chip: { l: 'ROUND 4 / 8', v: 'Click it' } },
+  rT3d: { bg: 'room', hud: 3, tg: [{ x: .76, y: .36, s: 42, f: .62 }], xh: 'c', chip: { l: 'ROUND 6 / 8', v: 'Flick & click' } },
+  ares: { bg: 'arena', ov: 'ares' }, abest: { bg: 'arena', ov: 'ares', best: 1 },
+  rres: { bg: 'arena', ov: 'rres' }, rfail: { bg: 'arena', ov: 'rres', fail: 1 },
+  sp2d: { bg: 'arena', ann: 2, tg: [{ x: .26, y: .3, s: 46 }, { x: .423, y: .382, s: 46 }, { x: .7, y: .62, s: 46 }], xh: { x: .28, y: .78 } },
+  sp3d: { bg: 'room', ann: 3, tg: [T3[0], T3[1], { x: .68, y: .72, s: 52, f: .82 }], xh: 'c' },
+  room: { bg: 'room' }, arena: { bg: 'arena' }
+};
+const SPARK = { ares: [1, 2, 2, 3, 2, 2, 3, 2, 2, 1, 2, 3, 2, 2, 2, 3, 2, 2, 2, 1, 2, 3, 2, 2, 3, 2, 2, 2, 2, 3], abest: [2, 2, 3, 3, 2, 3, 2, 3, 3, 2, 3, 2, 3, 2, 3, 2, 2, 3, 3, 2, 3, 3, 3, 3, 2, 3, 2, 3, 2, 3] };
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, th = TOK[p.theme] ? p.theme : 'dark', t = TOK[th];
+    const w = +p.w || 368, h = +p.h || 438, big = !!p.big, k = big ? 1.7 : 1, ui = big ? 1.5 : 1;
+    const scene = SC[p.scene] ? p.scene : 'chaos2d', S = SC[scene], mode = (p.mode || '2d').toUpperCase();
+    const is3d = S.bg === 'room', room = is3d ? buildRoom(w, h) : { by1: 0 };
+    const bg = S.bg === 'room' ? t.room.back : S.bg === 'wait' ? t.wait : S.bg === 'go' ? t.go : S.bg === 'soon' ? t.soon : t.arena;
+    const tgs = [], shadows = [];
+    const add = (g, phase) => { const s = g.s * k, b = Math.round(s * 2.7), x = g.x * w, y = g.y * h; tgs.push({ kind: is3d ? 'sphere' : 'disc', s, phase, sc: g.sc ?? 1, op: g.op ?? 1, ring: g.ring ?? -1, ghost: (g.ghost || 0) * k, bp: g.bp ?? .35, l: R1(x - b / 2), t: R1(y - b / 2), b }); if (is3d && phase === 'live') { const fy = room.vy + g.f * (h - room.vy), sw = s * 1.3, sh = s * .32; shadows.push({ l: R1(x - sw / 2), t: R1(fy - sh / 2), w: R1(sw), h: R1(sh), op: R1(.5 + g.f * .5) }); } };
+    (S.tg || []).forEach(g => add(g, 'live'));
+    if (S.hit) add(S.hit, 'hit');
+    const xh0 = S.xh === 'c' ? { x: .5, y: .5 } : S.xh;
+    const xhK = big ? 1.3 : 1, xhB = Math.round(64 * xhK);
+    const cfg = Object.assign({ xs: 'crossdot', color: '#4CF0B0', len: 6, thick: 2, gap: 4, outline: true, ow: 1, dot: true, ds: 2, op: 1 }, p.xh || {}, { open: xh0 && xh0.open || 0 });
+    const misses = (S.miss || []).map(m => ({ l: R1(m.x * w - 9 * k), t: R1(m.y * h - 9 * k), d: 18 * k, op: m.op, c: t.muted }));
+    const vanish = (S.vanish || []).map(v => ({ x: v.x * w, y: v.y * h, d: 56 * k }));
+    const pops = S.pop ? [{ x: S.pop.x * w, y: S.pop.y * h - 30 * k, t: S.pop.t, sub: S.pop.sub }] : [];
+    const chip = S.chip ? { l: S.chip.l, v: S.chip.v, c: S.chip.acc ? t.acText : t.text } : { l: '', v: '', c: '' };
+    let trail = { past: '', next: '' };
+    if (S.trail) trail = { past: smooth(S.trail.map(q => [q[0] * w, q[1] * h])), next: smooth(S.next.map(q => [q[0] * w, q[1] * h])) };
+    const isR = scene[0] === 'r';
+    const idle = isR ? { kicker: 'REACTION · SCREEN', name: 'Screen', meta: '5 rounds · 1–4 s delay · Normal', last: 'avg 231 ms', best: '· best 198 ms' }
+      : { kicker: 'AIM · SCENARIO', name: 'Chaos', meta: `3 targets · 30 s · Normal · ${mode}`, last: '640 pts · 86%', best: '· best 730' };
+    const best = !!S.best;
+    const ar = {
+      isBest: best, notBest: !best, kicker: `CHAOS · ${mode} · NORMAL`, tag: mode === '2D' ? 'Ranked · posted' : 'Local best · 3D',
+      score: best ? '770' : '640', scoreBg: best ? t.primary : 'none', bgClip: best ? 'text' : 'border-box', scoreC: best ? 'transparent' : t.text,
+      cmpL: best ? 'Previous best 730' : 'Personal best 730', cmpV: best ? '+40' : '−90', cmpC: best ? t.good : t.muted,
+      spark: (SPARK[best ? 'abest' : 'ares']).map(v => ({ h: v * 12, c: v === 3 ? t.accent : rgba(t.accent === '#00F0FF' ? '#00F0FF' : '#4FACFE', .38) })),
+      stats: (best ? [['ACCURACY', '91', '%'], ['HITS / SHOTS', '77', '/85'], ['AVG REACTION', '388', 'ms'], ['AVG TTK', '431', 'ms'], ['BEST STREAK', '24', ''], ['XP EARNED', '+96', 'xp']] : [['ACCURACY', '86', '%'], ['HITS / SHOTS', '64', '/74'], ['AVG REACTION', '412', 'ms'], ['AVG TTK', '468', 'ms'], ['BEST STREAK', '18', ''], ['XP EARNED', '+64', 'xp']]).map((s, i) => ({ l: s[0], v: s[1], u: s[2], c: i === 5 ? t.acText : t.text }))
+    };
+    const fail = !!S.fail, top = 96;
+    const rounds = fail ? [224, 251, 4000, 4000, 4000] : [224, 198, 251, 214, 268];
+    const rr = {
+      kicker: fail ? 'SCREEN · RUN FAILED' : 'SCREEN · NORMAL', kickC: fail ? t.redText : t.muted,
+      tag: fail ? 'Not posted' : 'Ranked · posted', tagC: fail ? t.redText : t.muted, tagB: fail ? rgba(t.red, .5) : t.border,
+      big: fail ? '3' : '231', bigU: fail ? 'false starts' : 'ms avg', bigSize: fail ? 54 : 58, bigC: fail ? t.redText : t.text,
+      sub: fail ? 'Rounds 3–5 counted at 4,000 ms' : 'Best round 198 ms · dashed line = avg', cmpL: fail ? 'Personal best' : 'Personal best 219 ms', cmpV: fail ? '219 ms' : '+12 ms', cmpC: t.muted,
+      hasAvg: !fail, avgY: Math.round(231 / 320 * top), avgLY: Math.round(231 / 320 * top) + 3,
+      bars: rounds.map((v, i) => { const pen = v >= 4000, b = !fail && v === 198; return { n: `R${i + 1}`, v: pen ? '4,000' : String(v), h: pen ? top : Math.round(v / (fail ? 400 : 320) * top * (fail ? .5 : 1)), lc: pen ? t.redText : b ? t.acText : t.text, bg: pen ? `repeating-linear-gradient(45deg, ${rgba(t.red, .45)} 0 3px, transparent 3px 7px)` : b ? t.primary : rgba(t.accent, .35), bd: pen ? `1px solid ${rgba(t.red, .6)}` : '0 solid transparent', r: t.rc ? '6px 6px 2px 2px' : '0' }; }),
+      stats: (fail ? [['AVERAGE', '2,495', 'ms', t.text], ['BEST ROUND', '224', 'ms', t.text], ['XP EARNED', '+5', 'xp', t.acText]] : [['FALSE STARTS', '1', '/3', t.text], ['BEST ROUND', '198', 'ms', t.text], ['XP EARNED', '+40', 'xp', t.acText]]).map(s => ({ l: s[0], v: s[1], u: s[2], c: s[3] })),
+      again: fail ? 'Try again' : 'Play again'
+    };
+    let ann = { edge: 12, edgeR: 8, halos: [], labels: [], lines: '', dims: '', hasHud: false, hatch: '', dimC: t.annot };
+    if (S.ann) {
+      const P = g => [g.x * w, g.y * h], gap = 24, a = t.annot, bad = t.red;
+      if (S.ann === 2) {
+        const halos = S.tg.map(g => { const [x, y] = P(g), d = g.s + gap; return { l: x - d / 2, t: y - d / 2, d, c: a, f: rgba('#4FACFE', .06) }; });
+        const [cx, cy] = P(S.xh); halos.push({ l: cx - 48, t: cy - 48, d: 96, c: a, f: rgba('#4CF0B0', .06) });
+        const rej = [[150, 320, 'aim zone'], [300, 236, 'overlap']];
+        rej.forEach(r => halos.push({ l: r[0] - 23, t: r[1] - 23, d: 46, c: bad, f: rgba(bad, .14) }));
+        const A = P(S.tg[0]), B = P(S.tg[1]), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy), u = [dx / L, dy / L], n = [-u[1], u[0]];
+        const a1 = [A[0] + u[0] * 23, A[1] + u[1] * 23], b1 = [B[0] - u[0] * 23, B[1] - u[1] * 23];
+        let dims = `M${a1.map(R1)}L${b1.map(R1)}`;
+        [a1, b1].forEach(q => { dims += `M${R1(q[0] + n[0] * 5)} ${R1(q[1] + n[1] * 5)}L${R1(q[0] - n[0] * 5)} ${R1(q[1] - n[1] * 5)}`; });
+        let lines = '';
+        rej.forEach(r => { lines += `M${r[0] - 7} ${r[1] - 7}L${r[0] + 7} ${r[1] + 7}M${r[0] + 7} ${r[1] - 7}L${r[0] - 7} ${r[1] + 7}`; });
+        ann = { edge: 12, edgeR: 8, halos, lines, dims, dimC: '#FFD166', hasHud: true, hatch: rgba('#7CC4FF', .16),
+          labels: [{ x: 108, y: 96, t: 'halo = r + gap/2', c: a }, { x: 154, y: 128, t: 'gap ≥ 24', c: '#FFD166' }, { x: 103, y: 404, t: 'aim clear · 48 px', c: '#4CF0B0' }, { x: 240, y: 344, t: 'rejected · aim zone', c: '#FF8396' }, { x: 300, y: 196, t: 'rejected · overlap', c: '#FF8396' }, { x: 310, y: 32, t: 'HUD · no spawn', c: a }, { x: 318, y: 424, t: 'edge 12 px', c: a }, { x: 258, y: 318, t: 'live', c: t.muted }] };
+      } else {
+        const cx = w / 2, cy = h / 2;
+        const halos = S.tg.map(g => { const [x, y] = P(g), d = g.s * 1.75; return { l: x - d / 2, t: y - d / 2, d, c: a, f: rgba('#4FACFE', .06) }; });
+        halos.push({ l: cx - 44, t: cy - 44, d: 88, c: '#4CF0B0', f: rgba('#4CF0B0', .06) });
+        let lines = ''; const labels = [];
+        const ang = ['21°', '24°', '17°'];
+        S.tg.forEach((g, i) => { const [x, y] = P(g); lines += `M${cx} ${cy}L${R1(x)} ${R1(y)}`; labels.push({ x: R1((cx + x) / 2), y: R1((cy + y) / 2), t: `θ ${ang[i]}`, c: a }); });
+        labels.push({ x: cx - 52, y: cy + 54, t: 'aim clear ≥ 10°', c: '#4CF0B0' }, { x: P(S.tg[0])[0], y: P(S.tg[0])[1] - 44, t: 'cone = r + 3°', c: a }, { x: w / 2, y: 24, t: 'angles from camera · not pixels', c: t.muted });
+        ann = { edge: 0, edgeR: 0, halos, lines, dims: '', dimC: a, hasHud: false, hatch: '', labels };
+      }
+    }
+    return {
+      th, t, w, h, ui, rad: t.r, clip: t.clip, bg, is3d, room, rc: t.room, shadows, tgs, misses, vanish, pops, chip, hasChip: !!S.chip,
+      hasTrail: !!S.trail, trail, hasAnn: !!S.ann, ann,
+      hasXh: !!xh0, xh: cfg, xhK, xhB, xhL: xh0 ? R1(xh0.x * w - xhB / 2) : 0, xhT: xh0 ? R1(xh0.y * h - xhB / 2) : 0,
+      hud2: !!p.hud && S.hud === 2, hud3: !!p.hud && S.hud === 3, custom: !!p.custom, edgeP: 10,
+      ovIdle: S.ov === 'idle', ovCount: S.ov === 'count', ovUnlock: S.ov === 'unlock', ovPause: S.ov === 'pause', ovWait: S.ov === 'wait', ovGo: S.ov === 'go', ovTime: S.ov === 'time', ovSoon: S.ov === 'soon', ovARes: S.ov === 'ares', ovRRes: S.ov === 'rres',
+      idle, playR: t.r ? '50%' : '0', ar, rr, rx: t.rx, resW: big ? 420 : Math.min(w, 380)
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -184,74 +184,7 @@
     // snake-dev/). Nothing outside it reads them before initSnakeGame().
 
     // MULTI-GAME SYSTEM VARIABLES
-    let currentGame = 'snake'; // 'snake' | 'reflex' | 'aim'
-    let gameAreaElement = null;
-
-    let reflexGameStarted = false;
-    let reflexGameFinished = false;
-    let reflexIsWaiting = false;
-    let reflexCanClick = false;
-    let reflexStartTime = 0;
-    let reflexReactionTimes = [];
-    let reflexCurrentRound = 0;
-    let reflexFalseStarts = 0;
-    let reflexMode = 'screen'; // 'screen' | 'target'
-    let reflexLastClickMs = 0;     // anti-rapid-click debounce
-    let reflexGoReadyMs = 0;       // timestamp when GO state became live; used to floor reaction time
-
-    // Anti-cheat tunables for RefleX
-    const REFLEX_CLICK_DEBOUNCE_MS = 80; // ignore back-to-back clicks within this window (spam clicker)
-    const REFLEX_FALSE_START_LIMIT = 3;  // hard fail the game after this many false starts
-
-    let reflexShowTarget = false;
-    let reflexTargetPosition = { x: 0, y: 0 };
-    let reflexTargetColor = '#ef4444';
-
-    let reflexTimeoutRef = null;
-
-    const reflexGameModes = {
-        screen: {
-            name: 'Screen Mode',
-            icon: 'g-reflex',
-            description: 'Full screen reaction',
-            rounds: 5,
-            minDelay: 1000,
-            maxDelay: 4000,
-            targets: false
-        } ,
-        target: {
-            name: 'Target Mode',
-            icon: 'pro',
-            description: 'Click specific targets',
-            rounds: 8,
-            minDelay: 800,
-            maxDelay: 3000,
-            targets: true
-        }
-    };
-
-    let aimGameStarted = false;
-    let aimGameFinished = false;
-    let aimTimer = 30;
-    let aimScore = 0;
-    let aimAccuracy = 100;
-    let aimTargets = [];
-    let aimShots = 0;
-    let aimHits = 0;
-    let aimBulletHoles = [];
-
-    let aimTimerRef = null;
-    let aimRenderFrameId = null;
-
-    const aimChaosMode = {
-        name: 'Chaos Mode',
-        icon: 'g-aim',
-        description: 'Multiple fast targets',
-        targetSize: 35,
-        targetCount: 3,
-        targetSpeed: 800,
-        timeLimit: 30
-    };
+    let currentGame = 'snake';
 
     let flappyCanvas, flappyCtx;
     let flappyGameRunning = false;
@@ -486,6 +419,7 @@
         snookerReds: 15,
         snookerDifficulty: 'adaptive',
         gameFps: 60, // 30 or 60 — half or full vsync
+        gameSound: 'medium', // ⚙️ Game Sounds, every game's effects (sfxPlay): 'high' | 'medium' | 'low' | 'off'
         // Ludo rule toggles — flat, not nested: .toggle-switch writes
         // userPreferences[data-pref] directly. ludoRules() reads them live (mid-match).
         ludoBlocks: true,       // 2+ own tokens bar opponents (never on a safe square)
@@ -2138,8 +2072,12 @@
         tetris:   { icon: 'g-tetris', label: 'Tetris',   unit: 'pts' },
         breakout: { icon: 'g-breakout', label: 'Breakout', unit: 'pts' },
         flappy:   { icon: 'g-flappy', label: 'Flappy',   unit: 'pipes' },
-        aim:      { icon: 'g-aim', label: 'Aim',      unit: 'pts' },
-        reflex:   { icon: 'g-reflex', label: 'RefleX',   unit: 'ms', lowerIsBetter: true,
+        // AimLab's ranked scenarios: Chaos is the aim scalar; Screen and Target read RefleX's records
+        // (lbBoardValue hands them to 'reflex'), and rank low first. 'reflex' stays as their store.
+        aim:      { icon: 'g-aim', label: 'AimLab',   unit: 'pts', units: { screen: 'ms', target: 'ms' }, lower: { screen: true, target: true },
+                    modes: { chaos: 'Chaos', screen: 'Screen', target: 'Target' },
+                    notes: { chaos: '2D · Normal · 30 s', screen: 'Normal · lower is better', target: '2D · Normal · lower is better' } },
+        reflex:   { icon: 'g-reflex', label: 'Reaction', unit: 'ms', lowerIsBetter: true,
                     modes: { screen: 'Screen', target: 'Target' } },
         // Pool ranks CPU wins by tier as Ludo does, filed under the tier locked when the frame
         // started. 'cpu' is the all-time total (older wins predate the split); 'pvp' is hot-seat;
@@ -2177,7 +2115,10 @@
         return (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0;
     }
 
+    // A board ranks low first when the game does (RefleX), or the mode does (AimLab's reaction tabs).
+    const lbLower = (game, mode) => { const c = LB_BOARDS[game] || {}; return !!(c.lowerIsBetter || (c.lower && c.lower[mode])); };
     function lbBoardValue(player, game, mode) {
+        if (game === 'aim') { if (mode === 'screen' || mode === 'target') return lbBoardValue(player, 'reflex', mode); mode = null; }
         const primary = LB_PRIMARY_MODE[game];
         const gb = player.gameBests || {};
 
@@ -2248,7 +2189,8 @@
         if (!cfg || !cfg.modes) return null;
         try {
             if (game === 'snake')  return snakeMode;
-            if (game === 'reflex') return reflexMode;
+            if (game === 'reflex') return aimReactLbMode();
+            if (game === 'aim')    return aimLbMode();
             // Pool's CPU board is the tier locked for this frame; a tournament has none, so All-time.
             if (game === 'pool')   return poolMode === 'pvp' ? 'pvp' : poolMode === 'net' ? 'online'
                 : poolMode === 'cpu' && LB_BOARDS.pool.modes[poolCpuTier] ? poolCpuTier : 'cpu';
@@ -2276,7 +2218,7 @@
     // Tab strip — Ludo's four tiers are otherwise only reachable through settings. Generic, so
     // Snake, RefleX and Pool get it too.
     // A board tab's icon: the CPU tier, or what the board counts.
-    const LB_MODE_ICON = { pro: 'pro', hard: 'hard', normal: 'normal', easy: 'easy', cpu: 'book', pvp: 'people', highBreak: 'star', endless: 'endless', walled: 'walled', levels: 'levels', screen: 'g-reflex', target: 'pro' };
+    const LB_MODE_ICON = { pro: 'pro', hard: 'hard', normal: 'normal', easy: 'easy', cpu: 'book', pvp: 'people', highBreak: 'star', endless: 'endless', walled: 'walled', levels: 'levels', screen: 'g-reflex', target: 'pro', chaos: 'g-aim' };
     function gameLbTabsHtml(game, active) {
         const cfg = LB_BOARDS[game];
         if (!cfg || !cfg.modes) return '';
@@ -2298,7 +2240,7 @@
         box.innerHTML =
             '<div class="game-lb-head">' +
                 '<span>' + attIcon(cfg.icon) + ' ' + escapeHtml(cfg.label) + '</span>' +
-                (cfg.lowerIsBetter ? '<span class="game-lb-note">lower is better</span>' : '') +
+                (lbLower(game, mode) ? '<span class="game-lb-note">lower is better</span>' : '') +
                 '<button class="game-lb-close" onclick="window.closeGameLeaderboard()">✕</button>' +
             '</div>' +
             gameLbTabsHtml(game, mode) +
@@ -2376,7 +2318,7 @@
                     ' — open the ' + (cfg.label || game) + ' leaderboard';
         // Lower-is-better games beat their record by going down.
         const beat = (cur !== null && cur !== undefined && best !== null && best > 0)
-            ? (cfg.lowerIsBetter ? cur > 0 && cur <= best : cur >= best)
+            ? (lbLower(game, gameLbMode(game)) ? cur > 0 && cur <= best : cur >= best)
             : false;
         btn.classList.toggle('is-record', !!beat);
         refreshGameLeaderboard(game);
@@ -10127,6 +10069,9 @@
         const S = poolS, w = v.winner, R = poolRules();
         if (S.awardedRack === S.rackId) return;
         S.awardedRack = S.rackId;
+        // Against the CPU or online, the stinger is yours to win or lose; hot-seat cheers the winner.
+        const mine = poolMode === 'cpu' ? 1 : poolMode === 'net' && S.netRoom ? S.netRoom.seat : w;
+        poolSfx(w === mine ? 'win' : 'lose');
         // A frame that survives a reload is gone once it is decided, before anything is paid.
         poolClearSaved();
         // Tournament frames go to the bracket, not to the quick-match records or XP.
@@ -10241,6 +10186,8 @@
         const S = poolS, R = poolRules();
         const v = R.judge(S.frame, S.world, { call: S.called, nominate: S.nom });
         poolShowToast(R.text(v, poolNames()));
+        if (v.foul) poolSfx('foul');
+        else if (v.notice === 'century' || v.notice === 'maximum') poolSfx('century');
         R.apply(S.world, v);
         if (!v.foul && v.counted) poolAwardPots(v.shooter, v.counted.length);
         poolAfterTurn(v);
@@ -10404,6 +10351,9 @@
         S.netLocal = poolMode === 'net' && !raw;
         if (S.netLocal) { const c = poolCueBall(); poolNetMove({ k: 'strike', n: S.netFrameNo, shot, cue: [c.x, c.y], called: S.called, nom: S.nom }); }
         ppStrike(S.world, shot);
+        const st = S.world.log[S.world.log.length - 1];
+        poolSfx('strike', st && st.type === 'strike' ? st.speed / S.cfg.maxSpeed : 0.5);
+        S.sndAt = S.world.log.length;
         // Your shots against the CPU, by cue: the frame's win goes to the one that played most.
         if (poolMode === 'cpu' && !poolCpuTurn()) { const id = poolSeatCueId(1); S.cueShots[id] = (S.cueShots[id] || 0) + 1; }
         S.shot = null;
@@ -10413,6 +10363,7 @@
     function poolStepMoving() {
         const S = poolS;
         ppStep(S.world, 1 / 60);
+        poolSfxLog();
         S.world.balls.forEach(b => {
             if (b.state === 'pocketed' && !S.down.has(b.id)) {
                 S.down.add(b.id);
@@ -10426,12 +10377,25 @@
         ppSimulate(S.world, 0.001); poolSettle();
         return true;
     }
+    // Sound (the host's sfxPlay): the table's own events, never a replayed or fast-forwarded table.
+    function poolSfx(name, k) { if (typeof sfxPlay === 'function' && !poolS.netReplay) sfxPlay(name, k, poolS.game); }
+    // The shot's contacts since the last step, from the physics log: each by how hard it was (the
+    // balls' speed after it, against half a break), the four loudest a step.
+    function poolSfxLog() {
+        const S = poolS, log = S.world.log, from = S.sndAt || 0;
+        if (log.length <= from) { S.sndAt = log.length; return; }
+        S.sndAt = log.length;
+        const V = S.cfg.maxSpeed * 0.5, sp = id => { const b = S.world.balls.find(q => q.id === id); return b ? Math.hypot(b.vx, b.vy) / V : 0; };
+        log.slice(from).map(e => e.type === 'ball' ? ['clack', sp(e.a) + sp(e.b)] : e.type === 'cushion' ? [e.kind === 'cushion' ? 'cushion' : 'jaw', sp(e.ball)] : e.type === 'pocket' ? ['pocket', 1] : null)
+            .filter(e => e && e[1] > 0.004).sort((a, b) => b[1] - a[1]).slice(0, 4).forEach(e => poolSfx(e[0], Math.sqrt(Math.min(1, e[1]))));
+    }
     // The shot clock ran out on the player at the table.
     function poolTimeout() {
         const S = poolS, R = poolRules();
         if (poolMode === 'net' && !poolRemoteTurn()) poolNetMove({ k: 'timeout', n: S.netFrameNo, nom: S.nom });
         const v = R.timeout(S.frame, S.world);
         poolShowToast(R.text(v, poolNames()));
+        poolSfx('foul');
         poolAfterTurn(v);
     }
 
@@ -10449,7 +10413,11 @@
             }
         } else if (S.phase === 'aim' && poolCanAct() && !S.drag && S.clockTotal) {
             // The clock waits for the hand-off and ball in hand; a tournament can turn it off.
+            // The last five seconds tick, as the bar turns hot; the last one higher.
+            const was = Math.ceil(S.clockLeft);
             S.clockLeft -= dt / 1000;
+            const now = Math.ceil(S.clockLeft);
+            if (now !== was && now >= 1 && now <= 5) poolSfx('clock', now === 1 ? 1 : 0.5);
             if (S.clockLeft <= 0) poolTimeout();
         }
         poolAimHoldTick(dt);
@@ -11467,7 +11435,7 @@
         resume: () => poolTourResume(),
         resumeTour: () => poolTourResume(),
         bracket: () => { const T = poolS.tour; if (!T.t) return; T.screen = 'bracket'; T.tab = poolTourTab(); poolTourBump(); },
-        champion: () => { const T = poolS.tour; if (T.t && ptChampion(T.t) !== null) { T.screen = 'champion'; poolTourBump(); } },
+        champion: () => { const T = poolS.tour; if (T.t && ptChampion(T.t) !== null) { T.screen = 'champion'; poolSfx('champion'); poolTourBump(); } },
         // Leaving a screen: from the champion the tournament is let go; with no match in
         // progress, a tournament table goes back to quick matches.
         close: () => {
@@ -11839,6 +11807,59 @@
         });
     }
     // ═══ END POOL ENGINE ═══
+
+    // GAME SOUNDS (AimLab, pool, snooker): one synthesised bank, oscillators and filtered noise, so
+    // no files and no permission. ⚙️ Game Sounds sets the level or Off; nothing plays while the tab
+    // is hidden. Browsers hold the context until a click, and every game starts on one.
+    const SFX_LEVEL = { high: 1, medium: 0.6, low: 0.3, off: 0 };
+    const sfxS = { ac: null, out: null, noise: null, live: [] };
+    function sfxCtx() {
+        const k = SFX_LEVEL[userPreferences.gameSound] ?? SFX_LEVEL.medium;
+        if (!k || document.hidden) return null;
+        try {
+            if (!sfxS.ac) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; sfxS.ac = new AC(); sfxS.out = sfxS.ac.createGain(); sfxS.out.connect(sfxS.ac.destination); }
+            if (sfxS.ac.state === 'suspended') sfxS.ac.resume();
+            sfxS.out.gain.value = k;
+            return sfxS.ac;
+        } catch (_) { return null; }
+    }
+    // At most 10 voices: a break's burst of contacts plays its loudest, not every one.
+    function sfxVoice(ac, ms) { const now = ac.currentTime; sfxS.live = sfxS.live.filter(t => t > now); if (sfxS.live.length >= 10) return false; sfxS.live.push(now + ms / 1000); return true; }
+    // A tone: f Hz (gliding to f2), ms long, peak vol, starting at ms from now.
+    function sfxTone(f, ms, type, vol, f2, at) {
+        const ac = sfxCtx(); if (!ac || !sfxVoice(ac, ms + (at || 0))) return;
+        const t = ac.currentTime + (at || 0) / 1000, e = t + ms / 1000, o = ac.createOscillator(), g = ac.createGain();
+        o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, e);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, e);
+        o.connect(g); g.connect(sfxS.out); o.start(t); o.stop(e + 0.02);
+    }
+    // A noise burst through a filter: a ball's click, a cushion's thud.
+    function sfxNoise(ms, vol, type, freq, q, at) {
+        const ac = sfxCtx(); if (!ac || !sfxVoice(ac, ms + (at || 0))) return;
+        if (!sfxS.noise) { const n = ac.sampleRate, b = ac.createBuffer(1, n, n), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; sfxS.noise = b; }
+        const t = ac.currentTime + (at || 0) / 1000, e = t + ms / 1000, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+        s.buffer = sfxS.noise; f.type = type; f.frequency.value = freq; f.Q.value = q || 1;
+        g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, e);
+        s.connect(f); f.connect(g); g.connect(sfxS.out); s.start(t, Math.random() * 0.5); s.stop(e + 0.02);
+    }
+    // The table: k is how hard (0–1). Snooker's smaller balls click a little higher.
+    function sfxPlay(name, k, game) {
+        k = Math.max(0, Math.min(1, k === undefined ? 1 : k));
+        const p = game === 'snooker' ? 1.12 : 1, arp = (fs, ms, gap, vol) => fs.forEach((f, i) => sfxTone(f, ms, 'triangle', vol, 0, i * gap));
+        switch (name) {
+            case 'strike': sfxNoise(30, 0.08 + 0.35 * k, 'bandpass', 2600 * p, 1.2); sfxTone(1100 * p, 35, 'triangle', 0.04 + 0.12 * k, 700); break;
+            case 'clack': sfxNoise(22, 0.05 + 0.45 * k, 'bandpass', 3400 * p, 3); sfxTone(2300 * p, 40, 'sine', 0.03 + 0.2 * k, 1900 * p); break;
+            case 'cushion': sfxNoise(80, 0.04 + 0.3 * k, 'lowpass', 380, 0.8); sfxTone(110, 70, 'sine', 0.03 + 0.18 * k, 70); break;
+            case 'jaw': [0, 55, 100].forEach((at, i) => sfxNoise(18, (0.25 - i * 0.07) * (0.4 + k), 'bandpass', 2400, 2, at)); break;
+            case 'pocket': sfxTone(190, 160, 'sine', 0.22, 85); sfxNoise(140, 0.16, 'lowpass', 650, 0.7, 10); break;
+            case 'foul': sfxTone(160, 150, 'square', 0.05, 140); sfxTone(118, 220, 'square', 0.05, 100, 140); break;
+            case 'clock': sfxTone(k >= 1 ? 1400 : 1000, 55, 'sine', 0.07); break;
+            case 'win': arp([523, 659, 784, 1047], 220, 95, 0.07); break;
+            case 'lose': arp([392, 330, 262], 260, 140, 0.06); break;
+            case 'century': arp([784, 988, 1175, 1568], 180, 70, 0.06); break;
+            case 'champion': arp([523, 659, 784, 659, 784, 1047], 240, 150, 0.07); break;
+        }
+    }
 
     // SHARED MAXIMIZE-TO-MODAL HELPER (Pool + Ludo)
     // Two ways in:
@@ -13481,785 +13502,1152 @@
     }
     // ═══ END SNAKE ENGINE ═══
 
-    function initReflexGame() {
-        gameAreaElement = document.getElementById('multi-game-area');
-        if (!gameAreaElement) return;
+    // ═══ AIMLAB ENGINE — generated from aim-dev/, do not edit here ═══
+    // ── AimLab core: scenarios, spawn rules, scoring, the reaction rules. No DOM (aim-ui.js draws). ──
+    // Design: aim-dev/ref/design (Canvas A12 spawn rules, A13 timing). Plan: AIMLAB_PLAN.md.
+    const AIM_SCEN = {
+        // size: 2D diameter in px; ang: 3D angular radius in degrees (about the 2D size at the 95° default FOV).
+        chaos:    { name: 'Chaos', group: 'aim', len: 30, count: 3, size: 46, ang: 6.5, desc: 'Three live targets; hit one, another spawns. Drift at Hard.' },
+        flick:    { name: 'Flick', group: 'aim', len: 30, count: 1, size: 26, ang: 3.8, desc: 'One small target at a time. Measures time-to-kill.' },
+        tracking: { name: 'Tracking', group: 'aim', len: 45, count: 1, size: 50, ang: 7, desc: 'Keep aim on a curving target to fill the ring.' },
+        shrink:   { name: 'Shrink', group: 'aim', len: 30, count: 3, size: 50, ang: 7, life: 1600, desc: 'Hit before they shrink away. A vanish is a miss.' },
+        // RefleX's two modes: rounds and delays are its Normal, unchanged.
+        screen:   { name: 'Screen', group: 'react', rounds: 5, minDelay: 1000, maxDelay: 4000, noCam: true, desc: 'Wait for green, then click anywhere.' },
+        target:   { name: 'Target', group: 'react', rounds: 8, minDelay: 800, maxDelay: 3000, size: 60, ang: 8, desc: 'Click the target the moment it appears.' }
+    };
+    const AIM_ORDER = ['chaos', 'flick', 'tracking', 'shrink', 'screen', 'target'];
+    // delay: [min ×, max ×] on the reaction wait.
+    const AIM_DIFF = {
+        easy:   { name: 'Easy', sub: 'BIG · SLOW', size: 1.3, speed: 0.6, life: 1.5, delay: [1, 0.5] },
+        normal: { name: 'Normal', sub: 'RANKED', size: 1, speed: 1, life: 1, delay: [1, 1] },
+        hard:   { name: 'Hard', sub: 'SMALL · DRIFT', size: 0.75, speed: 1.5, life: 0.7, delay: [0.6, 1.25], drift: true }
+    };
+    const AIM_GAP_PX = 24, AIM_EDGE_PX = 12, AIM_CLEAR_PX = 48, AIM_GAP_DEG = 6, AIM_CLEAR_DEG = 10, AIM_TRIES = 40;
+    const AIM_DEBOUNCE_MS = 80, AIM_FS_LIMIT = 3, AIM_SOON_MS = 1200, AIM_NEXT_MS = 300, AIM_COUNT_MS = 3000, AIM_FX_MS = 600;
+    // 3D: targets sit on a shell AIM_D from the camera, inside this window (degrees from the room's forward).
+    const AIM_D = 12, AIM_YAW = 34, AIM_P0 = -10, AIM_P1 = 18;
+    const AIM_KEY = 'aimLab';
+    const AIM_XH_DEFAULT = { xs: 'crossdot', color: '#4CF0B0', len: 6, thick: 2, gap: 4, outline: true, ow: 1, dot: true, ds: 2, op: 100, dyn: true };
+    const AIM_SET_DEFAULT = { sens: 1, fov: 95, invY: false, sound: true, hitSnd: 'tick', timerBar: true, tcolor: '#FF5D73', bg: 'room' };
 
-        updateReflexScoreDisplay();
-        updateReflexDisplay();
-    }
+    const aimDir = (y, p) => { const a = y * Math.PI / 180, b = p * Math.PI / 180; return [Math.cos(b) * Math.sin(a), Math.sin(b), Math.cos(b) * Math.cos(a)]; };
+    const aimAngle = (a, b) => { const u = aimDir(a.x, a.y), v = aimDir(b.x, b.y); return Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]))) * 180 / Math.PI; };
+    // Centre distance: px in 2D, degrees from the camera in 3D (depth can't hide an overlap).
+    const aimDist = (sp, a, b) => sp.ang ? aimAngle(a, b) : Math.hypot(a.x - b.x, a.y - b.y);
+    const aimMult = s => s >= 9 ? 2 : s >= 6 ? 1.5 : s >= 4 ? 1.25 : 1;
+    const aimRanked = (id, mode, diff) => diff === 'normal' && (id === 'screen' || ((id === 'chaos' || id === 'target') && mode === '2d'));
+    const aimBestKey = (id, mode, diff) => id + '|' + (AIM_SCEN[id].noCam ? '-' : mode) + '|' + diff;
+    const aimMean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
 
-    function generateReflexTargetPosition() {
-        if (!gameAreaElement) return { x: 200, y: 200 };
+    // A spawn space. 2D: px, with holes (the in-run HUD) no target may sit under. k scales sizes (Max).
+    function aimSpace2d(w, h, holes, k) { return { ang: false, w, h, k: k || 1, holes: holes || [], edge: AIM_EDGE_PX, gap: AIM_GAP_PX, clear: AIM_CLEAR_PX }; }
+    function aimSpace3d() { return { ang: true, k: 1, holes: [], edge: 0, gap: AIM_GAP_DEG, clear: AIM_CLEAR_DEG, y0: -AIM_YAW, y1: AIM_YAW, p0: AIM_P0, p1: AIM_P1 }; }
+    function aimRadius(sp, id, diff) { const S = AIM_SCEN[id], d = AIM_DIFF[diff].size; return sp.ang ? S.ang * d : S.size / 2 * d * sp.k; }
 
-        const rect = gameAreaElement.getBoundingClientRect();
-        const targetSize = 60;
-        const margin = Math.max(targetSize / 2 + 20, 50);
-
-        const availableWidth = Math.max(rect.width - margin * 2, 100);
-        const availableHeight = Math.max(rect.height - margin * 2, 100);
-
-        const minX = margin;
-        const maxX = rect.width - margin;
-        const minY = margin;
-        const maxY = rect.height - margin;
-
-        let position = {
-            x: Math.random() * availableWidth + margin,
-            y: Math.random() * availableHeight + margin
+    // Rejection sampling: dist(A,B) ≥ rA + rB + gap against every live target, the edge clear of the aim,
+    // off the HUD. 40 tries, then the gap relaxes by 25% at a time down to 0; never an overlap (null if no room).
+    function aimSpawnAt(sp, r, live, aim, rnd) {
+        rnd = rnd || Math.random;
+        const fits = (p, gap, clear) => {
+            for (const q of sp.holes) { const dx = Math.max(q.x - p.x, 0, p.x - q.x - q.w), dy = Math.max(q.y - p.y, 0, p.y - q.y - q.h); if (dx * dx + dy * dy < r * r) return false; }
+            if (aim && clear > 0 && aimDist(sp, p, aim) < r + clear) return false;
+            for (const t of live) if (aimDist(sp, p, t) < r + t.r + gap) return false;
+            return true;
         };
-
-        position.x = Math.max(minX, Math.min(maxX, position.x));
-        position.y = Math.max(minY, Math.min(maxY, position.y));
-
-        return position;
-    }
-
-    function generateReflexTargetColor() {
-        const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
-        return colors[Math.floor(Math.random() * colors.length)];
-    }
-
-    function startReflexRound(roundNum) {
-        const config = reflexGameModes[reflexMode];
-        const nextRound = roundNum || reflexCurrentRound + 1;
-
-        if (nextRound > config.rounds) {
-            finishReflexGame();
-            return;
+        const lo = sp.ang ? [sp.y0 + r, sp.p0 + r] : [r + sp.edge, r + sp.edge], hi = sp.ang ? [sp.y1 - r, sp.p1 - r] : [sp.w - r - sp.edge, sp.h - r - sp.edge];
+        if (hi[0] < lo[0] || hi[1] < lo[1]) return null;
+        const pick = () => ({ x: lo[0] + rnd() * (hi[0] - lo[0]), y: lo[1] + rnd() * (hi[1] - lo[1]) });
+        for (let g = sp.gap; ; g = g > 0.5 ? g * 0.75 : 0) {
+            for (let i = 0; i < AIM_TRIES; i++) { const p = pick(); if (fits(p, g, sp.clear)) return p; }
+            if (!g) break;
         }
+        // Last resort: scan for any free spot, the aim zone included.
+        const st = sp.ang ? 0.5 : 4;
+        for (let y = lo[1]; y <= hi[1]; y += st) for (let x = lo[0]; x <= hi[0]; x += st) if (fits({ x, y }, 0, 0)) return { x, y };
+        return null;
+    }
 
-        reflexCurrentRound = nextRound;
-        reflexIsWaiting = true;
-        reflexCanClick = false;
-        reflexShowTarget = false;
-
-        updateReflexDisplay();
-
-        const delay = Math.random() * (config.maxDelay - config.minDelay) + config.minDelay;
-
-        reflexTimeoutRef = setTimeout(() => {
-            reflexStartTime = Date.now();
-            reflexGoReadyMs = reflexStartTime;
-            reflexCanClick = true;
-            reflexIsWaiting = false;
-
-            if (config.targets) {
-                reflexTargetPosition = generateReflexTargetPosition();
-                reflexTargetColor = generateReflexTargetColor();
-                reflexShowTarget = true;
+    // ── Aim runs ─────────────────────────────────────────────────────
+    function aimNewRun(id, mode, diff, sp) {
+        return { id, mode, diff, sp, len: AIM_SCEN[id].len * 1000, el: 0, score: 0, hits: 0, shots: 0, streak: 0, bestStreak: 0, nid: 1,
+            tg: [], kills: [], marks: [], fx: [], trail: [], onMs: 0, onRun: 0, spark: new Array(30).fill(0), over: false };
+    }
+    function aimAddTarget(run, aim, rnd) {
+        rnd = rnd || Math.random;
+        const S = AIM_SCEN[run.id], D = AIM_DIFF[run.diff], sp = run.sp, r = aimRadius(sp, run.id, run.diff);
+        if (run.id === 'tracking') {
+            const t = { id: run.nid++, r, r0: r, born: run.el, ph: [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3, rnd() * 6.3] };
+            aimTrackPos(run, t); run.tg.push(t); return t;
+        }
+        const p = aimSpawnAt(sp, r, run.tg, aim, rnd);
+        if (!p) return null;
+        const t = { id: run.nid++, x: p.x, y: p.y, r, r0: r, born: run.el, vx: 0, vy: 0 };
+        if (D.drift && run.id === 'chaos') { const a = rnd() * 6.283, v = (sp.ang ? 6 : 60 * sp.k) * D.speed; t.vx = Math.cos(a) * v; t.vy = Math.sin(a) * v; }
+        run.tg.push(t);
+        return t;
+    }
+    function aimFill(run, aim, rnd) { const n = AIM_SCEN[run.id].count; for (let i = run.tg.length; i < n; i++) if (!aimAddTarget(run, aim, rnd)) break; }
+    // Tracking: two sines per axis, phases per target; speed scales with difficulty.
+    function aimTrackPos(run, t) {
+        const sp = run.sp, s = run.el / 1000 * AIM_DIFF[run.diff].speed, p = t.ph;
+        const ux = 0.62 * Math.sin(0.9 * s + p[0]) + 0.38 * Math.sin(1.7 * s + p[1]), uy = 0.6 * Math.sin(1.1 * s + p[2]) + 0.4 * Math.sin(0.7 * s + p[3]);
+        if (sp.ang) { t.x = ux * (sp.y1 - t.r) * 0.85; t.y = (sp.p0 + sp.p1) / 2 + uy * ((sp.p1 - sp.p0) / 2 - t.r); return; }
+        const top = sp.holes.reduce((m, q) => Math.max(m, q.y + q.h), sp.edge);
+        t.x = sp.w / 2 + ux * (sp.w / 2 - t.r - sp.edge);
+        t.y = (top + sp.h - sp.edge) / 2 + uy * ((sp.h - sp.edge - top) / 2 - t.r);
+    }
+    // Rescale a live 2D run when the viewport changes size (footer hides, Max opens).
+    function aimRescale(run, sp) {
+        const o = run.sp; run.sp = sp;
+        if (sp.ang || o.ang || !o.w || !o.h) return;
+        const sx = sp.w / o.w, sy = sp.h / o.h, sk = sp.k / o.k;
+        for (const t of run.tg) { t.x *= sx; t.y *= sy; t.r *= sk; t.r0 *= sk; t.vx *= sk; t.vy *= sk; }
+        for (const m of run.marks.concat(run.fx)) { m.x *= sx; m.y *= sy; if (m.r) m.r *= sk; }
+        for (const p of run.trail) { p.x *= sx; p.y *= sy; }
+    }
+    function aimHitAt(run, aim) { for (const t of run.tg) if (aimDist(run.sp, aim, t) <= t.r) return t; return null; }
+    function aimShoot(run, aim, rnd) {
+        if (run.over || run.id === 'tracking') return null;
+        run.shots++;
+        const t = aimHitAt(run, aim);
+        if (!t) { run.streak = 0; run.marks.push({ x: aim.x, y: aim.y, at: run.el }); return null; }
+        run.hits++; run.streak++; run.bestStreak = Math.max(run.bestStreak, run.streak);
+        const ttk = run.el - t.born, m = aimMult(run.streak);
+        // Chaos is hits × 10, as the ranked board always was; the others pay the streak multiplier.
+        const pts = run.id === 'chaos' ? 10 : Math.round(10 * m);
+        run.score += pts;
+        run.kills.push({ at: run.el, ttk });
+        run.spark[Math.min(29, Math.floor(run.el / run.len * 30))]++;
+        const sub = run.id === 'flick' ? 'TTK ' + Math.round(ttk) + ' MS' : run.streak < 2 ? '' : run.id === 'chaos' ? 'STREAK ' + run.streak : (m > 1 ? '×' + m + ' · ' : '') + 'STREAK ' + run.streak;
+        run.fx.push({ x: t.x, y: t.y, r: t.r, at: run.el, pts: '+' + pts, sub });
+        run.tg = run.tg.filter(q => q !== t);
+        aimFill(run, aim, rnd);
+        return t;
+    }
+    function aimTick(run, dt, aim, rnd) {
+        if (run.over) return;
+        run.el = Math.min(run.len, run.el + dt);
+        const sp = run.sp, D = AIM_DIFF[run.diff], s = dt / 1000;
+        if (run.id === 'tracking') {
+            const t = run.tg[0];
+            if (t) {
+                aimTrackPos(run, t);
+                run.trail.push({ x: t.x, y: t.y }); if (run.trail.length > 40) run.trail.shift();
+                const on = !!aim && aimDist(sp, aim, t) <= t.r;
+                t.on = on;
+                if (on) {
+                    run.onMs += dt; run.onRun += dt; run.streak = Math.floor(run.onRun / 1000); run.bestStreak = Math.max(run.bestStreak, run.streak);
+                    run.score += s * 40 * aimMult(run.streak);
+                    run.spark[Math.min(29, Math.floor(run.el / run.len * 30))] += dt;
+                } else { run.onRun = 0; run.streak = 0; }
             }
-
-            updateReflexDisplay();
-        }, delay);
-    }
-
-    // Centralised false-start: cancels the pending GO timer, increments the counter, then either
-    // ends the game or re-arms the wait with a longer cool-off so a click burst cannot carry over.
-    function reflexHandleFalseStart() {
-        reflexFalseStarts++;
-        reflexCanClick = false;
-        reflexShowTarget = false;
-        if (reflexTimeoutRef) {
-            clearTimeout(reflexTimeoutRef);
-            reflexTimeoutRef = null;
-        }
-        if (reflexFalseStarts >= REFLEX_FALSE_START_LIMIT) {
-            // Hard fail — record a penalty time for any remaining rounds so the
-            // average can't be gamed by ending early on a single fast click.
-            const config = reflexGameModes[reflexMode];
-            const penalty = config.maxDelay; // worst-case reaction
-            while (reflexReactionTimes.length < config.rounds) {
-                reflexReactionTimes.push(penalty);
-            }
-            finishReflexGame();
-            return;
-        }
-        updateReflexDisplay();
-        // Longer cool-off than the original 500ms so a rapid-click stream
-        // doesn't immediately re-arm and exploit the next GO.
-        setTimeout(() => startReflexRound(reflexCurrentRound), 1200);
-    }
-
-    function handleReflexClick(event) {
-        if (!reflexGameStarted || reflexGameFinished) return;
-
-        // 1. Click-spam debounce — returns before any state mutation, so a spam stream cannot
-        // false-start, score, or traverse states.
-        const now = Date.now();
-        if (now - reflexLastClickMs < REFLEX_CLICK_DEBOUNCE_MS) {
-            return;
-        }
-        reflexLastClickMs = now;
-
-        // 2. FALSE START — clicked during the wait phase.
-        if (reflexIsWaiting) {
-            reflexHandleFalseStart();
-            return;
-        }
-
-        if (!reflexCanClick) return;
-
-        // Lucky prefires that land just after GO (even sub-100ms) are legitimate; the false-start
-        // gate and click debounce already block spam, so no floor is needed here.
-        const reactionTime = now - reflexStartTime;
-
-        // 4. TARGET MODE — require the click to land on the target.
-        if (reflexGameModes[reflexMode].targets && reflexShowTarget) {
-            const rect = gameAreaElement.getBoundingClientRect();
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
-            const distance = Math.sqrt(
-                Math.pow(clickX - reflexTargetPosition.x, 2) +
-                Math.pow(clickY - reflexTargetPosition.y, 2)
-            );
-            if (distance > 30) {
-                // Missed — treat as a false start so spam-clicking the canvas
-                // can't farm rounds by waiting for the GO + auto-restart loop.
-                reflexHandleFalseStart();
-                return;
-            }
-        }
-
-        // 5. SUCCESSFUL REACTION
-        reflexReactionTimes.push(reactionTime);
-        reflexCanClick = false;
-        reflexShowTarget = false;
-        updateReflexDisplay();
-        setTimeout(() => { startReflexRound(); }, 300);
-    }
-
-    function finishReflexGame() {
-        reflexGameStarted = false;
-        reflexGameFinished = true;
-        reflexCanClick = false;
-        reflexShowTarget = false;
-
-        if (reflexTimeoutRef) {
-            clearTimeout(reflexTimeoutRef);
-            reflexTimeoutRef = null;
-        }
-
-        const avgTime = reflexReactionTimes.length > 0
-            ? Math.round(reflexReactionTimes.reduce((a, b) => a + b, 0) / reflexReactionTimes.length)
-            : 0;
-        const bestTime = reflexReactionTimes.length > 0 ? Math.min(...reflexReactionTimes) : 0;
-
-        // loadReflexHighScores() normalises the never-scored sentinel back to Infinity, so a value
-        // that round-tripped through JSON as null can be beaten again.
-        const highScores = loadReflexHighScores();
-        let newHighScore = false;
-
-        // A finished run with no recorded reaction leaves both figures at 0, and RefleX ranks
-        // ascending — storing it would plant an unbeatable 0 ms record at the top.
-        if (reflexReactionTimes.length > 0) {
-            if (avgTime > 0 && avgTime < highScores[reflexMode].avg) {
-                highScores[reflexMode].avg = avgTime;
-                newHighScore = true;
-            }
-            if (bestTime > 0 && bestTime < highScores[reflexMode].best) {
-                highScores[reflexMode].best = bestTime;
-                newHighScore = true;
-            }
-        }
-
-        if (newHighScore) {
-            saveReflexHighScores(highScores);
-            updateReflexScoreDisplay();
-            queueScoreSync();
-        }
-
-        awardGameXP('reflex', { avgTime, bestTime, falseStarts: reflexFalseStarts, isHighScore: newHighScore });
-
-        updateReflexDisplay();
-        showReflexResults(avgTime, bestTime, newHighScore);
-    }
-
-    function resetReflexGame() {
-        reflexGameStarted = false;
-        reflexGameFinished = false;
-        reflexIsWaiting = false;
-        reflexCanClick = false;
-        reflexStartTime = 0;
-        reflexReactionTimes = [];
-        reflexCurrentRound = 0;
-        reflexFalseStarts = 0;
-        reflexShowTarget = false;
-        reflexLastClickMs = 0;
-        reflexGoReadyMs = 0;
-
-        if (reflexTimeoutRef) {
-            clearTimeout(reflexTimeoutRef);
-            reflexTimeoutRef = null;
-        }
-
-        // The run's live figure is gone, so the score button must be told — else it shows the last
-        // run's best beside a board that was reset underneath it.
-        updateReflexScoreDisplay();
-        updateReflexDisplay();
-        hideReflexResults();
-    }
-
-    function startReflexGame() {
-        resetReflexGame();
-        reflexGameStarted = true;
-        reflexGameFinished = false;
-        reflexReactionTimes = [];
-        reflexCurrentRound = 0;
-        reflexFalseStarts = 0;
-
-        if (gameAreaElement) {
-            gameAreaElement.removeEventListener('click', handleReflexClick);
-            gameAreaElement.addEventListener('click', handleReflexClick);
-        }
-
-        updateReflexDisplay();
-        startReflexRound(1);
-    }
-
-    function toggleReflexMode() {
-        if (reflexGameStarted) return; // Can't change mode during game
-
-        reflexMode = reflexMode === 'screen' ? 'target' : 'screen';
-        // updateReflexDisplay() repaints only the play area; the mode chip, the best/current button
-        // and the leaderboard overlay all sit behind updateReflexScoreDisplay(), so both must run.
-        updateReflexScoreDisplay();
-        updateReflexDisplay();
-    }
-
-    function updateReflexDisplay() {
-        if (!gameAreaElement) return;
-
-        const config = reflexGameModes[reflexMode];
-
-        gameAreaElement.className = 'multi-game-area reflex-game-area';
-        gameAreaElement.style.pointerEvents = 'auto'; // Ensure clicks work
-
-        if (config.targets) {
-            gameAreaElement.style.cursor = 'crosshair';
         } else {
-            gameAreaElement.style.cursor = 'pointer';
+            for (const t of run.tg) {
+                if (!t.vx && !t.vy) continue;
+                t.x += t.vx * s; t.y += t.vy * s;
+                const lo = sp.ang ? [sp.y0, sp.p0] : [sp.edge, sp.edge], hi = sp.ang ? [sp.y1, sp.p1] : [sp.w - sp.edge, sp.h - sp.edge];
+                if (t.x - t.r < lo[0] && t.vx < 0 || t.x + t.r > hi[0] && t.vx > 0) t.vx = -t.vx;
+                if (t.y - t.r < lo[1] && t.vy < 0 || t.y + t.r > hi[1] && t.vy > 0) t.vy = -t.vy;
+                for (const q of sp.holes) if (t.x + t.r > q.x && t.x - t.r < q.x + q.w && t.y + t.r > q.y && t.y - t.r < q.y + q.h && t.vy < 0) t.vy = -t.vy;
+            }
+            // Drift never closes below the gap: approaching pairs swap their normal velocities and part.
+            for (let i = 0; i < run.tg.length; i++) for (let j = i + 1; j < run.tg.length; j++) {
+                const a = run.tg[i], b = run.tg[j], d = aimDist(sp, a, b), min = a.r + b.r + sp.gap;
+                if (d >= min || !d) continue;
+                const nx = (b.x - a.x) / d, ny = (b.y - a.y) / d, va = a.vx * nx + a.vy * ny, vb = b.vx * nx + b.vy * ny;
+                if (va - vb > 0) { a.vx += (vb - va) * nx; a.vy += (vb - va) * ny; b.vx += (va - vb) * nx; b.vy += (va - vb) * ny; }
+                const push = (min - d) / 2 + 0.01; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+            }
+            if (run.id === 'shrink') {
+                const life = AIM_SCEN.shrink.life * D.life;
+                for (const t of run.tg.slice()) {
+                    const age = run.el - t.born;
+                    t.r = t.r0 * Math.max(0, 1 - age / life);
+                    if (age >= life) { run.shots++; run.streak = 0; run.fx.push({ x: t.x, y: t.y, r: t.r0, at: run.el, vanish: true }); run.tg = run.tg.filter(q => q !== t); }
+                }
+                aimFill(run, aim, rnd);
+            }
         }
-
-        if (reflexIsWaiting) {
-            gameAreaElement.classList.add('reflex-waiting-state');
-            gameAreaElement.style.background = 'linear-gradient(135deg, #dc2626, #991b1b)';
-        } else if (reflexCanClick) {
-            gameAreaElement.classList.add('reflex-ready-state');
-            gameAreaElement.style.background = 'linear-gradient(135deg, #16a34a, #15803d)';
-        } else {
-            gameAreaElement.style.background = 'rgba(0, 0, 0, 0.3)';
-        }
-
-        gameAreaElement.innerHTML = '';
-
-        const stateText = document.createElement('div');
-        stateText.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2rem;
-            font-weight: 700;
-            color: white;
-            text-align: center;
-            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-            z-index: 10;
-        `;
-
-        if (!reflexGameStarted) {
-            stateText.textContent = `Click "Play" to start ${config.name}`;
-            stateText.style.fontSize = '1.5rem';
-        } else if (reflexIsWaiting) {
-            stateText.textContent = 'Wait for it...';
-        } else if (reflexCanClick) {
-            stateText.textContent = config.targets ? '' : 'CLICK NOW!';
-        } else if (reflexGameFinished) {
-            stateText.textContent = 'Game Complete!';
-        } else {
-            stateText.textContent = `Round ${reflexCurrentRound}/${config.rounds}`;
-            stateText.style.fontSize = '1.2rem';
-            stateText.style.top = '20px';
-            stateText.style.transform = 'translateX(-50%)';
-        }
-
-        gameAreaElement.appendChild(stateText);
-
-        if (reflexShowTarget && config.targets && reflexCanClick) {
-            const target = document.createElement('div');
-            target.className = 'reflex-target';
-            target.style.cssText = `
-                position: absolute;
-                left: ${reflexTargetPosition.x - 30}px;
-                top: ${reflexTargetPosition.y - 30}px;
-                width: 60px;
-                height: 60px;
-                border-radius: 50%;
-                background: radial-gradient(circle, ${reflexTargetColor}, ${reflexTargetColor}aa);
-                box-shadow: 0 0 30px ${reflexTargetColor}66;
-                animation: targetPulse 1s ease-in-out infinite;
-                cursor: crosshair;
-                z-index: 15;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            `;
-            gameAreaElement.appendChild(target);
-        }
-
-        updateReflexStatsDisplay();
+        run.marks = run.marks.filter(m => run.el - m.at < AIM_FX_MS);
+        run.fx = run.fx.filter(m => run.el - m.at < AIM_FX_MS);
+        if (run.el >= run.len) run.over = true;
     }
-
-    function updateReflexStatsDisplay() {
-        const statsElement = document.getElementById('reflex-stats');
-        if (!statsElement) return;
-
-        const config = reflexGameModes[reflexMode];
-        const avgTime = reflexReactionTimes.length > 0
-            ? Math.round(reflexReactionTimes.reduce((a, b) => a + b, 0) / reflexReactionTimes.length)
-            : 0;
-
-        statsElement.innerHTML = `
-            <div style="display: flex; justify-content: space-around; padding: 8px; font-size: 0.875rem;">
-                <div><strong>Round:</strong> ${reflexCurrentRound}/${config.rounds}</div>
-                <div><strong>Avg:</strong> ${avgTime}ms</div>
-                <div><strong>False Starts:</strong> ${reflexFalseStarts}</div>
-            </div>
-        `;
-    }
-
-    function updateReflexScoreDisplay() {
-        const chip = document.getElementById('reflex-mode-chip');
-        if (chip) {
-            const meta = reflexGameModes[reflexMode];
-            chip.innerHTML = meta ? attIcon(meta.icon) + ' ' + meta.name : reflexMode;
-        }
-        const scores = loadReflexHighScores();
-        const b = scores[reflexMode] && scores[reflexMode].best;
-        const best = (b && b !== Infinity && b > 0) ? b : null;
-        // The live figure is this run's best so far, which is what the board
-        // ranks — the last individual reaction jitters too much to read.
-        const cur = reflexReactionTimes.length ? Math.min(...reflexReactionTimes) : null;
-        updateGameScoreBtn('reflex', cur, best, 'ms');
-    }
-
-    function showReflexResults(avgTime, bestTime, isNewHighScore) {
-        const resultsElement = document.getElementById('reflex-results');
-        if (!resultsElement) return;
-
-        resultsElement.innerHTML = `
-            <div style="text-align: center;">
-                <h3 style="margin-bottom: 16px; color: #10b981;">${isNewHighScore ? attIcon('party') + ' New High Score!' : 'Game Complete!'}</h3>
-                <div style="margin-bottom: 12px;">
-                    <div style="font-size: 1.2rem; font-weight: 700;">Average: ${avgTime}ms</div>
-                    <div style="font-size: 1.2rem; font-weight: 700;">Best: ${bestTime}ms</div>
-                    <div style="font-size: 0.9rem; margin-top: 8px;">False Starts: ${reflexFalseStarts}</div>
-                </div>
-                <button id="reflex-play-again-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                    Play Again
-                </button>
-            </div>
-        `;
-        resultsElement.classList.add('active');
-
-        const playAgainBtn = document.getElementById('reflex-play-again-btn');
-        if (playAgainBtn) {
-            playAgainBtn.onclick = () => {
-                hideReflexResults();
-                resetReflexGame();
-                startReflexGame();
-            };
-        }
-    }
-
-    function hideReflexResults() {
-        const resultsElement = document.getElementById('reflex-results');
-        if (resultsElement) {
-            resultsElement.classList.remove('active');
-        }
-    }
-
-    function initAimTrainerGame() {
-        gameAreaElement = document.getElementById('multi-game-area');
-        if (!gameAreaElement) return;
-
-        aimGameStarted = false;
-        aimGameFinished = false;
-        aimTimer = aimChaosMode.timeLimit;
-        aimScore = 0;
-        aimAccuracy = 100;
-        aimTargets = [];
-        aimShots = 0;
-        aimHits = 0;
-        aimBulletHoles = [];
-
-        updateAimScoreDisplay();
-        renderAimGame();
-    }
-
-    function generateAimTargetPosition() {
-        if (!gameAreaElement) return { x: 200, y: 200 };
-
-        const rect = gameAreaElement.getBoundingClientRect();
-        const targetSize = aimChaosMode.targetSize;
-        const margin = targetSize / 2 + 20;
-
-        const minX = margin;
-        const maxX = rect.width - margin;
-        const minY = margin;
-        const maxY = rect.height - margin;
-
-        let position = {
-            x: Math.random() * (maxX - minX) + minX,
-            y: Math.random() * (maxY - minY) + minY
-        };
-
-        return position;
-    }
-
-    function createAimTarget() {
-        const position = generateAimTargetPosition();
+    function aimSummary(run) {
+        const track = run.id === 'tracking', iv = run.kills.map((k, i) => k.at - (i ? run.kills[i - 1].at : 0));
+        const top = Math.max(1, ...run.spark);
         return {
-            id: Date.now() + Math.random(),
-            x: position.x,
-            y: position.y,
-            size: aimChaosMode.targetSize,
-            createdAt: Date.now()
+            score: Math.round(run.score), hits: run.hits, shots: run.shots, bestStreak: run.bestStreak,
+            acc: track ? (run.el ? Math.round(run.onMs / run.el * 100) : 0) : run.shots ? Math.round(run.hits / run.shots * 100) : 0,
+            react: Math.round(aimMean(iv)), ttk: Math.round(aimMean(run.kills.map(k => k.ttk))), onS: run.onMs / 1000,
+            spark: run.spark.map(v => v / top)
         };
     }
+    // Live accuracy: '—' until the first shot (tracking: share of time on target).
+    const aimLiveAcc = run => run.id === 'tracking' ? (run.el > 0 ? Math.round(run.onMs / run.el * 100) : null) : run.shots ? Math.round(run.hits / run.shots * 100) : null;
 
-    function spawnMultipleTargets(count) {
-        const newTargets = [];
-        for (let i = 0; i < count; i++) {
-            newTargets.push(createAimTarget());
-            // Small delay to ensure unique IDs
-            const tempId = Date.now();
-            while (Date.now() === tempId) { /* wait */ }
+    // ── Reaction (RefleX's rules) ────────────────────────────────────
+    // 80 ms debounce · a click before GO is a false start, as is Target's off-target click · the third
+    // ends the run, its missing rounds counted at the max delay · 1.2 s cool-off, 0.3 s between rounds.
+    function aimReactNew(id, diff) {
+        const S = AIM_SCEN[id], d = AIM_DIFF[diff].delay;
+        return { id, diff, rounds: S.rounds, min: S.minDelay * d[0], max: S.maxDelay * d[1], round: 0, phase: 'idle', times: [], fs: 0, last: -1e9, until: 0, goAt: 0, fromWait: false, fail: false, tg: null };
+    }
+    function aimReactArm(R, now, rnd) { R.phase = 'wait'; R.tg = null; R.goAt = 0; R.until = now + R.min + (rnd || Math.random)() * (R.max - R.min); }
+    function aimReactNext(R, now, rnd) { if (R.round >= R.rounds) { R.phase = 'done'; return; } R.round++; aimReactArm(R, now, rnd); }
+    // spawn() places Target's target when GO lands; returns true when the phase changed.
+    function aimReactTick(R, now, rnd, spawn) {
+        if (R.phase === 'wait' && now >= R.until) { R.phase = 'go'; R.goAt = 0; if (R.id === 'target' && spawn) R.tg = spawn(); return true; }
+        if (R.phase === 'time' && now >= R.until) { aimReactNext(R, now, rnd); return true; }
+        if (R.phase === 'soon' && now >= R.until) { aimReactArm(R, now, rnd); return true; }
+        return false;
+    }
+    // GO is timed from the frame that first paints it, not from the timer.
+    function aimReactPainted(R, now) { if (R.phase === 'go' && !R.goAt) R.goAt = now; }
+    function aimReactFalse(R, now, fromWait) {
+        R.fs++; R.tg = null;
+        if (R.fs >= AIM_FS_LIMIT) { while (R.times.length < R.rounds) R.times.push(R.max); R.fail = true; R.phase = 'done'; return 'fail'; }
+        R.phase = 'soon'; R.fromWait = fromWait; R.until = now + AIM_SOON_MS;
+        return 'false';
+    }
+    function aimReactClick(R, now, onTarget) {
+        if (now - R.last < AIM_DEBOUNCE_MS) return 'debounce';
+        R.last = now;
+        // Unpainted GO counts as the wait: nobody saw it.
+        if (R.phase === 'wait' || (R.phase === 'go' && !R.goAt) || (R.phase === 'soon' && R.fromWait)) return aimReactFalse(R, now, true);
+        if (R.phase !== 'go') return 'ignored';
+        if (R.id === 'target' && !onTarget) return aimReactFalse(R, now, false);
+        R.times.push(Math.round(now - R.goAt)); R.phase = 'time'; R.tg = null; R.until = now + AIM_NEXT_MS;
+        return 'hit';
+    }
+    // As RefleX: the average counts penalty rounds, the best is the fastest round.
+    const aimReactSummary = R => ({ avg: Math.round(aimMean(R.times)), best: R.times.length ? Math.min(...R.times) : 0, fs: R.fs, fail: R.fail, times: R.times.slice() });
+
+    // ── Storage: one 'aimLab' key; the ranked boards keep their own keys ──
+    function aimLoad() {
+        const s = lsJSON(AIM_KEY, null) || {};
+        return { scen: AIM_SCEN[s.scen] ? s.scen : 'chaos', diff: AIM_DIFF[s.diff] ? s.diff : 'normal', mode: s.mode === '3d' ? '3d' : '2d',
+            bests: s.bests && typeof s.bests === 'object' ? s.bests : {}, last: s.last && typeof s.last === 'object' ? s.last : {},
+            xh: Object.assign({}, AIM_XH_DEFAULT, s.xh), set: Object.assign({}, AIM_SET_DEFAULT, s.set) };
+    }
+    function aimSave(st) { try { localStorage.setItem(AIM_KEY, JSON.stringify(st)); } catch (_) {} }
+    // A ranked best merges the legacy record (aimChaosHighScore, reflexHighScores) with the local one.
+    function aimBestOf(st, id, mode, diff) {
+        const v = st.bests[aimBestKey(id, mode, diff)], react = AIM_SCEN[id].group === 'react';
+        let b = typeof v === 'number' && v > 0 ? v : 0;
+        if (aimRanked(id, mode, diff)) {
+            if (id === 'chaos') b = Math.max(b, lsInt('aimChaosHighScore'));
+            else { const r = loadReflexHighScores()[id], l = r && isFinite(r.best) && r.best > 0 ? r.best : 0; if (l) b = b ? Math.min(b, l) : l; }
         }
-        aimTargets = newTargets;
-        // Render will be called by the function that spawns targets
+        return react ? b || 0 : b;
     }
 
-    function handleAimTargetHit(targetId, clickX, clickY) {
-        aimScore += 10;
-        aimHits++;
-        aimShots++;
-
-        aimBulletHoles.push({
-            id: Date.now() + Math.random(),
-            x: clickX,
-            y: clickY,
-            type: 'hit',
-            createdAt: Date.now()
-        });
-
-        aimTargets = aimTargets.filter(target => target.id !== targetId);
-        aimTargets.push(createAimTarget());
-
-        aimAccuracy = aimShots > 0 ? Math.round((aimHits / aimShots) * 100) : 0;
-
-        if (aimBulletHoles.length > 20) {
-            aimBulletHoles = aimBulletHoles.slice(-20);
-        }
-
-        updateAimStatsDisplay();
-        renderAimGame(); // Render on state change
+    // Crosshair share code: AL1-<style><hex>-len-thick-gap-outline-dot-opacity-dynamic (outline/dot 0 = off).
+    const AIM_XS = { C: 'cross', D: 'dot', X: 'crossdot', O: 'circle', T: 't' };
+    function aimXhCode(c) {
+        const s = Object.keys(AIM_XS).find(k => AIM_XS[k] === c.xs) || 'X';
+        return 'AL1-' + s + c.color.slice(1).toUpperCase() + '-' + [c.len, c.thick, c.gap, c.outline ? c.ow : 0, c.dot ? c.ds : 0, c.op, c.dyn ? 1 : 0].join('-');
+    }
+    function aimXhParse(code) {
+        const m = /^AL1-([CDXOT])([0-9A-F]{6})-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)-([01])$/i.exec(String(code || '').trim());
+        if (!m) return null;
+        const n = (i, lo, hi) => Math.max(lo, Math.min(hi, parseInt(m[i], 10)));
+        const ow = n(6, 0, 3), ds = n(7, 0, 6);
+        return { xs: AIM_XS[m[1].toUpperCase()], color: '#' + m[2].toUpperCase(), len: n(3, 0, 20), thick: n(4, 1, 6), gap: n(5, 0, 12),
+            outline: ow > 0, ow: ow || 1, dot: ds > 0, ds: ds || 2, op: n(8, 10, 100), dyn: m[9] === '1' };
     }
 
-    function handleAimMissedShot(clickX, clickY) {
-        aimShots++;
+    // ── AimLab UI: the panel, the canvas (2D arena, 3D room), input, sheets, results, Max ──
+    // Host API: initAimLab() · aimDetach() · aimToggleMax() · aimLbMode() · aimReactLbMode() · aimOnThemeChange()
+    const aimC = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+    const AIM_ICON = {
+        chaos: aimC(6, 7, 2.6) + aimC(14.5, 6.5, 2) + aimC(11, 14.5, 3), flick: aimC(15, 5, 2.2) + 'M4 16l7.5-7.5M11.5 8.5H8M11.5 8.5V12',
+        tracking: 'M2.5 15.5c2.5-6 5-7 7.5-3.5s5 2.5 7.5-5' + aimC(10, 12, 2.4), shrink: aimC(10, 10, 7) + aimC(10, 10, 3.8) + aimC(10, 10, 1),
+        screen: 'M3 4.5h14v11H3zM10.8 7l-2.3 3.3h3l-2.3 3.2', target: aimC(10, 10, 6.5) + aimC(10, 10, 1.6) + 'M10 1.5v2.5M10 16v2.5M1.5 10H4M16 10h2.5',
+        brand: 'M4.5 10a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0M10 1.8v4M10 14.2v4M1.8 10h4M14.2 10h4', play: 'M6.5 4.2 15.8 10 6.5 15.8Z', pause: 'M7.5 5v10M12.5 5v10',
+        restart: 'M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3', xh: 'M4.5 10a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0M10 2v4M10 14v4M2 10h4M14 10h4',
+        settings: 'M3.5 6h8M15.5 6h1M3.5 14h1M8.5 14h8M11.5 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M4.5 14a2 2 0 1 0 4 0a2 2 0 1 0 -4 0',
+        max: 'M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4', exit: 'M7.5 3.5v4h-4M12.5 3.5v4h4M7.5 16.5v-4h-4M12.5 16.5v-4h4',
+        close: 'M5.5 5.5l9 9M14.5 5.5l-9 9', chev: 'M6 8l4 4 4-4', copy: 'M7 7h9v9H7zM13 4H4v9', warn: 'M10 4.5v7M10 15v.5',
+        trophy: 'M6.5 3.5h7v4a3.5 3.5 0 0 1-7 0ZM6.5 5H4.2a2.4 2.4 0 0 0 2.6 3M13.5 5h2.3a2.4 2.4 0 0 1-2.6 3M10 11v3M7 16.5h6',
+        lock: 'M10 3c-3 0-4.5 2-4.5 4.5v5C5.5 15 7 17 10 17s4.5-2 4.5-4.5v-5C14.5 5 13 3 10 3ZM10 6v2.5'
+    };
+    const aimSvg = (d, cls) => `<svg class="aim-i${cls ? ' ' + cls : ''}" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="${d}"/></svg>`;
+    const aimEsc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const aimFmt = n => Math.round(n).toLocaleString('en-US');
+    const AIM_SWATCH = ['#4CF0B0', '#FFFFFF', '#4FACFE', '#FFE15A', '#FF4FD8', '#FF5D73'];
+    const AIM_TCOLORS = ['#FF5D73', '#FFB547', '#4CF0B0', '#4FACFE', '#B06CFF'];
+    const AIM_ROOM = { x: 10, fl: -3.2, ce: 4.6, bk: 16, fr: -6 };
+    const AIM_SND = { tick: [1800, 40, 'square', 0.04], pop: [520, 90, 'sine', 0.12], ding: [1320, 220, 'triangle', 0.07] };
 
-        aimBulletHoles.push({
-            id: Date.now() + Math.random(),
-            x: clickX,
-            y: clickY,
-            type: 'miss',
-            createdAt: Date.now()
-        });
+    const aimS = { root: null, hud: null, vp: null, cv: null, ctx: null, st: null, on: false, raf: 0, lastMs: 0, tokAt: -1e9, tok: {},
+        phase: 'idle', prev: '', run: null, R: null, res: null, sheet: '', max: false, count: 0, W: 0, H: 0, dpr: 1, ptr: null,
+        yaw: 0, pitch: 0, locked: false, lockTry: false, open: 0, ro: null, hudKey: '', ovKey: '', confirmReset: false };
 
-        aimAccuracy = aimShots > 0 ? Math.round((aimHits / aimShots) * 100) : 0;
+    const aimScen = () => AIM_SCEN[aimS.st.scen];
+    const aimMode = () => aimScen().noCam ? '2d' : aimS.st.mode;
+    const aimIs3d = () => aimMode() === '3d';
+    const aimDiffName = d => AIM_DIFF[d].name;
+    const aimLive = () => aimS.phase === 'count' || aimS.phase === 'run';
 
-        if (aimBulletHoles.length > 20) {
-            aimBulletHoles = aimBulletHoles.slice(-20);
-        }
+    // Through the host's shared bank (sfxTone): ⚙️ Game Sounds is the master, AimLab's Sound its own switch.
+    function aimBeep(f, ms, type, vol) { if (aimS.st && aimS.st.set.sound && typeof sfxTone === 'function') sfxTone(f, ms, type, vol || 0.08); }
+    const aimHitSnd = () => { const s = AIM_SND[aimS.st.set.hitSnd] || AIM_SND.tick; aimBeep(s[0], s[1], s[2], s[3]); };
 
-        updateAimStatsDisplay();
-        renderAimGame(); // Render on state change
+    // ── Theme: the canvas reads the --aim-* tokens off the HUD (they follow Aurora light/dark and Cyberpunk) ──
+    function aimReadTok() {
+        const S = aimS; if (!S.hud) return;
+        const cs = getComputedStyle(S.hud), g = k => cs.getPropertyValue('--aim-' + k).trim();
+        S.tok = { text: g('text') || '#F4F2FA', muted: g('muted') || '#A9A6BC', accent: g('accent') || '#4FACFE', red: g('red') || '#FF5D73', redText: g('red-text') || '#FF8396',
+            track: g('track') || 'rgba(255,255,255,.16)', cyber: g('cyber') === '1', light: g('light') === '1', popSh: g('pop-shadow') || 'rgba(0,0,0,.6)',
+            ceil: g('room-ceil') || '#0C0B12', side: g('room-side') || '#15131E', back: g('room-back') || '#1D1A2A', floor: g('room-floor') || '#100F18',
+            grid: g('room-grid') || 'rgba(146,128,255,.26)', wgrid: g('room-wgrid') || 'rgba(255,255,255,.045)', edge: g('room-edge') || 'rgba(255,255,255,.1)',
+            light2: g('room-light') || 'rgba(160,140,255,.22)', vign: g('vign') || 'rgba(0,0,0,.5)', shadow: g('shadow') || 'rgba(0,0,0,.9)', font: g('font') || 'Inter, system-ui, sans-serif' };
+        S.tokAt = performance.now();
+    }
+    function aimOnThemeChange() { aimReadTok(); aimSyncMaxTheme(); }
+    const aimHex = h => { const n = parseInt(String(h).replace('#', ''), 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+    const aimRgba = (h, a) => { const c = aimHex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
+    const aimMix = (a, b, t) => { const x = aimHex(a), y = aimHex(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
+
+    // ── Build ─────────────────────────────────────────────────────────
+    function aimBuild(root) {
+        const S = aimS, I = AIM_ICON, h = document.createElement('div');
+        h.className = 'aim-hud';
+        const tile = '<div class="aim-tile"><span class="l"></span><span class="v"><b></b><u></u><em></em></span><span class="bar"><i></i></span><span class="pips"><i></i><i></i><i></i></span></div>';
+        h.innerHTML =
+            `<div class="aim-top"><div class="aim-brand"><span class="aim-logo">${aimSvg(I.brand)}</span><b>AimLab</b></div>` +
+            `<button type="button" class="aim-chip" data-act="sheet:scenarios" aria-label="Choose scenario"><span class="aim-chip-i"></span><span class="aim-chip-t"><b></b><i></i></span>${aimSvg(I.chev, 'is-chev')}</button>` +
+            `<button type="button" class="aim-bestb" data-act="sheet:bests" aria-label="Personal bests">${aimSvg(I.trophy, 'is-gold')}<b></b><i>best</i></button></div>` +
+            `<div class="aim-tiles">${tile + tile + tile + tile}</div>` +
+            `<div class="aim-vp"><canvas class="aim-cv"></canvas><div class="aim-vchip"><span></span><b></b></div>` +
+            `<div class="aim-vbtns"><button type="button" class="aim-vb" data-act="pause" aria-label="Pause">${aimSvg(I.pause)}</button><button type="button" class="aim-vb" data-act="max" aria-label="Max view">${aimSvg(I.max)}</button></div>` +
+            `<div class="aim-esc"><kbd>Esc</kbd><span>Pause</span></div><div class="aim-custom"><i></i>Custom · not ranked</div><div class="aim-ov"></div></div>` +
+            `<div class="aim-foot"><button type="button" class="aim-b is-primary aim-pp" data-act="playpause" aria-label="Play">${aimSvg(I.play)}<span>Play</span></button>` +
+            `<button type="button" class="aim-b" data-act="restart" aria-label="Restart">${aimSvg(I.restart)}</button>` +
+            `<div class="aim-seg" role="group" aria-label="Camera"><button type="button" data-act="mode:2d">2D</button><button type="button" data-act="mode:3d">3D</button></div>` +
+            `<button type="button" class="aim-b aim-mode1" data-act="mode:toggle" aria-label="Camera mode"><b></b><span>MODE</span></button>` +
+            `<button type="button" class="aim-b" data-act="sheet:crosshair" aria-label="Crosshair">${aimSvg(I.xh)}</button>` +
+            `<button type="button" class="aim-b" data-act="sheet:settings" aria-label="Settings">${aimSvg(I.settings)}</button>` +
+            `<span class="aim-sep"></span><button type="button" class="aim-b aim-maxb" data-act="max" aria-label="Max view">${aimSvg(I.max, 'is-in')}${aimSvg(I.exit, 'is-out')}<span>Exit</span></button></div>` +
+            `<div class="aim-status"><i></i><span></span></div><div class="aim-rank"></div>` +
+            `<div class="aim-sheetw"><div class="aim-scrim" data-act="sheet:"></div><div class="aim-sheet" role="dialog" aria-modal="true"></div></div>`;
+        root.innerHTML = '';
+        root.appendChild(h);
+        S.root = root; S.hud = h; S.vp = h.querySelector('.aim-vp'); S.cv = h.querySelector('.aim-cv'); S.ctx = S.cv.getContext('2d');
+        S.tiles = Array.from(h.querySelectorAll('.aim-tile'));
+        h.addEventListener('click', aimOnClick);
+        h.addEventListener('input', aimOnInput);
+        h.addEventListener('change', aimOnInput);
     }
 
-    function handleAimClick(event) {
-        if (!aimGameStarted || aimGameFinished) return;
+    // ── Lifecycle ─────────────────────────────────────────────────────
+    function initAimLab() {
+        const root = document.getElementById('aim-root');
+        if (!root) return;
+        const S = aimS;
+        if (!S.st) S.st = aimLoad();
+        if (!S.hud || !root.contains(S.hud)) aimBuild(root);
+        if (S.on) return;
+        S.on = true;
+        const vp = S.vp;
+        vp.addEventListener('pointerdown', aimOnDown);
+        vp.addEventListener('pointermove', aimOnMove);
+        vp.addEventListener('pointerleave', aimOnLeave);
+        window.addEventListener('keydown', aimOnKey, true);
+        window.addEventListener('blur', aimOnBlur);
+        document.addEventListener('visibilitychange', aimOnBlur);
+        document.addEventListener('pointerlockchange', aimOnLockChange);
+        document.addEventListener('pointerlockerror', aimOnLockError);
+        if (window.ResizeObserver) { S.ro = new ResizeObserver(aimResize); S.ro.observe(vp); }
+        aimReadTok(); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
+        S.lastMs = 0; S.raf = requestAnimationFrame(aimLoop);
+    }
+    // Leaving the panel: a run in progress is dropped (no XP), Max and the lock close.
+    function aimDetach() {
+        const S = aimS;
+        if (S.max) aimToggleMax();
+        if (!S.on) return;
+        S.on = false;
+        if (S.raf) cancelAnimationFrame(S.raf); S.raf = 0;
+        aimLock(false);
+        const vp = S.vp;
+        vp.removeEventListener('pointerdown', aimOnDown);
+        vp.removeEventListener('pointermove', aimOnMove);
+        vp.removeEventListener('pointerleave', aimOnLeave);
+        window.removeEventListener('keydown', aimOnKey, true);
+        window.removeEventListener('blur', aimOnBlur);
+        document.removeEventListener('visibilitychange', aimOnBlur);
+        document.removeEventListener('pointerlockchange', aimOnLockChange);
+        document.removeEventListener('pointerlockerror', aimOnLockError);
+        if (S.ro) { S.ro.disconnect(); S.ro = null; }
+        if (aimLive() || S.phase === 'paused') aimQuit();
+        S.sheet = '';
+    }
 
-        const rect = gameAreaElement.getBoundingClientRect();
-        const clickX = event.clientX - rect.left;
-        const clickY = event.clientY - rect.top;
+    // ── Layout and size ───────────────────────────────────────────────
+    function aimLayout() {
+        const S = aimS, h = S.hud; if (!h) return;
+        const live = aimLive() || S.phase === 'paused';
+        h.classList.toggle('is-run', live);
+        h.classList.toggle('is-3d', aimIs3d());
+        h.classList.toggle('is-react', aimScen().group === 'react');
+        h.classList.toggle('is-max', S.max);
+        h.classList.toggle('is-narrow', !S.max && h.clientWidth > 0 && h.clientWidth < 352);
+        h.classList.toggle('is-sheet', !!S.sheet);
+        h.classList.toggle('is-done', S.phase === 'ares' || S.phase === 'rres');
+        S.vp.classList.toggle('is-aim', S.phase === 'count' || (S.phase === 'run' && !aimScen().noCam));
+        // Plain and Grid drop the arena's dots (Grid draws its lines on the canvas).
+        S.vp.classList.toggle('is-flat', S.st.set.bg !== 'room');
+        S.hudKey = '';
+    }
+    function aimSpace() {
+        const S = aimS;
+        if (aimIs3d()) return aimSpace3d();
+        // No spawns under the in-run HUD: Pause/Max in the corner, or Max's bars.
+        const holes = S.max ? [{ x: 0, y: 0, w: S.W, h: 96 }, { x: 0, y: S.H - 96, w: S.W, h: 96 }] : (aimLive() || S.phase === 'paused') ? [{ x: S.W - 116, y: 0, w: 116, h: 64 }] : [];
+        return aimSpace2d(S.W, S.H, holes, S.max ? 1.7 : 1);
+    }
+    function aimResize() {
+        const S = aimS; if (!S.vp) return;
+        const W = S.vp.clientWidth, H = S.vp.clientHeight;
+        if (!W || !H) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        if (W !== S.W || H !== S.H || dpr !== S.dpr) {
+            S.W = W; S.H = H; S.dpr = dpr;
+            S.cv.width = Math.round(W * dpr); S.cv.height = Math.round(H * dpr);
+            S.cv.style.width = W + 'px'; S.cv.style.height = H + 'px';
+        }
+        S.hud.classList.toggle('is-narrow', !S.max && S.hud.clientWidth < 352);
+        if (S.run && !aimIs3d()) aimRescale(S.run, aimSpace());
+        aimFitOv();
+    }
+    function aimLocal(e) {
+        const S = aimS, r = S.vp.getBoundingClientRect();
+        return { x: (e.clientX - r.left) * S.W / (r.width || 1), y: (e.clientY - r.top) * S.H / (r.height || 1) };
+    }
+    const aimAim = () => aimIs3d() ? { x: aimS.yaw, y: aimS.pitch } : aimS.ptr;
 
-        let targetHit = false;
+    // ── Flow ──────────────────────────────────────────────────────────
+    function aimPlay() {
+        const S = aimS, sc = aimScen(), now = performance.now();
+        S.res = null; S.sheet = ''; S.yaw = 0; S.pitch = 0; S.run = null; S.R = null;
+        if (sc.group === 'aim') { S.phase = 'count'; S.count = AIM_COUNT_MS; S.lastBeep = 4; }
+        else { S.phase = 'run'; S.R = aimReactNew(S.st.scen, S.st.diff); aimReactNext(S.R, now); }
+        aimLayout(); aimResize();
+        if (sc.group === 'aim') S.run = aimNewRun(S.st.scen, aimMode(), S.st.diff, aimSpace());
+        if (aimIs3d()) aimLock(true);
+        aimOv(); aimSheet(); aimSyncScoreBtn();
+    }
+    function aimPause() {
+        const S = aimS; if (!aimLive()) return;
+        S.prev = S.phase; S.phase = 'paused';
+        aimLock(false); aimLayout(); aimOv();
+    }
+    function aimResume() {
+        const S = aimS; if (S.phase !== 'paused') return;
+        S.phase = S.prev || 'run';
+        // A reaction round in flight re-arms: a pause must not hand out a free GO.
+        if (S.R && (S.R.phase === 'wait' || S.R.phase === 'go')) aimReactArm(S.R, performance.now());
+        aimLayout();
+        if (aimIs3d()) aimLock(true);
+        aimOv();
+    }
+    function aimQuit() {
+        const S = aimS;
+        S.phase = 'idle'; S.run = null; S.R = null; S.res = null;
+        aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
+    }
+    function aimStep(dt, ts) {
+        const S = aimS;
+        S.open = Math.max(0, S.open - dt);
+        if (S.phase === 'count') {
+            if (aimIs3d() && !S.locked) return;
+            S.count -= dt;
+            const n = Math.ceil(S.count / 1000);
+            if (n !== S.lastBeep && n > 0) { S.lastBeep = n; aimBeep(660, 90, 'sine', 0.07); }
+            if (S.count <= 0) { S.phase = 'run'; aimBeep(990, 140, 'sine', 0.08); aimFill(S.run, aimAim()); aimLayout(); aimOv(); }
+            else aimOvCount();
+            return;
+        }
+        if (S.phase !== 'run') return;
+        if (aimIs3d() && !S.locked) return;
+        if (S.run) {
+            aimTick(S.run, dt, aimAim());
+            if (S.run.over) aimFinish();
+        } else if (S.R) {
+            if (aimReactTick(S.R, ts, Math.random, aimReactSpawn)) { aimOv(); if (S.R.phase === 'go' && S.R.id === 'screen') aimBeep(880, 60, 'square', 0.03); }
+            if (S.R.phase === 'done') aimReactFinish();
+        }
+    }
+    function aimReactSpawn() {
+        const S = aimS, sp = aimSpace(), r = aimRadius(sp, 'target', S.st.diff), p = aimSpawnAt(sp, r, [], aimAim());
+        return p ? { x: p.x, y: p.y, r, born: performance.now() } : null;
+    }
+    function aimLoop(ts) {
+        const S = aimS;
+        if (!S.on) return;
+        S.raf = requestAnimationFrame(aimLoop);
+        const dt = S.lastMs ? Math.min(50, ts - S.lastMs) : 0;
+        S.lastMs = ts;
+        if (ts - S.tokAt > 500) aimReadTok();
+        aimStep(dt, ts);
+        aimDraw();
+        if (S.R) aimReactPainted(S.R, ts);
+        aimHudSync();
+    }
 
-        for (const target of aimTargets) {
-            const distance = Math.sqrt(
-                Math.pow(clickX - target.x, 2) + Math.pow(clickY - target.y, 2)
-            );
+    // ── Results ───────────────────────────────────────────────────────
+    function aimXp(fn) { const x0 = typeof userXP === 'object' && userXP ? userXP.totalXP || 0 : 0; try { fn(); } catch (_) {} return Math.max(0, (typeof userXP === 'object' && userXP ? userXP.totalXP || 0 : 0) - x0); }
+    function aimFinish() {
+        const S = aimS, run = S.run, st = S.st, sm = aimSummary(run), id = run.id, mode = run.mode, diff = run.diff;
+        const key = aimBestKey(id, mode, diff), prev = aimBestOf(st, id, mode, diff), ranked = aimRanked(id, mode, diff), isBest = sm.score > prev && sm.score > 0;
+        if (isBest) st.bests[key] = sm.score;
+        if (ranked && sm.score > lsInt('aimChaosHighScore')) saveAimHighScore(sm.score);
+        st.last[key] = { score: sm.score, acc: sm.acc };
+        aimSave(st);
+        // The aim XP table is Chaos's: other scenarios pay on a Chaos-sized score, Sharpshooter stays Chaos Normal's.
+        const xpScore = Math.round((id === 'chaos' ? sm.score : id === 'tracking' ? sm.score / 3 : sm.hits * 10) * (diff === 'easy' ? 0.5 : 1));
+        const xp = aimXp(() => awardGameXP('aim', { score: xpScore, accuracy: id === 'chaos' && diff === 'normal' ? sm.acc : Math.min(sm.acc, 94), hits: sm.hits, isHighScore: ranked && isBest }));
+        S.res = Object.assign({ kind: 'aim', id, mode, diff, prev, isBest, ranked, xp }, sm);
+        S.phase = 'ares'; S.run = null;
+        aimBeep(isBest ? 1320 : 740, 260, 'triangle', 0.08);
+        aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
+    }
+    function aimReactFinish() {
+        const S = aimS, R = S.R, st = S.st, sm = aimReactSummary(R), id = R.id, mode = aimMode(), diff = R.diff;
+        const key = aimBestKey(id, mode, diff), prev = aimBestOf(st, id, mode, diff), ranked = aimRanked(id, mode, diff) && !sm.fail;
+        const isBest = !sm.fail && sm.best > 0 && (!prev || sm.best < prev);
+        if (!sm.fail) {
+            if (isBest) st.bests[key] = sm.best;
+            const ak = key + '|avg', pa = st.bests[ak];
+            if (sm.avg > 0 && (!pa || sm.avg < pa)) st.bests[ak] = sm.avg;
+        }
+        st.last[key] = { avg: sm.avg, best: sm.best, fail: sm.fail };
+        aimSave(st);
+        // A failed run is not posted (design R9); RefleX's own record stays the board's source.
+        let changed = false;
+        if (ranked) {
+            const hs = loadReflexHighScores();
+            if (sm.avg > 0 && sm.avg < hs[id].avg) { hs[id].avg = sm.avg; changed = true; }
+            if (sm.best > 0 && sm.best < hs[id].best) { hs[id].best = sm.best; changed = true; }
+            if (changed) saveReflexHighScores(hs);
+        }
+        const xp = aimXp(() => awardGameXP('reflex', { avgTime: sm.avg, bestTime: sm.best, falseStarts: sm.fs, isHighScore: changed }));
+        S.res = Object.assign({ kind: 'react', id, mode, diff, prev, prevAvg: st.bests[key + '|avg'], isBest, ranked, xp, max: R.max, rounds: R.rounds }, sm);
+        S.phase = 'rres'; S.R = null;
+        aimBeep(sm.fail ? 220 : 990, 240, 'triangle', 0.07);
+        aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
+    }
 
-            if (distance <= (target.size / 2) + 5) {
-                handleAimTargetHit(target.id, clickX, clickY);
-                targetHit = true;
+    // One header button, the team board: its tabs are the ranked scenarios (Chaos, Screen, Target),
+    // and it shows and opens the one being played; the aim scenarios with no board show Chaos.
+    function aimReactLbMode() { return aimS.st && aimS.st.scen === 'target' ? 'target' : 'screen'; }
+    function aimLbMode() { return aimS.st && aimScen().group === 'react' ? aimReactLbMode() : 'chaos'; }
+    function aimSyncScoreBtn() {
+        const S = aimS; if (!S.st || typeof updateGameScoreBtn !== 'function') return;
+        const m = aimLbMode(), res = S.res && S.res.ranked ? S.res : null;
+        if (m === 'chaos') updateGameScoreBtn('aim', S.run && aimRanked(S.run.id, S.run.mode, S.run.diff) ? Math.round(S.run.score) : res && res.kind === 'aim' ? res.score : null, aimBestOf(S.st, 'chaos', '2d', 'normal'));
+        else updateGameScoreBtn('aim', res && res.id === m ? res.best : null, aimBestOf(S.st, m, '2d', 'normal') || null, ' ms');
+    }
+
+    // ── Pointer lock (3D): raw movement first, as pool does ──
+    function aimLock(on) {
+        const S = aimS, vp = S.vp; if (!vp) return;
+        if (!on) { if (document.pointerLockElement === vp) document.exitPointerLock(); return; }
+        if (document.pointerLockElement === vp || !vp.requestPointerLock) return;
+        S.lockTry = true;
+        const go = o => { const p = vp.requestPointerLock(o); return p && p.catch ? p : null; };
+        try { const p = go({ unadjustedMovement: true }); if (p) p.catch(() => { S.lockTry = false; try { const q = go(); if (q) q.catch(() => {}); } catch (_) {} }); else S.lockTry = false; }
+        catch (_) { S.lockTry = false; try { go(); } catch (_) {} }
+    }
+    function aimOnLockChange() {
+        const S = aimS, on = document.pointerLockElement === S.vp;
+        S.locked = on; S.lockTry = false;
+        if (!on && aimIs3d() && aimLive()) aimPause();
+        aimOv();
+    }
+    // As pool: the raw-input attempt failing is not news (the plain lock follows); a refused plain lock is.
+    // Chrome refuses a re-lock for about a second after Esc released one.
+    function aimOnLockError() {
+        if (!aimS.lockTry && typeof showXPNotification === 'function') showXPNotification('The browser refused the mouse lock. Click the play area again', 'game', 'lock');
+        aimS.lockTry = false; aimOv();
+    }
+
+    // ── Input ─────────────────────────────────────────────────────────
+    function aimOnDown(e) {
+        const S = aimS;
+        if (e.button !== 0 || S.sheet || (e.target.closest && e.target.closest('button, input, .aim-card'))) return;
+        if (aimIs3d() && (aimLive()) && !S.locked) { aimLock(true); e.preventDefault(); return; }
+        if (S.phase !== 'run') return;
+        e.preventDefault();
+        const aim = aimAim(), now = e.timeStamp || performance.now();
+        if (!aim) return;
+        if (S.run) {
+            const t = aimShoot(S.run, aim);
+            if (S.st.xh.dyn) S.open = 120;
+            if (t) aimHitSnd(); else if (S.run.id !== 'tracking') aimBeep(180, 60, 'sine', 0.03);
+        } else if (S.R) {
+            const tg = S.R.tg, on = !!tg && aimDist(aimSpace(), aim, tg) <= tg.r;
+            const r = aimReactClick(S.R, now, on);
+            if (r === 'hit') aimHitSnd(); else if (r === 'false' || r === 'fail') aimBeep(200, 160, 'sawtooth', 0.04);
+            if (r !== 'debounce' && r !== 'ignored') aimOv();
+        }
+    }
+    function aimOnMove(e) {
+        const S = aimS;
+        if (S.locked) {
+            const k = 0.08 * S.st.set.sens, mx = e.movementX || 0, my = e.movementY || 0;
+            if (Math.abs(mx) > 250 || Math.abs(my) > 250) return; // Chrome's pointer-lock spike
+            S.yaw = Math.max(-60, Math.min(60, S.yaw + mx * k));
+            S.pitch = Math.max(-40, Math.min(40, S.pitch + (S.st.set.invY ? my : -my) * k));
+            return;
+        }
+        S.ptr = aimLocal(e);
+    }
+    function aimOnLeave() { aimS.ptr = null; }
+    function aimOnBlur() { if ((document.hidden || !document.hasFocus()) && aimLive()) aimPause(); }
+    const aimTyping = e => { const t = e.target; return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable); };
+    function aimOnKey(e) {
+        const S = aimS;
+        if (!S.on || aimTyping(e)) return;
+        const take = () => { e.preventDefault(); e.stopPropagation(); };
+        if (e.key === 'Escape') {
+            if (S.sheet) { take(); aimSheetOpen(''); }
+            else if (aimLive()) { take(); aimPause(); }
+            else if (S.phase === 'paused' && !aimIs3d()) { take(); aimResume(); }
+        } else if ((e.code === 'Space' || e.key === ' ') && !S.sheet && (S.phase === 'idle' || S.phase === 'ares' || S.phase === 'rres')) {
+            if (!S.hud.offsetParent && !S.max) return;
+            take(); aimPlay();
+        }
+    }
+    function aimOnClick(e) {
+        const b = e.target.closest('[data-act]');
+        if (!b || !aimS.hud.contains(b)) return;
+        const S = aimS, [act, arg] = b.getAttribute('data-act').split(':');
+        const st = S.st, save = () => aimSave(st);
+        switch (act) {
+            case 'play': case 'again': case 'restart': aimPlay(); break;
+            case 'playpause': if (aimLive()) aimPause(); else if (S.phase === 'paused') aimResume(); else aimPlay(); break;
+            case 'pause': aimPause(); break;
+            case 'resume': aimResume(); break;
+            case 'quit': aimQuit(); break;
+            case 'lock': aimLock(true); break;
+            case 'max': aimToggleMax(); break;
+            case 'sheet': aimSheetOpen(arg || ''); break;
+            case 'mode':
+                if (aimScen().noCam || aimLive() || S.phase === 'paused') break;
+                st.mode = arg === 'toggle' ? (st.mode === '3d' ? '2d' : '3d') : arg; save();
+                if (S.phase !== 'idle') S.phase = 'idle', S.res = null;
+                aimLayout(); aimResize(); aimOv(); aimSheet(); break;
+            case 'scen': if (AIM_SCEN[arg]) { st.scen = arg; save(); aimQuit(); aimSheetOpen(''); } break;
+            case 'diff': if (AIM_DIFF[arg]) { st.diff = arg; save(); aimQuit(); aimSheet(); } break;
+            case 'xs': st.xh.xs = arg; save(); aimSheet(); break;
+            case 'xc': st.xh.color = arg; save(); aimSheet(); break;
+            case 'tc': st.set.tcolor = arg; save(); aimSheet(); break;
+            case 'snd': st.set.hitSnd = arg; save(); aimHitSnd(); aimSheet(); break;
+            case 'bg': st.set.bg = arg; save(); aimLayout(); aimSheet(); break;
+            case 'copy': { const c = aimXhCode(st.xh); try { navigator.clipboard.writeText(c); } catch (_) {} b.classList.add('is-done'); break; }
+            case 'paste': {
+                const f = S.hud.querySelector('.aim-code'), apply = v => { const x = aimXhParse(v); if (f) f.classList.toggle('is-bad', !x); if (x) { st.xh = x; save(); aimSheet(); } };
+                try { navigator.clipboard.readText().then(apply, () => apply(f && f.value)); } catch (_) { apply(f && f.value); }
                 break;
             }
-        }
-
-        if (!targetHit) {
-            handleAimMissedShot(clickX, clickY);
+            case 'board': aimSheetOpen(''); if (typeof toggleGameLeaderboard === 'function') toggleGameLeaderboard('aim', true); break;
+            case 'reset':
+                if (!S.confirmReset) { S.confirmReset = true; b.textContent = 'Confirm reset'; break; }
+                st.bests = {}; st.last = {}; save(); S.confirmReset = false; aimSheet(); aimOv(); break;
         }
     }
-
-    function updateAimTimer() {
-        if (!aimGameStarted || aimGameFinished) return;
-
-        aimTimer--;
-
-        if (aimTimer <= 0) {
-            finishAimGame();
-        }
-
-        updateAimStatsDisplay();
+    // Sheet inputs: data-set="xh.len" / "set.sens", numbers, checkboxes, the crosshair code.
+    function aimOnInput(e) {
+        const el = e.target, k = el.getAttribute && el.getAttribute('data-set');
+        if (!k) return;
+        const S = aimS, [o, f] = k.split('.'), obj = S.st[o];
+        if (f === 'code') { if (e.type !== 'change') return; const x = aimXhParse(el.value); el.classList.toggle('is-bad', !x); if (x) { S.st.xh = x; aimSave(S.st); aimSheet(); } return; }
+        if (f === 'color') { if (!/^#[0-9a-f]{6}$/i.test(el.value)) { el.classList.add('is-bad'); return; } obj.color = el.value.toUpperCase(); }
+        else if (el.type === 'checkbox') obj[f] = el.checked;
+        else { const v = parseFloat(el.value); if (!isFinite(v)) return; obj[f] = Math.max(+el.min || -1e9, Math.min(+el.max || 1e9, v)); }
+        aimSave(S.st);
+        // Live preview without rebuilding the sheet under the slider.
+        S.hud.querySelectorAll(`[data-out="${k}"]`).forEach(n => { n.textContent = aimOutVal(k, obj[f]); if (n.tagName === 'INPUT' && n !== el) n.value = obj[f]; });
+        S.hud.querySelectorAll(`input[data-set="${k}"]`).forEach(n => { if (n !== el) n.value = obj[f]; });
+        if (o === 'xh') aimXhPreview();
+        if (e.type === 'change' || el.type === 'checkbox') aimSheet();
     }
+    const aimOutVal = (k, v) => k === 'xh.op' ? v + '%' : k === 'set.fov' ? v + '°' : k === 'set.sens' ? (+v).toFixed(2) : String(v);
 
-    function finishAimGame() {
-        aimGameStarted = false;
-        aimGameFinished = true;
-
-        if (aimTimerRef) {
-            clearInterval(aimTimerRef);
-            aimTimerRef = null;
-        }
-
-        if (aimRenderFrameId) {
-            cancelAnimationFrame(aimRenderFrameId);
-            aimRenderFrameId = null;
-        }
-
-        const highScore = loadAimHighScore();
-        const isNewHighScore = aimScore > highScore;
-
-        if (isNewHighScore) {
-            saveAimHighScore(aimScore);
-            updateAimScoreDisplay();
-        }
-
-        awardGameXP('aim', { score: aimScore, accuracy: aimAccuracy, hits: aimHits, isHighScore: isNewHighScore });
-
-        showAimResults(isNewHighScore);
+    // ── Drawing ───────────────────────────────────────────────────────
+    function aimCam() {
+        const S = aimS, f = S.W / 2 / Math.tan(S.st.set.fov * Math.PI / 360), y = S.yaw * Math.PI / 180, p = S.pitch * Math.PI / 180;
+        return { W: S.W, H: S.H, f, cy: Math.cos(y), sy: Math.sin(y), cp: Math.cos(p), sp: Math.sin(p) };
     }
-
-    function resetAimGame() {
-        aimGameStarted = false;
-        aimGameFinished = false;
-        aimTimer = aimChaosMode.timeLimit;
-        aimScore = 0;
-        aimAccuracy = 100;
-        aimTargets = [];
-        aimShots = 0;
-        aimHits = 0;
-        aimBulletHoles = [];
-
-        if (aimTimerRef) {
-            clearInterval(aimTimerRef);
-            aimTimerRef = null;
+    const aimToCam = (C, q) => { const x1 = q[0] * C.cy - q[2] * C.sy, z1 = q[0] * C.sy + q[2] * C.cy; return [x1, q[1] * C.cp - z1 * C.sp, q[1] * C.sp + z1 * C.cp]; };
+    const aimProj = (C, q) => [C.W / 2 + C.f * q[0] / q[2], C.H / 2 - C.f * q[1] / q[2]];
+    const AIM_NEAR = 0.05;
+    function aimClipPoly(C, pts) {
+        const q = pts.map(p => aimToCam(C, p)), out = [];
+        for (let i = 0; i < q.length; i++) {
+            const a = q[i], b = q[(i + 1) % q.length], ia = a[2] > AIM_NEAR, ib = b[2] > AIM_NEAR;
+            if (ia) out.push(a);
+            if (ia !== ib) { const t = (AIM_NEAR - a[2]) / (b[2] - a[2]); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, AIM_NEAR]); }
         }
-
-        hideAimResults();
-        renderAimGame(); // Update DOM to show instructions screen
+        return out.map(p => aimProj(C, p));
     }
-
-    function startAimGame() {
-        aimGameStarted = true;
-        aimGameFinished = false;
-        aimTimer = aimChaosMode.timeLimit;
-        aimScore = 0;
-        aimAccuracy = 100;
-        aimTargets = [];
-        aimShots = 0;
-        aimHits = 0;
-        aimBulletHoles = [];
-
-        if (aimTimerRef) {
-            clearInterval(aimTimerRef);
-            aimTimerRef = null;
-        }
-
-        if (gameAreaElement) {
-            gameAreaElement.removeEventListener('click', handleAimClick);
-            gameAreaElement.addEventListener('click', handleAimClick);
-        }
-
-        spawnMultipleTargets(aimChaosMode.targetCount);
-
-        aimTimerRef = setInterval(updateAimTimer, 1000);
-
-        renderAimGame();
-
-        updateAimStatsDisplay();
+    function aimSeg(c, C, a, b) {
+        let p = aimToCam(C, a), q = aimToCam(C, b);
+        if (p[2] <= AIM_NEAR && q[2] <= AIM_NEAR) return;
+        if (p[2] <= AIM_NEAR || q[2] <= AIM_NEAR) { const t = (AIM_NEAR - p[2]) / (q[2] - p[2]), m = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, AIM_NEAR]; if (p[2] <= AIM_NEAR) p = m; else q = m; }
+        const A = aimProj(C, p), B = aimProj(C, q);
+        c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]);
     }
-
-    function renderAimGame() {
-        if (!gameAreaElement) return;
-
-        gameAreaElement.className = 'multi-game-area aim-game-area';
-        gameAreaElement.style.background = 'rgba(0, 0, 0, 0.3)';
-        gameAreaElement.style.cursor = 'crosshair';
-
-        if (!aimGameStarted) {
-            gameAreaElement.innerHTML = '';
-            const instructionText = document.createElement('div');
-            instructionText.className = 'aim-instruction-text';
-            instructionText.style.cssText = `
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 1.5rem;
-                font-weight: 700;
-                color: white;
-                text-align: center;
-                text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-            `;
-            instructionText.textContent = 'Click "Play" to start Chaos Mode';
-            gameAreaElement.appendChild(instructionText);
-            return;
+    function aimDrawRoom(c, C, bg) {
+        const T = aimS.tok, R = AIM_ROOM, X = R.x, F = R.fl, U = R.ce, B = R.bk, N = R.fr;
+        c.fillStyle = T.back; c.fillRect(0, 0, C.W, C.H);
+        if (bg === 'plain') return;
+        const face = (pts, col) => { const p = aimClipPoly(C, pts); if (p.length < 3) return; c.beginPath(); c.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) c.lineTo(p[i][0], p[i][1]); c.closePath(); c.fillStyle = col; c.fill(); };
+        const shaded = bg === 'room';
+        face([[-X, U, N], [X, U, N], [X, U, B], [-X, U, B]], shaded ? T.ceil : T.back);
+        face([[-X, F, N], [X, F, N], [X, F, B], [-X, F, B]], shaded ? T.floor : T.back);
+        face([[-X, U, N], [-X, U, B], [-X, F, B], [-X, F, N]], shaded ? T.side : T.back);
+        face([[X, U, N], [X, U, B], [X, F, B], [X, F, N]], shaded ? T.side : T.back);
+        face([[-X, U, B], [X, U, B], [X, F, B], [-X, F, B]], T.back);
+        c.lineWidth = 1;
+        c.beginPath();
+        for (let z = N + 2; z < B; z += 2.5) { aimSeg(c, C, [-X, F, z], [-X, U, z]); aimSeg(c, C, [X, F, z], [X, U, z]); }
+        for (let x = -X + 2.5; x < X; x += 2.5) aimSeg(c, C, [x, F, B], [x, U, B]);
+        for (let y = F + 1.56; y < U; y += 1.56) aimSeg(c, C, [-X, y, B], [X, y, B]);
+        c.strokeStyle = T.wgrid; c.stroke();
+        c.beginPath();
+        for (let x = -X; x <= X; x += 20 / 12) aimSeg(c, C, [x, F, N], [x, F, B]);
+        for (let z = N + 1.5; z < B; z += 2.2) aimSeg(c, C, [-X, F, z], [X, F, z]);
+        c.strokeStyle = T.grid; c.stroke();
+        c.beginPath();
+        [[-X, F], [X, F], [-X, U], [X, U]].forEach(e => aimSeg(c, C, [e[0], e[1], N], [e[0], e[1], B]));
+        aimSeg(c, C, [-X, F, B], [X, F, B]); aimSeg(c, C, [-X, U, B], [X, U, B]); aimSeg(c, C, [-X, F, B], [-X, U, B]); aimSeg(c, C, [X, F, B], [X, U, B]);
+        c.lineWidth = 1.2; c.strokeStyle = T.edge; c.stroke();
+        if (!shaded) return;
+        const L = aimToCam(C, [0, U - 1, B - 2]);
+        if (L[2] > AIM_NEAR) { const p = aimProj(C, L), g = c.createRadialGradient(p[0], p[1], 0, p[0], p[1], C.W * 0.45); g.addColorStop(0, T.light2); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, C.W, C.H); }
+    }
+    function aimVignette(c, W, H) {
+        const g = c.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.42, W / 2, H * 0.45, Math.max(W, H) * 0.75);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, aimS.tok.vign); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    }
+    // A spawn scales 0.3 → 1.12 → 1 over 180 ms; it can be hit from frame 1.
+    function aimSpawnScale(age) { const a = Math.max(0, Math.min(1, age / 180)); return a < 0.61 ? [0.3 + 0.82 * a / 0.61, 0.35 + 0.65 * a / 0.61] : [1.12 - 0.12 * (a - 0.61) / 0.39, 1]; }
+    function aimDisc(c, x, y, r, col, k, op) {
+        const T = aimS.tok;
+        c.save(); c.globalAlpha = op; c.translate(x, y); c.scale(k, k);
+        if (T.cyber) {
+            const g = c.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, aimRgba(col, 0.3)); g.addColorStop(0.2, aimRgba(col, 0.3)); g.addColorStop(0.21, aimRgba(col, 0.1)); g.addColorStop(1, aimRgba(col, 0.1));
+            c.shadowColor = aimRgba(col, 0.6); c.shadowBlur = r * 0.64;
+            c.beginPath(); c.arc(0, 0, r - 1, 0, 6.2832); c.fillStyle = g; c.fill(); c.lineWidth = 2; c.strokeStyle = col; c.stroke(); c.shadowBlur = 0;
+            c.beginPath(); c.arc(0, 0, r * 0.56, 0, 6.2832); c.lineWidth = 1.5; c.strokeStyle = aimRgba(col, 0.8); c.stroke();
+            c.beginPath(); c.arc(0, 0, Math.max(1.5, r * 0.15), 0, 6.2832); c.fillStyle = col; c.fill();
+        } else {
+            c.beginPath(); c.arc(0, 0, r + 3, 0, 6.2832); c.fillStyle = aimRgba(col, 0.22); c.fill();
+            const g = c.createRadialGradient(0, -r * 0.24, 0, 0, 0, r); g.addColorStop(0, aimMix(col, '#ffffff', 0.2)); g.addColorStop(0.58, col); g.addColorStop(1, aimMix(col, '#000000', 0.16));
+            c.shadowColor = aimRgba(col, 0.38); c.shadowBlur = r * 0.76; c.shadowOffsetY = r * 0.24;
+            c.beginPath(); c.arc(0, 0, r, 0, 6.2832); c.fillStyle = g; c.fill(); c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0;
+            c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.arc(0, 0, r - 1, 0, 6.2832); c.stroke();
+            c.lineWidth = 1.5; c.strokeStyle = 'rgba(255,255,255,.38)'; c.beginPath(); c.arc(0, 0, r * 0.56, 0, 6.2832); c.stroke();
+            c.beginPath(); c.arc(0, 0, Math.max(1.5, r * 0.15), 0, 6.2832); c.fillStyle = '#FFFFFF'; c.fill();
         }
-
-        const instructionText = gameAreaElement.querySelector('.aim-instruction-text');
-        if (instructionText) {
-            instructionText.remove();
+        c.restore();
+    }
+    function aimSphere(c, x, y, r, col, k, op) {
+        c.save(); c.globalAlpha = op; c.translate(x, y); c.scale(k, k);
+        const g = c.createRadialGradient(-r * 0.32, -r * 0.4, 0, 0, 0, r);
+        g.addColorStop(0, '#FFFFFF'); g.addColorStop(0.09, aimMix(col, '#ffffff', 0.55)); g.addColorStop(0.38, col); g.addColorStop(0.76, aimMix(col, '#000000', 0.45)); g.addColorStop(1, aimMix(col, '#000000', 0.72));
+        if (aimS.tok.cyber) { c.shadowColor = aimRgba(col, 0.55); c.shadowBlur = r * 0.8; }
+        c.beginPath(); c.arc(0, 0, r, 0, 6.2832); c.fillStyle = g; c.fill();
+        c.restore();
+    }
+    // Hit: a burst ring, a flash and 8 shards; the popup rises 24 px and fades by 600 ms.
+    function aimBurst(c, x, y, r, col, bp, pts, sub, k) {
+        const T = aimS.tok, s = r * 2;
+        c.save();
+        c.globalAlpha = 0.8 * (1 - bp) + 0.05; c.lineWidth = 1.5; c.strokeStyle = col; c.beginPath(); c.arc(x, y, s * (1.1 + bp * 0.9) / 2, 0, 6.2832); c.stroke();
+        c.globalAlpha = Math.max(0, 1 - bp * 1.6);
+        const g = c.createRadialGradient(x, y, 0, x, y, s * 0.75); g.addColorStop(0, T.light ? aimRgba(col, 0.45) : 'rgba(255,255,255,.65)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.beginPath(); c.arc(x, y, s * 0.75, 0, 6.2832); c.fill();
+        for (let i = 0; i < 8; i++) {
+            const a = (i * 45 + 22.5) * Math.PI / 180, d = s * (0.72 + bp * 0.6) * 0.7, w = s * (0.16 - bp * 0.07);
+            c.globalAlpha = 1 - bp * 0.7; c.fillStyle = i % 2 ? col : (T.light ? aimMix(col, '#000000', 0.1) : '#FFFFFF');
+            c.save(); c.translate(x + Math.cos(a) * d, y + Math.sin(a) * d); c.rotate(a); c.fillRect(-w / 2, -1.25, w, 2.5); c.restore();
         }
-
-        // During gameplay: only update elements that changed
-        // Remove bullet holes that don't exist anymore (keep only elements with matching IDs)
-        const existingHoles = gameAreaElement.querySelectorAll('.bullet-hole');
-        existingHoles.forEach(holeEl => {
-            const holeId = holeEl.dataset.holeId;
-            const stillExists = aimBulletHoles.some(h => h.id == holeId);
-            if (!stillExists) {
-                holeEl.remove();
+        if (pts) {
+            c.globalAlpha = Math.max(0, 1 - bp); c.textAlign = 'center'; c.shadowColor = T.popSh; c.shadowBlur = 8;
+            const py = y - 30 * k - 24 * bp * k;
+            c.fillStyle = T.text; c.font = `800 ${18 * k}px ${T.font}`; c.fillText(pts, x, py);
+            if (sub) { c.fillStyle = T.accent; c.font = `700 ${9.5 * k}px ${T.font}`; c.fillText(sub, x, py + 13 * k); }
+        }
+        c.restore();
+    }
+    function aimDrawXh(c, x, y, cfg, k, open) {
+        const r = n => Math.round(n * 2) / 2, L = r(cfg.len * k), T = r(cfg.thick * k), G = r((cfg.gap + (open || 0)) * k), ow = cfg.outline ? r(cfg.ow * k) : 0;
+        const xs = cfg.xs, bars = [];
+        if (xs === 'cross' || xs === 'crossdot' || xs === 't') { bars.push([G, -T / 2, L, T], [-G - L, -T / 2, L, T], [-T / 2, G, T, L]); if (xs !== 't') bars.push([-T / 2, -G - L, T, L]); }
+        const dot = xs === 'dot' || xs === 'crossdot' || ((xs === 'circle' || xs === 't') && cfg.dot), D = r((xs === 'dot' ? Math.max(cfg.ds, 3) : cfg.ds) * k), cr = G + L * 0.6;
+        c.save(); c.translate(Math.round(x), Math.round(y)); c.globalAlpha = cfg.op / 100;
+        const pass = (col, e) => {
+            c.fillStyle = col; c.strokeStyle = col;
+            for (const b of bars) if (b[2] && b[3]) c.fillRect(b[0] - e, b[1] - e, b[2] + 2 * e, b[3] + 2 * e);
+            if (xs === 'circle') { c.lineWidth = T + 2 * e; c.beginPath(); c.arc(0, 0, Math.max(1, cr - T / 2), 0, 6.2832); c.stroke(); }
+            if (dot && D) { c.beginPath(); c.arc(0, 0, D / 2 + e, 0, 6.2832); c.fill(); }
+        };
+        if (ow) pass('rgba(0,0,0,.85)', ow);
+        pass(cfg.color, 0);
+        c.restore();
+    }
+    function aimDraw() {
+        const S = aimS, c = S.ctx, W = S.W, H = S.H;
+        if (!c || !W) return;
+        c.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+        c.clearRect(0, 0, W, H);
+        const sc = aimScen(), is3d = aimIs3d(), T = S.tok, col = S.st.set.tcolor, k = S.max ? 1.7 : 1;
+        const C = is3d ? aimCam() : null, run = S.run, R = S.R;
+        if (is3d) { aimDrawRoom(c, C, S.st.set.bg); aimVignette(c, W, H); }
+        else if (S.st.set.bg === 'grid' && !(R && sc.noCam)) {
+            c.beginPath(); for (let x = 0; x <= W; x += 24) { c.moveTo(x + 0.5, 0); c.lineTo(x + 0.5, H); } for (let y = 0; y <= H; y += 24) { c.moveTo(0, y + 0.5); c.lineTo(W, y + 0.5); }
+            c.strokeStyle = T.cyber ? aimRgba('#00F0FF', 0.08) : T.light ? 'rgba(15,23,42,.08)' : 'rgba(255,255,255,.06)'; c.lineWidth = 1; c.stroke();
+        }
+        // World → screen for a yaw/pitch point (3D) or px (2D); [x, y, scale] or null behind the camera.
+        const at = (p, r) => {
+            if (!is3d) return [p.x, p.y, r];
+            const d = aimDir(p.x, p.y), q = aimToCam(C, [d[0] * AIM_D, d[1] * AIM_D, d[2] * AIM_D]);
+            if (q[2] < 0.3) return null;
+            const s = aimProj(C, q); return [s[0], s[1], C.f * AIM_D * Math.tan(r * Math.PI / 180) / q[2], q];
+        };
+        const tg = run ? run.tg : R && R.tg ? [R.tg] : [], el = run ? run.el : 0;
+        if (run && run.id === 'tracking' && run.trail.length > 1) {
+            c.beginPath(); run.trail.forEach((p, i) => { const s = at(p, 1); if (s) i ? c.lineTo(s[0], s[1]) : c.moveTo(s[0], s[1]); });
+            c.globalAlpha = 0.45; c.lineWidth = 2.5; c.lineCap = 'round'; c.strokeStyle = T.accent; c.stroke(); c.globalAlpha = 1;
+        }
+        if (is3d) for (const t of tg) {
+            const s = at(t, t.r); if (!s) continue;
+            const d = aimDir(t.x, t.y), f = aimToCam(C, [d[0] * AIM_D, AIM_ROOM.fl, d[2] * AIM_D]);
+            if (f[2] <= AIM_NEAR) continue;
+            const p = aimProj(C, f), rx = s[2] * 1.3, g = c.createRadialGradient(p[0], p[1], 0, p[0], p[1], rx);
+            g.addColorStop(0, T.shadow); g.addColorStop(1, 'rgba(0,0,0,0)');
+            c.save(); c.globalAlpha = 0.6; c.translate(p[0], p[1]); c.scale(1, 0.25); c.translate(-p[0], -p[1]); c.fillStyle = g; c.beginPath(); c.arc(p[0], p[1], rx, 0, 6.2832); c.fill(); c.restore();
+        }
+        for (const m of run ? run.marks : []) {
+            const s = at(m, 0.5); if (!s) continue;
+            const a = (el - m.at) / AIM_FX_MS, d = (18 + 9 * a) * k / 2;
+            c.save(); c.globalAlpha = 0.8 * (1 - a); c.strokeStyle = T.muted; c.fillStyle = T.muted; c.lineWidth = 1.5;
+            c.beginPath(); c.arc(s[0], s[1], d, 0, 6.2832); c.stroke(); c.beginPath(); c.arc(s[0], s[1], 1.5, 0, 6.2832); c.fill(); c.restore();
+        }
+        const order = is3d ? tg.slice().sort((a, b) => (at(b, b.r) || [0, 0, 0, [0, 0, 0]])[3][2] - (at(a, a.r) || [0, 0, 0, [0, 0, 0]])[3][2]) : tg;
+        for (const t of order) {
+            const s = at(t, t.r); if (!s) continue;
+            const age = run ? el - t.born : performance.now() - t.born, sp = aimSpawnScale(age);
+            if (run && run.id === 'shrink') { const g = at(t, t.r0 * 1.12); c.save(); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.strokeStyle = aimRgba(col, 0.5); c.beginPath(); c.arc(g[0], g[1], g[2], 0, 6.2832); c.stroke(); c.restore(); }
+            (is3d ? aimSphere : aimDisc)(c, s[0], s[1], s[2], col, sp[0], sp[1]);
+            if (run && run.id === 'tracking') {
+                const rr = s[2] * 1.6, a = aimLiveAcc(run) || 0;
+                c.save(); c.lineWidth = 3; c.strokeStyle = T.track; c.beginPath(); c.arc(s[0], s[1], rr, 0, 6.2832); c.stroke();
+                c.strokeStyle = T.accent; c.lineCap = 'round'; c.beginPath(); c.arc(s[0], s[1], rr, -Math.PI / 2, -Math.PI / 2 + 6.2832 * a / 100); c.stroke(); c.restore();
             }
-        });
-
-        aimBulletHoles.forEach(hole => {
-            const existingHole = gameAreaElement.querySelector(`[data-hole-id="${hole.id}"]`);
-            if (!existingHole) {
-                const holeElement = document.createElement('div');
-                holeElement.className = 'bullet-hole';
-                holeElement.dataset.holeId = hole.id;
-                holeElement.style.cssText = `
-                    position: absolute;
-                    left: ${hole.x - 6}px;
-                    top: ${hole.y - 6}px;
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    background: ${hole.type === 'hit'
-                        ? 'radial-gradient(circle, #10b981, transparent)'
-                        : 'radial-gradient(circle, #6b7280, transparent)'};
-                    pointer-events: none;
-                    opacity: 0.7;
-                    z-index: 5;
-                    animation: bulletHoleFade 2s ease-out;
-                `;
-                gameAreaElement.appendChild(holeElement);
-            }
-        });
-
-        const existingTargets = gameAreaElement.querySelectorAll('.aim-target');
-        existingTargets.forEach(targetEl => {
-            const targetId = targetEl.dataset.targetId;
-            const stillExists = aimTargets.some(t => t.id == targetId);
-            if (!stillExists) {
-                targetEl.remove();
-            }
-        });
-
-        aimTargets.forEach(target => {
-            const existingTarget = gameAreaElement.querySelector(`[data-target-id="${target.id}"]`);
-            if (!existingTarget) {
-                const targetElement = document.createElement('div');
-                targetElement.className = 'aim-target';
-                targetElement.dataset.targetId = target.id;
-                targetElement.style.cssText = `
-                    position: absolute;
-                    left: ${target.x - target.size / 2}px;
-                    top: ${target.y - target.size / 2}px;
-                    width: ${target.size}px;
-                    height: ${target.size}px;
-                    border-radius: 50%;
-                    background: radial-gradient(circle, #ef4444, #f59e0b);
-                    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-                    pointer-events: none;
-                    z-index: 10;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    animation: targetAppear 0.2s ease-out, targetPulse 1s ease-in-out infinite;
-                `;
-                gameAreaElement.appendChild(targetElement);
-            }
-        });
+        }
+        for (const f of run ? run.fx : []) {
+            const bp = (el - f.at) / AIM_FX_MS, s = at(f, f.r); if (!s) continue;
+            if (f.vanish) {
+                c.save(); c.globalAlpha = 0.7 * (1 - bp); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.strokeStyle = T.red; c.beginPath(); c.arc(s[0], s[1], 28 * k, 0, 6.2832); c.stroke();
+                c.setLineDash([]); c.fillStyle = T.redText; c.font = `700 ${9 * k}px ${T.font}`; c.textAlign = 'center'; c.fillText('MISS', s[0], s[1] + 28 * k + 12 * k); c.restore();
+            } else aimBurst(c, s[0], s[1], s[2], col, bp, f.pts, f.sub, k);
+        }
+        // Crosshair: centred in 3D, at the pointer in 2D while aiming.
+        const show = is3d ? !sc.noCam && (aimLive() || S.phase === 'paused' || S.phase === 'idle') : (aimLive() || S.phase === 'paused') && S.ptr && !sc.noCam;
+        if (show) { const p = is3d ? { x: W / 2, y: H / 2 } : S.ptr; aimDrawXh(c, p.x, p.y, S.st.xh, S.max ? 1.3 : 1, S.open > 0 ? 3 : 0); }
     }
 
-    function updateAimStatsDisplay() {
-        // Use direct DOM updates like quotes banner to prevent blinking
-        const timerElement = document.getElementById('aim-timer-display');
-        const scoreElement = document.getElementById('aim-score-display');
-        const accuracyElement = document.getElementById('aim-accuracy-display');
-        const hitsElement = document.getElementById('aim-hits-display');
-        const shotsElement = document.getElementById('aim-shots-display');
-
-        if (timerElement) timerElement.textContent = aimTimer;
-        if (scoreElement) scoreElement.textContent = aimScore;
-        if (accuracyElement) accuracyElement.textContent = aimAccuracy;
-        if (hitsElement) hitsElement.textContent = aimHits;
-        if (shotsElement) shotsElement.textContent = aimShots;
+    // ── HUD (tiles, chips) — text only changes when its value does ──
+    const aimSet = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+    function aimTiles() {
+        const S = aimS, sc = aimScen(), run = S.run, R = S.R, res = S.res, st = S.st;
+        if (sc.group === 'aim') {
+            const len = sc.len * 1000, left = run ? Math.max(0, run.len - run.el) : res ? 0 : len, frac = left / len;
+            const acc = run ? aimLiveAcc(run) : res && res.kind === 'aim' ? res.acc : null, m = run && run.id !== 'chaos' ? aimMult(run.streak) : 1;
+            return [['TIME', (left / 1000).toFixed(1), 's', '', { bar: st.set.timerBar ? frac : -1, hot: frac < 0.3 && frac > 0 }],
+                ['SCORE', aimFmt(run ? run.score : res && res.kind === 'aim' ? res.score : 0), '', ''],
+                ['ACCURACY', acc === null ? '—' : String(acc), acc === null ? '' : '%', ''],
+                ['STREAK', String(run ? run.streak : res && res.kind === 'aim' ? res.bestStreak : 0), res && !run ? 'best' : '', m > 1 ? '×' + m : '']];
+        }
+        const n = R ? R.rounds : sc.rounds, t = R ? R.times : res && res.kind === 'react' ? res.times : [], fs = R ? R.fs : res && res.kind === 'react' ? res.fs : 0;
+        const last = t.length ? t[t.length - 1] : null, avg = t.length ? Math.round(aimMean(t)) : null;
+        return [['ROUND', String(R ? R.round : res ? n : 0), '/' + n, ''], ['LAST', last === null ? '—' : aimFmt(last), last === null ? '' : 'ms', ''],
+            ['AVERAGE', avg === null ? '—' : aimFmt(avg), avg === null ? '' : 'ms', ''], [S.hud.classList.contains('is-narrow') ? 'FALSE ST.' : 'FALSE STARTS', String(fs), '/3', '', { pips: fs, hot: fs >= 2 }]];
+    }
+    function aimHudSync() {
+        const S = aimS, st = S.st, sc = aimScen(), mode = aimMode().toUpperCase(), narrow = S.hud.classList.contains('is-narrow');
+        aimTiles().forEach((d, i) => {
+            const el = S.tiles[i], x = d[4] || {};
+            aimSet(el.children[0], d[0]); aimSet(el.querySelector('b'), d[1]); aimSet(el.querySelector('u'), d[2]); aimSet(el.querySelector('em'), d[3]);
+            el.classList.toggle('is-hot', !!x.hot);
+            el.classList.toggle('has-bar', x.bar >= 0);
+            if (x.bar >= 0) el.querySelector('.bar i').style.width = Math.round(x.bar * 100) + '%';
+            el.classList.toggle('has-pips', x.pips !== undefined);
+            if (x.pips !== undefined) Array.from(el.querySelectorAll('.pips i')).forEach((p, j) => p.classList.toggle('is-on', j < x.pips));
+        });
+        const key = [st.scen, st.diff, mode, narrow, S.phase, S.max].join('|');
+        if (key !== S.hudKey) {
+            S.hudKey = key;
+            const dn = aimDiffName(st.diff), meta = sc.noCam ? dn : (narrow || sc.name.length > 5) ? mode + (st.diff !== 'normal' && !narrow ? ' · ' + dn : '') : mode + ' · ' + dn;
+            S.hud.querySelector('.aim-chip-i').innerHTML = aimSvg(AIM_ICON[st.scen]);
+            aimSet(S.hud.querySelector('.aim-chip-t b'), sc.name); aimSet(S.hud.querySelector('.aim-chip-t i'), S.max ? (sc.group === 'react' ? 'Reaction · ' + dn : mode + ' · ' + dn) : meta);
+            const b = aimBestOf(st, st.scen, aimMode(), st.diff);
+            aimSet(S.hud.querySelector('.aim-bestb b'), b ? aimFmt(b) + (sc.group === 'react' ? ' ms' : '') : '—');
+            S.hud.querySelectorAll('.aim-seg button').forEach(x => x.classList.toggle('is-on', !sc.noCam && x.getAttribute('data-act') === 'mode:' + aimMode()));
+            S.hud.querySelector('.aim-seg').classList.toggle('is-off', !!sc.noCam);
+            S.hud.querySelector('.aim-mode1').classList.toggle('is-off', !!sc.noCam);
+            aimSet(S.hud.querySelector('.aim-mode1 b'), mode);
+            const live = aimLive(), pp = S.hud.querySelector('.aim-pp');
+            pp.innerHTML = aimSvg(live ? AIM_ICON.pause : AIM_ICON.play) + `<span>${live ? 'Pause' : S.phase === 'paused' ? 'Resume' : 'Play'}</span>`;
+            pp.setAttribute('aria-label', live ? 'Pause' : 'Play');
+            S.hud.classList.toggle('is-custom', st.diff !== 'normal');
+            const ranked = aimRanked(st.scen, aimMode(), st.diff);
+            aimSet(S.hud.querySelector('.aim-rank'), dn + ' · ' + (ranked ? 'ranked' : st.diff === 'normal' ? 'local best (' + mode + ')' : 'not ranked'));
+        }
+        const done = S.phase === 'ares' || S.phase === 'rres';
+        aimSet(S.hud.querySelector('.aim-status span'), done ? 'Run complete' : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor');
+        S.hud.querySelector('.aim-status').classList.toggle('is-on', !done && (aimLive() || S.locked));
+        // In-viewport chip: per scenario, while running.
+        let chip = null;
+        const run = S.run, R = S.R;
+        if (S.phase === 'run' && run) {
+            if (run.id === 'tracking') chip = ['ON TARGET', (aimLiveAcc(run) || 0) + '%', 1];
+            else if (run.id === 'flick') chip = ['AVG TTK', run.kills.length ? Math.round(aimMean(run.kills.map(x => x.ttk))) + ' ms' : '—'];
+            else if (run.id === 'shrink') chip = ['LIFETIME', (AIM_SCEN.shrink.life * AIM_DIFF[run.diff].life / 1000).toFixed(1) + ' s'];
+        } else if (S.phase === 'run' && R && R.id === 'target') chip = ['ROUND ' + R.round + ' / ' + R.rounds, aimIs3d() ? 'Flick & click' : 'Click it'];
+        const vc = S.hud.querySelector('.aim-vchip');
+        vc.classList.toggle('is-on', !!chip);
+        if (chip) { aimSet(vc.children[0], chip[0]); aimSet(vc.children[1], chip[1]); vc.classList.toggle('is-acc', !!chip[2]); }
     }
 
-    function updateAimScoreDisplay() {
-        updateGameScoreBtn('aim', aimScore, loadAimHighScore());
+    // ── Overlays (DOM over the canvas): rebuilt only when the state they show changes ──
+    function aimVpBg() {
+        const S = aimS, R = S.R, sc = aimScen();
+        const bg = sc.noCam && R && S.phase !== 'paused' ? (R.phase === 'go' ? 'go' : R.phase === 'soon' ? 'soon' : 'wait') : '';
+        ['wait', 'go', 'soon'].forEach(k => S.vp.classList.toggle('is-' + k, bg === k));
+    }
+    function aimOvCount() {
+        const S = aimS, n = Math.max(1, Math.ceil(S.count / 1000)), el = S.vp.querySelector('.aim-count-n'), ring = S.vp.querySelector('.aim-count-ring');
+        if (el) aimSet(el, String(n));
+        if (ring) ring.style.strokeDasharray = (377 * (S.count % 1000 || 1000) / 1000).toFixed(1) + ' 377';
+    }
+    function aimOv() {
+        const S = aimS; if (!S.hud) return;
+        aimVpBg();
+        const sc = aimScen(), st = S.st, R = S.R, mode = aimMode().toUpperCase(), dn = aimDiffName(st.diff), I = AIM_ICON, kbd = k => `<kbd>${k}</kbd>`;
+        let key = S.phase + '|' + st.scen + '|' + st.diff + '|' + mode + '|' + S.locked, h = '';
+        if (R && S.phase === 'run') key += '|' + R.phase + '|' + R.round + '|' + R.fs + '|' + R.times.length;
+        if (key === S.ovKey) return;
+        S.ovKey = key;
+        const needLock = aimIs3d() && !S.locked && aimLive();
+        if (needLock) {
+            h = `<div class="aim-scrimv"></div><div class="aim-ovc"><button type="button" class="aim-card aim-unlock" data-act="lock"><span class="aim-lockic">${aimSvg(I.lock)}</span><b>Click to lock mouse</b><span>Mouse turns the camera. The crosshair stays centred.</span><span class="aim-hint">${kbd('Esc')}to release and pause</span></button></div>`;
+        } else if (S.phase === 'idle') {
+            const last = st.last[aimBestKey(st.scen, aimMode(), st.diff)], b = aimBestOf(st, st.scen, aimMode(), st.diff), react = sc.group === 'react';
+            const kick = react ? 'REACTION · ' + sc.name.toUpperCase() : 'AIM · SCENARIO';
+            const meta = react ? `${sc.rounds} rounds · ${(sc.minDelay * AIM_DIFF[st.diff].delay[0] / 1000).toFixed(1).replace('.0', '')}–${(sc.maxDelay * AIM_DIFF[st.diff].delay[1] / 1000).toFixed(1).replace('.0', '')} s delay · ${dn}${sc.noCam ? '' : ' · ' + mode}`
+                : `${sc.count === 1 ? (st.scen === 'tracking' ? 'Moving target' : '1 target') : sc.count + ' targets'} · ${sc.len} s · ${dn} · ${mode}`;
+            const lastT = !last ? 'No runs yet' : react ? (last.fail ? 'failed run' : 'avg ' + aimFmt(last.avg) + ' ms') : aimFmt(last.score) + ' pts · ' + last.acc + '%';
+            h = `<div class="aim-ovc"><div class="aim-idle"><div class="aim-kick">${kick}</div><div class="aim-idle-n">${sc.name}</div><div class="aim-idle-m">${meta}</div>` +
+                `<div class="aim-rings"><button type="button" class="aim-playbig" data-act="play" aria-label="Play">${aimSvg(I.play)}</button></div>` +
+                `<div class="aim-hint">Click to start${kbd('Space')}</div></div></div>` +
+                `<div class="aim-lastpill"><span class="aim-kick">LAST</span><b>${lastT}</b>${b ? `<span>· best ${aimFmt(b)}${react ? ' ms' : ''}</span>` : ''}</div>`;
+        } else if (S.phase === 'count') {
+            h = `<div class="aim-scrimv"></div><div class="aim-ovc"><div class="aim-count"><div class="aim-count-d"><svg viewBox="0 0 132 132" width="132" height="132"><circle cx="66" cy="66" r="60" class="aim-count-t"/><circle cx="66" cy="66" r="60" class="aim-count-ring"/></svg><span class="aim-count-n">3</span></div>` +
+                `<b>Get ready</b><span>${sc.name} · ${sc.len} s · aim at the first target</span></div></div>`;
+        } else if (S.phase === 'paused') {
+            const run = S.run, acc = run ? aimLiveAcc(run) : null;
+            const line = run ? `${sc.name} · ${((run.len - run.el) / 1000).toFixed(1)} s left` : `${sc.name} · round ${R ? R.round : 1} of ${sc.rounds}`;
+            const sub = run ? `${aimFmt(run.score)} pts · ${acc === null ? '—' : acc + '%'} accuracy` : `${R ? R.times.length : 0} rounds timed · ${R ? R.fs : 0}/3 false starts`;
+            h = `<div class="aim-scrimv is-blur"></div><div class="aim-ovc"><div class="aim-card aim-pausec"><div class="aim-kick">PAUSED</div><div class="aim-pause-t">${line}</div><div class="aim-pause-s">${sub}</div>` +
+                `<button type="button" class="aim-btn is-primary" data-act="resume">${aimSvg(I.play)}Resume</button><div class="aim-row2"><button type="button" class="aim-btn" data-act="restart">${aimSvg(I.restart)}Restart</button><button type="button" class="aim-btn is-red" data-act="quit">${aimSvg(I.close)}Quit</button></div>` +
+                `<div class="aim-hint">${kbd('Esc')}to resume</div></div></div>`;
+        } else if (S.phase === 'run' && R) {
+            const avg = R.times.length ? Math.round(aimMean(R.times)) : 0, pa = st.bests[aimBestKey(R.id, aimMode(), R.diff) + '|avg'];
+            if (R.phase === 'wait' && sc.noCam) h = `<div class="aim-ovc aim-rx"><div class="aim-wait"><div class="aim-waitr"><i></i><i></i><i></i></div><b>Wait for green…</b><span>Round ${R.round} of ${R.rounds} · don’t click yet</span></div></div>`;
+            else if (R.phase === 'wait') h = `<div class="aim-ovc aim-rx is-soft"><div class="aim-wait"><b>Wait for the target…</b><span>Round ${R.round} of ${R.rounds} · don’t click yet</span></div></div>`;
+            else if (R.phase === 'go' && sc.noCam) h = '<div class="aim-ovc"><div class="aim-go"><b>GO</b><span>CLICK ANYWHERE</span></div></div>';
+            else if (R.phase === 'time') {
+                const v = R.times[R.times.length - 1], ref = pa || avg, d = v - ref;
+                h = `<div class="aim-ovc aim-rx${sc.noCam ? '' : ' is-soft'}"><div class="aim-time"><div class="aim-kick">ROUND ${R.round} OF ${R.rounds}</div><div class="aim-time-v"><b>${aimFmt(v)}</b><span>ms</span></div>` +
+                    (ref && R.times.length > 1 || pa ? `<div class="aim-time-c${d <= 0 ? ' is-good' : ''}">${d <= 0 ? '−' : '+'}${Math.abs(Math.round(d))} ms vs your average</div>` : '') + `<span>Next round in 0.3 s</span></div></div>`;
+            } else if (R.phase === 'soon') {
+                h = `<div class="aim-ovc aim-rx is-soon"><div class="aim-soon"><span class="aim-soonic">${aimSvg(I.warn)}</span><b>${R.fromWait ? 'Too soon' : 'Missed'}</b><div class="aim-soon-n">False start ${R.fs} of 3<span>${[0, 1, 2].map(i => `<i class="${i < R.fs ? 'is-on' : ''}"></i>`).join('')}</span></div>` +
+                    `<span>${R.fromWait ? 'Wait for green' : 'Click the target itself'}. Round re-arms in 1.2 s.<br>A third false start ends the run.</span></div></div>`;
+            }
+        } else if (S.phase === 'ares' && S.res) h = aimOvAimRes(S.res);
+        else if (S.phase === 'rres' && S.res) h = aimOvReactRes(S.res);
+        S.hud.querySelector('.aim-ov').innerHTML = h;
+        if (S.phase === 'count') aimOvCount();
+        aimLayout(); aimFitOv();
+    }
+    // Overlay cards scale down to fit a short viewport (the 316 px column), and up 1.5× in Max.
+    function aimFitOv() {
+        const S = aimS; if (!S.hud || !S.W) return;
+        S.hud.querySelectorAll('.aim-ovc > *').forEach(el => {
+            el.style.transform = '';
+            const w = el.offsetWidth, h = el.offsetHeight;
+            if (!w || !h) return;
+            const k = Math.min(S.max ? 1.5 : 1, (S.H - 12) / h, (S.W - 8) / w);
+            if (k !== 1) el.style.transform = 'scale(' + k.toFixed(3) + ')';
+        });
+    }
+    function aimOvAimRes(r) {
+        const sc = AIM_SCEN[r.id], mode = r.mode.toUpperCase(), track = r.id === 'tracking', I = AIM_ICON;
+        const tag = r.ranked ? 'Ranked · posted' : r.diff !== 'normal' ? 'Custom · not ranked' : 'Local best · ' + mode;
+        const cmp = r.isBest ? [r.prev ? 'Previous best ' + aimFmt(r.prev) : 'First best', r.prev ? '+' + aimFmt(r.score - r.prev) : aimFmt(r.score), 'is-good'] : [r.prev ? 'Personal best ' + aimFmt(r.prev) : 'Personal best', r.prev ? '−' + aimFmt(r.prev - r.score) : '—', ''];
+        const stats = [['ACCURACY', r.acc, '%'], track ? ['ON TARGET', r.onS.toFixed(1), 's'] : ['HITS/SHOTS', r.hits, '/' + r.shots], ['REACTION', track ? '—' : r.react || '—', track || !r.react ? '' : 'ms'],
+            ['AVG TTK', track ? '—' : r.ttk || '—', track || !r.ttk ? '' : 'ms'], [track ? 'BEST HOLD' : 'BEST STREAK', r.bestStreak, track ? 's' : ''], ['XP EARNED', '+' + r.xp, 'xp', 1]];
+        return `<div class="aim-scrimv is-blur"></div>${r.isBest ? '<div class="aim-bestglow"></div>' : ''}<div class="aim-ovc"><div class="aim-res">` +
+            `<div class="aim-res-h"><span class="aim-kick">${sc.name.toUpperCase()} · ${mode} · ${AIM_DIFF[r.diff].name.toUpperCase()}</span>${r.isBest ? `<span class="aim-newbest">${aimSvg(I.trophy)}NEW BEST</span>` : `<span class="aim-tag">${tag}</span>`}</div>` +
+            `<div class="aim-res-m"><div class="aim-res-big${r.isBest ? ' is-best' : ''}"><b>${aimFmt(r.score)}</b><span>pts</span></div><div class="aim-res-c"><span>${cmp[0]}</span><b class="${cmp[2]}">${cmp[1]}</b></div></div>` +
+            `<div class="aim-spark-h"><span>${track ? 'ON TARGET' : 'HITS PER SECOND'}</span><span>0 – ${sc.len} s</span></div><div class="aim-spark">${r.spark.map(v => `<i class="${v >= 0.8 ? 'is-hi' : ''}" style="height:${Math.max(2, Math.round(v * 36))}px"></i>`).join('')}</div>` +
+            `<div class="aim-stats">${stats.map(s => `<div class="aim-stat"><span>${s[0]}</span><b${s[3] ? ' class="is-acc"' : ''}>${s[1]}<u>${s[2]}</u></b></div>`).join('')}</div>` +
+            `<div class="aim-row2 is-wide"><button type="button" class="aim-btn is-primary" data-act="again">${aimSvg(I.restart)}Play again</button><button type="button" class="aim-btn" data-act="sheet:scenarios">Change scenario</button></div></div></div>`;
+    }
+    function aimOvReactRes(r) {
+        const sc = AIM_SCEN[r.id], I = AIM_ICON, fail = r.fail, real = r.times.filter(v => v < r.max || !fail);
+        const tag = fail ? 'Not posted' : r.ranked ? 'Ranked · posted' : r.diff !== 'normal' ? 'Custom · not ranked' : 'Local best · 3D';
+        const top = Math.max(320, ...real.map(v => v * 1.15)), bestV = real.length ? Math.min(...real) : 0, ok = r.times.filter(v => v < r.max).length;
+        const bars = r.times.map((v, i) => { const pen = fail && v >= r.max; return `<div class="aim-rb${pen ? ' is-pen' : !fail && v === bestV ? ' is-best' : ''}"><span>${aimFmt(v)}</span><i style="height:${pen ? 96 : Math.max(3, Math.round(v / top * 96))}px"></i></div>`; }).join('');
+        const cmp = r.isBest ? [r.prev ? 'Previous best ' + aimFmt(r.prev) + ' ms' : 'First best', r.prev ? '−' + aimFmt(r.prev - r.best) + ' ms' : aimFmt(r.best) + ' ms', 'is-good'] : [r.prev ? 'Personal best ' + aimFmt(r.prev) + ' ms' : 'Personal best', r.prev ? (fail ? aimFmt(r.prev) + ' ms' : '+' + aimFmt(r.best - r.prev) + ' ms') : '—', ''];
+        const stats = fail ? [['AVERAGE', aimFmt(r.avg), 'ms'], ['BEST ROUND', bestV ? aimFmt(bestV) : '—', bestV ? 'ms' : ''], ['XP EARNED', '+' + r.xp, 'xp', 1]] : [['FALSE STARTS', r.fs, '/3'], ['BEST ROUND', aimFmt(r.best), 'ms'], ['XP EARNED', '+' + r.xp, 'xp', 1]];
+        return `<div class="aim-scrimv is-blur"></div><div class="aim-ovc"><div class="aim-res">` +
+            `<div class="aim-res-h"><span class="aim-kick${fail ? ' is-red' : ''}">${sc.name.toUpperCase()} · ${fail ? 'RUN FAILED' : AIM_DIFF[r.diff].name.toUpperCase()}</span>${r.isBest ? `<span class="aim-newbest">${aimSvg(I.trophy)}NEW BEST</span>` : `<span class="aim-tag${fail ? ' is-red' : ''}">${tag}</span>`}</div>` +
+            `<div class="aim-res-m"><div><div class="aim-res-big${fail ? ' is-fail' : ''}"><b>${fail ? r.fs : aimFmt(r.avg)}</b><span>${fail ? 'false starts' : 'ms avg'}</span></div><div class="aim-res-sub">${fail ? `Rounds ${ok + 1}–${r.rounds} counted at ${aimFmt(r.max)} ms` : `Best round ${aimFmt(r.best)} ms · dashed line = avg`}</div></div><div class="aim-res-c"><span>${cmp[0]}</span><b class="${cmp[2]}">${cmp[1]}</b></div></div>` +
+            `<div class="aim-rbars${r.times.length > 5 ? ' is-many' : ''}">${fail ? '' : `<div class="aim-avgline" style="bottom:${Math.round(r.avg / top * 96)}px"></div>`}${bars}</div>` +
+            `<div class="aim-rlabels">${r.times.map((v, i) => `<span>R${i + 1}</span>`).join('')}</div>` +
+            `<div class="aim-stats is-3">${stats.map(s => `<div class="aim-stat"><span>${s[0]}</span><b${s[3] ? ' class="is-acc"' : ''}>${s[1]}<u>${s[2]}</u></b></div>`).join('')}</div>` +
+            `<div class="aim-row2 is-wide"><button type="button" class="aim-btn is-primary" data-act="again">${aimSvg(I.restart)}${fail ? 'Try again' : 'Play again'}</button><button type="button" class="aim-btn" data-act="sheet:scenarios">Change scenario</button></div></div></div>`;
     }
 
-    function showAimResults(isNewHighScore) {
-        const resultsElement = document.getElementById('aim-results');
-        if (!resultsElement) return;
-
-        resultsElement.innerHTML = `
-            <div style="text-align: center;">
-                <h3 style="margin-bottom: 16px; color: #ef4444;">${isNewHighScore ? attIcon('party') + ' New High Score!' : 'Game Complete!'}</h3>
-                <div style="margin-bottom: 12px;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: #f59e0b;">Score: ${aimScore}</div>
-                    <div style="font-size: 1.2rem; margin-top: 8px;">Accuracy: ${aimAccuracy}%</div>
-                    <div style="font-size: 0.9rem; margin-top: 4px;">Hits: ${aimHits}/${aimShots}</div>
-                </div>
-                <button id="aim-play-again-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #ef4444, #f59e0b); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                    Play Again
-                </button>
-            </div>        `;
-        resultsElement.classList.add('active');
-
-        const playAgainBtn = document.getElementById('aim-play-again-btn');
-        if (playAgainBtn) {
-            playAgainBtn.onclick = () => {
-                hideAimResults();
-                resetAimGame();
-                startAimGame();
+    // ── Sheets: scenarios, crosshair, settings, personal bests ──
+    function aimSheetOpen(name) {
+        const S = aimS;
+        if (name && aimLive()) aimPause();
+        S.sheet = name; S.confirmReset = false;
+        // Shown first: the crosshair previews measure their canvases.
+        aimLayout(); aimSheet();
+    }
+    function aimSheet() {
+        const S = aimS, w = S.hud && S.hud.querySelector('.aim-sheet');
+        if (!w) return;
+        const st = S.st, I = AIM_ICON, name = S.sheet, T = { scenarios: ['CHOOSE', 'Scenario'], crosshair: ['CROSSHAIR', 'Crosshair editor'], settings: ['AIMLAB', 'Settings'], bests: ['RECORDS', 'Personal bests'] }[name];
+        if (!T) { w.innerHTML = ''; return; }
+        const seg = (opts, cur, act) => `<div class="aim-segs">${opts.map(o => `<button type="button" class="${o[0] === cur ? 'is-on' : ''}" data-act="${act}:${o[0]}">${o[1]}</button>`).join('')}</div>`;
+        const tog = (k, on) => `<input type="checkbox" class="aim-tog" data-set="${k}"${on ? ' checked' : ''}>`;
+        const slider = (k, label, v, min, max, step, t) => `<label class="aim-sl"><span class="aim-sl-h"><span>${t || ''}${label}</span><b data-out="${k}">${aimOutVal(k, v)}</b></span><input type="range" data-set="${k}" min="${min}" max="${max}" step="${step || 1}" value="${v}"></label>`;
+        let b = '';
+        if (name === 'scenarios') {
+            const card = id => {
+                const s = AIM_SCEN[id], on = id === st.scen, react = s.group === 'react', bb = (m) => aimBestOf(st, id, m, st.diff);
+                const b1 = react ? (s.noCam ? (bb('2d') ? aimFmt(bb('2d')) + ' ms' : '—') : '2D ' + (bb('2d') ? aimFmt(bb('2d')) + ' ms' : '—')) : '2D ' + (bb('2d') ? aimFmt(bb('2d')) : '—');
+                const av = st.bests[aimBestKey(id, '2d', st.diff) + '|avg'];
+                const b2 = react ? (s.noCam ? (av ? 'avg ' + aimFmt(av) : '') : '3D ' + (bb('3d') ? aimFmt(bb('3d')) + ' ms' : '—')) : '3D ' + (bb('3d') ? aimFmt(bb('3d')) : '—');
+                const len = react ? s.rounds + ' rounds' : s.len + ' s';
+                return `<button type="button" class="aim-card aim-scard${on ? ' is-on' : ''}" data-act="scen:${id}"><span class="aim-scard-i">${aimSvg(I[id])}</span><span class="aim-scard-t"><span><b>${s.name}</b><i>${len}</i></span><span>${s.desc}</span></span><span class="aim-scard-b"><b>${b1}</b><span>${b2}</span></span></button>`;
             };
+            b = `<div class="aim-segs is-diff">${Object.keys(AIM_DIFF).map(d => `<button type="button" class="${d === st.diff ? 'is-on' : ''}" data-act="diff:${d}"><b>${AIM_DIFF[d].name}</b><span>${AIM_DIFF[d].sub}</span></button>`).join('')}</div>` +
+                `<div class="aim-note"><i></i>Normal runs post to the team leaderboard. Easy and Hard stay local.</div>` +
+                `<div class="aim-grp"><span>AIM</span><span>BEST 2D · 3D</span></div>${['chaos', 'flick', 'tracking', 'shrink'].map(card).join('')}` +
+                `<div class="aim-grp"><span>REACTION · LOWER IS BETTER</span><span>BEST</span></div>${['screen', 'target'].map(card).join('')}`;
+        } else if (name === 'crosshair') {
+            const x = st.xh;
+            b = `<div class="aim-xhp"><div class="aim-xhbox is-2d"><canvas class="aim-xhc" data-k="2d"></canvas><span>2D ARENA</span></div><div class="aim-xhbox is-3d"><canvas class="aim-xhc" data-k="3d"></canvas><span>3D ROOM</span></div></div>` +
+                `<div class="aim-presets">${[['cross', 'Cross'], ['dot', 'Dot'], ['crossdot', 'Cross+dot'], ['circle', 'Circle'], ['t', 'T-shape']].map(p => `<button type="button" class="aim-preset${x.xs === p[0] ? ' is-on' : ''}" data-act="xs:${p[0]}"><canvas class="aim-xhc" data-k="p" data-xs="${p[0]}"></canvas><span>${p[1]}</span></button>`).join('')}</div>` +
+                `<div class="aim-swatches">${AIM_SWATCH.map(c => `<button type="button" class="aim-sw${x.color.toUpperCase() === c ? ' is-on' : ''}" data-act="xc:${c}" aria-label="Colour ${c}" style="--sw:${c}"></button>`).join('')}<label class="aim-hex"><i style="background:${x.color}"></i><input type="text" maxlength="7" data-set="xh.color" value="${x.color}" aria-label="Custom colour"></label></div>` +
+                `<div class="aim-sliders">${slider('xh.len', 'Length', x.len, 0, 20)}${slider('xh.thick', 'Thickness', x.thick, 1, 6)}${slider('xh.gap', 'Gap', x.gap, 0, 12)}${slider('xh.op', 'Opacity', x.op, 10, 100, 5)}` +
+                `${slider('xh.ow', 'Outline', x.ow, 1, 3, 1, tog('xh.outline', x.outline))}${slider('xh.ds', 'Centre dot', x.ds, 1, 6, 1, tog('xh.dot', x.dot))}</div>` +
+                `<label class="aim-row"><span><b>Dynamic</b><i>Opens briefly on each shot</i></span>${tog('xh.dyn', x.dyn)}</label>` +
+                `<div class="aim-codeh"><input type="text" class="aim-code" data-set="xh.code" value="${aimXhCode(x)}" aria-label="Crosshair code" spellcheck="false"><button type="button" class="aim-btn" data-act="copy">${aimSvg(I.copy)}Copy code</button><button type="button" class="aim-btn" data-act="paste">Paste</button></div>`;
+        } else if (name === 'settings') {
+            const s = st.set, row = (l, d, ctl) => `<label class="aim-row"><span><b>${l}</b>${d ? `<i>${d}</i>` : ''}</span>${ctl}</label>`;
+            b = `<div class="aim-row is-line"><span><b>Mode</b></span>${seg([['2d', '2D'], ['3d', '3D']], st.mode, 'mode')}</div>` +
+                `<div class="aim-row is-line is-sl"><span class="aim-grow"><b>Sensitivity</b><input type="range" data-set="set.sens" min="0.1" max="5" step="0.05" value="${s.sens}"></span><input type="number" class="aim-num" data-set="set.sens" min="0.1" max="5" step="0.05" value="${s.sens}" aria-label="Sensitivity"></div>` +
+                `<div class="aim-row is-line is-sl"><span class="aim-grow"><b>Field of view <i>· 3D only · 70–110</i></b><input type="range" data-set="set.fov" min="70" max="110" step="1" value="${s.fov}"></span><b class="aim-big" data-out="set.fov">${s.fov}°</b></div>` +
+                row('Invert Y', '3D camera pitch', tog('set.invY', s.invY)) + row('Sound', 'Hit, miss and countdown cues', tog('set.sound', s.sound)) + row('Timer bar', 'Draining bar in the TIME tile', tog('set.timerBar', s.timerBar)) +
+                `<div class="aim-row is-line"><span><b>Hit sound</b></span><div class="aim-pills">${[['tick', 'Tick'], ['pop', 'Pop'], ['ding', 'Ding']].map(p => `<button type="button" class="${s.hitSnd === p[0] ? 'is-on' : ''}" data-act="snd:${p[0]}">${p[1]}</button>`).join('')}</div></div>` +
+                `<div class="aim-row is-line"><span><b>Target colour</b></span><div class="aim-tcs">${AIM_TCOLORS.map(c => `<button type="button" class="aim-sw${s.tcolor.toUpperCase() === c ? ' is-on' : ''}" data-act="tc:${c}" aria-label="Target ${c}" style="--sw:${c}"></button>`).join('')}</div></div>` +
+                `<div class="aim-row"><span><b>Background</b></span>${seg([['room', 'Room'], ['grid', 'Grid'], ['plain', 'Plain']], s.bg, 'bg')}</div>`;
+        } else if (name === 'bests') {
+            const rows = [];
+            AIM_ORDER.forEach(id => {
+                const s = AIM_SCEN[id];
+                (s.noCam ? ['-'] : ['2d', '3d']).forEach((m, i) => {
+                    const cells = Object.keys(AIM_DIFF).map(d => { const v = aimBestOf(st, id, m === '-' ? '2d' : m, d), rk = aimRanked(id, m === '-' ? '2d' : m, d); return `<span class="${rk ? 'is-rk' : ''}${v ? '' : ' is-none'}">${v ? aimFmt(v) : '—'}</span>`; }).join('');
+                    rows.push(`<div class="aim-brow${i ? ' is-sub' : ''}"><b>${i ? '' : s.name}</b><i>${m === '-' ? '—' : m.toUpperCase()}</i>${cells}</div>`);
+                });
+            });
+            b = `<div class="aim-legend"><span><i></i>Ranked · team board</span><span>Lower ms is better</span></div>` +
+                `<div class="aim-btable"><div class="aim-brow is-head"><b>SCENARIO</b><i></i><span>EASY</span><span>NORMAL</span><span>HARD</span></div>${rows.join('')}</div>` +
+                `<div class="aim-row2 is-wide is-end"><button type="button" class="aim-btn is-primary" data-act="board">Open team board</button><button type="button" class="aim-btn is-red is-auto" data-act="reset">Reset</button></div>`;
         }
+        w.className = 'aim-sheet is-' + name;
+        w.setAttribute('aria-label', T[1]);
+        w.innerHTML = `<div class="aim-grab"></div><div class="aim-sheet-h"><span><span class="aim-kick">${T[0]}</span><b>${T[1]}</b></span><button type="button" class="aim-b" data-act="sheet:" aria-label="Close">${aimSvg(I.close)}</button></div><div class="aim-sheet-b">${b}</div>`;
+        if (name === 'crosshair') aimXhPreview();
+        S.hudKey = '';
+    }
+    // The editor's previews: the live crosshair over a 2D target and the 3D room, and each preset.
+    function aimXhPreview() {
+        const S = aimS, st = S.st;
+        S.hud.querySelectorAll('.aim-xhc').forEach(cv => {
+            const r = cv.getBoundingClientRect(), W = Math.round(cv.clientWidth || r.width), H = Math.round(cv.clientHeight || r.height), d = Math.min(window.devicePixelRatio || 1, 2);
+            if (!W || !H) return;
+            cv.width = W * d; cv.height = H * d;
+            const c = cv.getContext('2d'), k = cv.getAttribute('data-k');
+            c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, W, H);
+            if (k === 'p') { aimDrawXh(c, W / 2, H / 2, Object.assign({}, st.xh, { xs: cv.getAttribute('data-xs') }), 1.1, 0); return; }
+            if (k === '3d') {
+                const C = { W, H, f: W / 2 / Math.tan(st.set.fov * Math.PI / 360), cy: 1, sy: 0, cp: 1, sp: 0 };
+                aimDrawRoom(c, C, 'room'); aimSphere(c, W * 0.62, H * 0.35, 15, st.set.tcolor, 1, 1);
+            } else aimDisc(c, W * 0.6, H * 0.45, 27, st.set.tcolor, 1, 1);
+            aimDrawXh(c, W / 2, H / 2, st.xh, 2.4, 0);
+        });
+        const code = S.hud.querySelector('.aim-code');
+        if (code && document.activeElement !== code) { code.value = aimXhCode(st.xh); code.classList.remove('is-bad'); }
     }
 
-    function hideAimResults() {
-        const resultsElement = document.getElementById('aim-results');
-        if (resultsElement) {
-            resultsElement.classList.remove('active');
-        }
+    // ── Max: 1280 × 800, scaled to fit; the HUD moves in and out whole ──
+    function aimSyncMaxTheme() {
+        const f = aimS.maxFrame; if (!f) return;
+        const w = document.getElementById('total-time-summary'), cyber = !!(w && w.classList.contains('retro-theme'));
+        f.classList.toggle('retro-theme', cyber);
+        try { if (cyber) { applyCyberTokens(f); applyCyberShape(f); } else { clearCyberTokens(f); clearCyberShape(f); } } catch (_) {}
     }
+    function aimFitMax() {
+        const S = aimS; if (!S.maxFrame || !S.maxPanel) return;
+        const k = Math.min(1, (window.innerWidth - 32) / 1280, (window.innerHeight - 32) / 800);
+        S.maxPanel.style.width = Math.round(1280 * k) + 'px'; S.maxPanel.style.height = Math.round(800 * k) + 'px';
+        S.maxFrame.style.transform = 'scale(' + k + ')';
+    }
+    function aimBuildMax(panel) {
+        const S = aimS;
+        S.maxPanel = panel; S.maxFrame = document.createElement('div'); S.maxFrame.className = 'aim-max-frame';
+        panel.appendChild(S.maxFrame); S.maxFrame.appendChild(S.hud);
+        S.max = true; aimSyncMaxTheme(); aimFitMax();
+        window.addEventListener('resize', aimFitMax);
+        aimReadTok(); aimLayout(); aimResize(); S.ovKey = ''; aimOv();
+    }
+    function aimUnbuildMax() {
+        const S = aimS;
+        window.removeEventListener('resize', aimFitMax);
+        if (S.root) S.root.appendChild(S.hud);
+        S.maxFrame = null; S.maxPanel = null; S.max = false;
+        aimReadTok(); aimLayout(); aimResize(); S.ovKey = ''; aimOv();
+    }
+    function aimToggleMax() {
+        const S = aimS; if (!S.hud || typeof toggleGameMaxModal !== 'function') return;
+        const locked = S.locked;
+        S.max = toggleGameMaxModal({ canvasId: 'aim-root', title: 'AimLab', panelClass: 'aim-max-panel', build: aimBuildMax, unbuild: aimUnbuildMax, onToggle: aimToggleMax });
+        // Moving the viewport drops the lock; a live 3D run pauses through aimOnLockChange.
+        if (locked && aimIs3d() && aimLive()) aimPause();
+    }
+    // ═══ END AIMLAB ENGINE ═══
 
     function initFlappyGame() {
         flappyCanvas = document.getElementById('flappy-canvas');
@@ -17021,17 +17409,8 @@
                 toggleSnakeSkinTray(false);
                 break;
 
-            case 'reflex':
-                if (reflexTimeoutRef) { clearTimeout(reflexTimeoutRef); reflexTimeoutRef = null; }
-                if (gameAreaElement) gameAreaElement.removeEventListener('click', handleReflexClick);
-                resetReflexGame();
-                break;
-
             case 'aim':
-                if (aimTimerRef) { clearInterval(aimTimerRef); aimTimerRef = null; }
-                if (aimRenderFrameId) { cancelAnimationFrame(aimRenderFrameId); aimRenderFrameId = null; }
-                if (gameAreaElement) gameAreaElement.removeEventListener('click', handleAimClick);
-                resetAimGame();
+                aimDetach();
                 break;
 
             case 'flappy':
@@ -17074,9 +17453,8 @@
     // starts it. Its controls row and scoreboard are '<key>-controls' and '<key>-scoreboard'.
     const GAME_PANELS = {
         snake: { el: 'snake-canvas', icon: 'g-snake', title: 'Snake', start: () => initSnakeGame() },
-        reflex: { el: 'multi-game-area', stats: 'reflex-stats', icon: 'g-reflex', title: 'RefleX',
-            start: () => { initReflexGame(); updateReflexDisplay(); } },
-        aim: { el: 'multi-game-area', stats: 'aim-stats', icon: 'g-aim', title: 'Chaos Aim Trainer', start: () => { initAimTrainerGame(); renderAimGame(); } },
+        // AimLab (aim-dev/) builds its own panel and footer, and merges RefleX as its Reaction scenarios.
+        aim: { el: 'aim-root', noControls: true, icon: 'g-aim', title: 'AimLab', start: () => initAimLab(), shown: () => aimSyncScoreBtn() },
         flappy: { el: 'flappy-canvas', icon: 'g-flappy', title: 'Flappy Bird', start: () => initFlappyGame() },
         tetris: { el: 'tetris-canvas', icon: 'g-tetris', title: 'Tetris', start: () => initTetrisGame() },
         breakout: { el: 'breakout-canvas', icon: 'g-breakout', title: 'Breakout', start: () => {
@@ -18644,12 +19022,10 @@
             #total-time-summary .game-score-btn :is(.gsb-score, .gsb-best) { font-size: 11px; opacity: 1; }
             #total-time-summary .game-score-btn .gsb-sep { margin: 0 2px; font-size: 11px; opacity: .5; }
             #total-time-summary :is(.snake-mode-chip .att-ico, .gsb-trophy) { display: none; }
-            #total-time-summary .snake-canvas, #total-time-summary .multi-game-area, #total-time-summary .prayer-panel { border-radius: 12px; }
+            #total-time-summary .snake-canvas, #total-time-summary .prayer-panel { border-radius: 12px; }
             /* Square like the canvases (368 x 368, scaled to the column), not a fixed 368 px tall. */
-            #total-time-summary :is(.multi-game-area, .prayer-panel) { height: auto; aspect-ratio: 1 / 1; }
-            /* RefleX and Aim give their stats row (and its gap) back, so the card is as tall as Snake's. */
+            #total-time-summary .prayer-panel { height: auto; aspect-ratio: 1 / 1; }
             #total-time-summary .snake-game-container { container-type: inline-size; }
-            #total-time-summary .multi-game-area { aspect-ratio: auto; height: calc(100cqw - 53px); }
             #total-time-summary .snake-game-title { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
             #total-time-summary .snake-scoreboard { flex-shrink: 0; }
             #total-time-summary .snake-controls { margin: 0; gap: 6px; }
@@ -19511,10 +19887,6 @@
                     color: white;
                 }
 
-                .attendance-summary:not(.retro-theme) .multi-game-area {
-                    background: rgba(0, 0, 0, 0.06);
-                }
-
                 .attendance-summary:not(.retro-theme) .snake-game-over {
                     background: rgba(255, 255, 255, 0.92);
                     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
@@ -20085,7 +20457,7 @@
             }
 
             /* MAIN CONTAINER — never a filter: it would become the containing block
-               for the position:fixed #aim-results and .lb-ach-popover. */
+               for the position:fixed .lb-ach-popover. */
 
             .attendance-summary.retro-theme {
                 background:
@@ -20938,7 +21310,7 @@
 
             /* SIDE PANELS — border-radius only, never clip-path or filter: these hold
                game canvases, trays, popovers and the two position:fixed elements
-               (#aim-results, .lb-ach-popover). */
+               (.lb-ach-popover). */
 
             .attendance-summary.retro-theme .snake-game-container,
             .attendance-summary.retro-theme .quotes-container,
@@ -22766,6 +23138,438 @@
             .pool-hud[data-layout="compact"] .ph-view.is-rails:not(.is-band-b) .ph-chips:not([data-fold]) { padding: 2px 3px; }
             .pool-hud:not([data-bars]) .ph-view.is-rails .ph-spinpop { left: calc(var(--rail-left) + var(--rail-pocket) + 6px); bottom: calc(var(--rail-bottom) + 6px); }
             /* ═══ END POOL THEME ═══ */
+            /* ═══ AIMLAB THEME — generated from aim-dev/aim-theme.css, do not edit here ═══ */
+            /* ═══ AimLab — tokens per preset (Aurora dark, Aurora light, Cyberpunk), then components.
+               Design: aim-dev/ref/design. The canvas reads the --aim-* tokens (aimReadTok), so
+               every colour it draws comes from here too. Cyberpunk follows the light block. */
+            .aim-hud {
+                --aim-text: #F4F2FA; --aim-muted: #A9A6BC; --aim-glass: rgba(255, 255, 255, 0.08); --aim-border: rgba(255, 255, 255, 0.16); --aim-hair: rgba(255, 255, 255, 0.08);
+                --aim-accent: #4FACFE; --aim-ac-text: #6CBBFF; --aim-red: #FF5D73; --aim-red-text: #FF8396; --aim-gold: #FFCB6B; --aim-good: #3DDC97;
+                --aim-primary: linear-gradient(135deg, #7048FF 0%, #3D5CF5 52%, #2563EB 100%); --aim-on-primary: #FFFFFF;
+                --aim-font: 'Inter', system-ui, sans-serif; --aim-num: 'Inter', system-ui, sans-serif; --aim-r: 14px; --aim-rc: 12px; --aim-rc-in: 9px; --aim-rs: 22px 22px 0 0; --aim-knob: 50%;
+                --aim-clip: none; --aim-clip-c: none; --aim-clip-s: none;
+                --aim-track: rgba(255, 255, 255, 0.14); --aim-sel-bg: rgba(79, 172, 254, 0.18); --aim-sel-bd: rgba(79, 172, 254, 0.6); --aim-sw-gap: #141220;
+                --aim-sheet-bg: linear-gradient(180deg, #221D31 0%, #141220 100%); --aim-backdrop: rgba(4, 5, 8, 0.55); --aim-scrim: rgba(6, 7, 12, 0.6); --aim-card: rgba(22, 20, 34, 0.8); --aim-hud: rgba(18, 16, 28, 0.66);
+                --aim-ring: rgba(255, 255, 255, 0.09); --aim-vp-border: rgba(255, 255, 255, 0.12); --aim-key: rgba(255, 255, 255, 0.1); --aim-pop-shadow: rgba(0, 0, 0, 0.6);
+                --aim-btn-sh: 0 6px 18px rgba(61, 92, 245, 0.4); --aim-play-glow: 0 0 0 6px rgba(112, 72, 255, 0.16), 0 12px 32px rgba(61, 92, 245, 0.45); --aim-best-glow: rgba(112, 72, 255, 0.35); --aim-logo-sh: 0 4px 14px rgba(112, 72, 255, 0.45);
+                --aim-arena: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1.5px) 0 0 / 22px 22px, radial-gradient(95% 80% at 50% 30%, #1B1729 0%, #0C0B13 68%, #07080B 100%);
+                --aim-wait: radial-gradient(85% 75% at 50% 42%, #1E2850 0%, #0F142B 70%, #0A0D1C 100%); --aim-go: radial-gradient(85% 75% at 50% 42%, #34E07F 0%, #19B45A 70%, #14974B 100%); --aim-go-text: #03230F;
+                --aim-soon: radial-gradient(85% 75% at 50% 42%, #4E1527 0%, #2A0A13 70%, #1D060C 100%);
+                --aim-rx-text: #DFE6FF; --aim-rx-muted: #A3AED6; --aim-rx-ring: rgba(160, 180, 255, 0.16); --aim-rx-chip: rgba(61, 220, 151, 0.14); --aim-soon-text: #FF8EA0; --aim-soon-muted: #E8B0BA;
+                --aim-room-ceil: #0C0B12; --aim-room-side: #15131E; --aim-room-back: #1D1A2A; --aim-room-floor: #100F18; --aim-room-grid: rgba(146, 128, 255, 0.26); --aim-room-wgrid: rgba(255, 255, 255, 0.045);
+                --aim-room-edge: rgba(255, 255, 255, 0.10); --aim-room-light: rgba(160, 140, 255, 0.22); --aim-vign: rgba(0, 0, 0, 0.5); --aim-shadow: rgba(0, 0, 0, 0.9); --aim-cyber: 0; --aim-light: 0;
+                --aim-max-bg: #06080A; --aim-arena-flat: radial-gradient(95% 80% at 50% 30%, #1B1729 0%, #0C0B13 68%, #07080B 100%);
+            }
+            @media (prefers-color-scheme: light) {
+                .aim-hud {
+                    --aim-text: #0F172A; --aim-muted: #475569; --aim-glass: rgba(255, 255, 255, 0.7); --aim-border: rgba(15, 23, 42, 0.11); --aim-hair: rgba(15, 23, 42, 0.07);
+                    --aim-ac-text: #0369A1; --aim-red-text: #BE123C; --aim-gold: #B45309; --aim-good: #15803D;
+                    --aim-track: rgba(15, 23, 42, 0.12); --aim-sel-bg: rgba(79, 172, 254, 0.16); --aim-sel-bd: rgba(3, 105, 161, 0.45); --aim-sw-gap: #FFFFFF;
+                    --aim-sheet-bg: rgba(255, 255, 255, 0.97); --aim-backdrop: rgba(15, 23, 42, 0.25); --aim-scrim: rgba(241, 244, 249, 0.72); --aim-card: rgba(255, 255, 255, 0.9); --aim-hud: rgba(255, 255, 255, 0.82);
+                    --aim-ring: rgba(15, 23, 42, 0.08); --aim-vp-border: rgba(15, 23, 42, 0.08); --aim-key: rgba(15, 23, 42, 0.06); --aim-pop-shadow: rgba(255, 255, 255, 0.9);
+                    --aim-btn-sh: 0 6px 16px rgba(61, 92, 245, 0.3); --aim-play-glow: 0 0 0 6px rgba(112, 72, 255, 0.12), 0 12px 28px rgba(61, 92, 245, 0.3); --aim-best-glow: rgba(112, 72, 255, 0.2); --aim-logo-sh: 0 4px 12px rgba(112, 72, 255, 0.3);
+                    --aim-arena: radial-gradient(rgba(15, 23, 42, 0.10) 1px, transparent 1.5px) 0 0 / 22px 22px, radial-gradient(95% 80% at 50% 30%, #FFFFFF 0%, #F1F4F9 68%, #E7ECF4 100%);
+                    --aim-wait: radial-gradient(85% 75% at 50% 42%, #E9EEFB 0%, #D4DEF3 100%); --aim-soon: radial-gradient(85% 75% at 50% 42%, #FFE7EB 0%, #FBCFD7 100%);
+                    --aim-rx-text: #1E2A55; --aim-rx-muted: #4A5785; --aim-rx-ring: rgba(30, 42, 85, 0.14); --aim-rx-chip: rgba(21, 128, 61, 0.1); --aim-soon-text: #9F1239; --aim-soon-muted: #7F2A3D;
+                    --aim-room-ceil: #E2E6EF; --aim-room-side: #D7DDE8; --aim-room-back: #EEF1F7; --aim-room-floor: #CDD5E3; --aim-room-grid: rgba(61, 92, 245, 0.28); --aim-room-wgrid: rgba(15, 23, 42, 0.05);
+                    --aim-room-edge: rgba(15, 23, 42, 0.12); --aim-room-light: rgba(255, 255, 255, 0.8); --aim-vign: rgba(15, 23, 42, 0.14); --aim-shadow: rgba(15, 23, 42, 0.4); --aim-light: 1;
+                    --aim-max-bg: #F1F4F9; --aim-arena-flat: radial-gradient(95% 80% at 50% 30%, #FFFFFF 0%, #F1F4F9 68%, #E7ECF4 100%);
+                }
+            }
+            /* Cyberpunk: the widget's --rt-* colours. The one inversion (--rt-text fill, --rt-bg-1 type) is the primary. */
+            .retro-theme .aim-hud {
+                --aim-text: var(--rt-text); --aim-muted: var(--rt-text-dim); --aim-glass: rgba(var(--rt-accent-rgb), 0.05); --aim-border: var(--rt-border); --aim-hair: rgba(var(--rt-accent-rgb), 0.14);
+                --aim-accent: var(--rt-accent); --aim-ac-text: var(--rt-accent); --aim-red: #FF2E63; --aim-red-text: #FF6B8F; --aim-gold: #FFE600; --aim-good: #39FF88;
+                --aim-primary: var(--rt-text); --aim-on-primary: var(--rt-bg-1);
+                --aim-font: 'Share Tech Mono', monospace; --aim-num: 'Share Tech Mono', monospace; --aim-r: 0px; --aim-rc: 0px; --aim-rc-in: 0px; --aim-rs: 0; --aim-knob: 0;
+                --aim-clip: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+                --aim-clip-c: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+                --aim-clip-s: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px);
+                --aim-track: rgba(var(--rt-accent-rgb), 0.18); --aim-sel-bg: rgba(var(--rt-accent-rgb), 0.14); --aim-sel-bd: var(--rt-accent); --aim-sw-gap: var(--rt-bg-1);
+                --aim-sheet-bg: var(--rt-bg-1); --aim-backdrop: rgba(0, 0, 0, 0.6); --aim-scrim: rgba(1, 6, 9, 0.72); --aim-card: var(--rt-panel-strong); --aim-hud: var(--rt-panel-strong);
+                --aim-ring: rgba(var(--rt-accent-rgb), 0.16); --aim-vp-border: rgba(var(--rt-accent-rgb), 0.32); --aim-key: rgba(var(--rt-accent-rgb), 0.12); --aim-pop-shadow: rgba(var(--rt-accent-rgb), 0.6);
+                --aim-btn-sh: var(--rt-glow-soft); --aim-play-glow: var(--rt-glow-soft); --aim-best-glow: rgba(var(--rt-accent-rgb), 0.25); --aim-logo-sh: var(--rt-glow-soft);
+                --aim-arena: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 3px), linear-gradient(rgba(var(--rt-accent-rgb), 0.075) 1px, transparent 1px) 0 0 / 24px 24px, linear-gradient(90deg, rgba(var(--rt-accent-rgb), 0.075) 1px, transparent 1px) 0 0 / 24px 24px, radial-gradient(95% 80% at 50% 35%, var(--rt-bg-2) 0%, var(--rt-bg-1) 100%);
+                --aim-wait: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, var(--rt-bg-2) 0%, var(--rt-bg-1) 100%);
+                --aim-go: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, #5BFFA0 0%, #22E070 100%); --aim-go-text: #02200D;
+                --aim-soon: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px), radial-gradient(85% 75% at 50% 42%, #2E0714 0%, #120207 100%);
+                --aim-rx-text: var(--rt-text); --aim-rx-muted: var(--rt-text-dim); --aim-rx-ring: rgba(var(--rt-accent-rgb), 0.22); --aim-rx-chip: rgba(57, 255, 136, 0.1); --aim-soon-text: #FF6B8F; --aim-soon-muted: #D99AAB;
+                --aim-room-ceil: var(--rt-bg-1); --aim-room-side: var(--rt-bg-2); --aim-room-back: var(--rt-bg-2); --aim-room-floor: var(--rt-bg-1); --aim-room-grid: rgba(var(--rt-accent-rgb), 0.42); --aim-room-wgrid: rgba(var(--rt-accent-rgb), 0.08);
+                --aim-room-edge: rgba(var(--rt-accent-rgb), 0.5); --aim-room-light: rgba(var(--rt-accent-rgb), 0.12); --aim-vign: rgba(0, 0, 0, 0.6); --aim-shadow: rgba(0, 0, 0, 0.8); --aim-cyber: 1; --aim-light: 0;
+                --aim-max-bg: var(--rt-bg-1); --aim-arena-flat: radial-gradient(95% 80% at 50% 35%, var(--rt-bg-2) 0%, var(--rt-bg-1) 100%);
+            }
+
+            /* ── Compact panel: chip row, four tiles, the viewport (the hero), a 44 px icon footer.
+               During a run the footer goes and Pause/Max sit in the viewport corner. ── */
+            .aim-root { width: 100%; container-type: inline-size; }
+            /* The viewport keeps the design's 368:438 at any column width; the rows around it are fixed (170 px). */
+            .aim-hud { position: relative; width: 100%; aspect-ratio: 368 / 608; height: calc(100cqw * 438 / 368 + 170px); display: flex; flex-direction: column; gap: 10px; font-family: var(--aim-font); color: var(--aim-text); line-height: 1.3; -webkit-font-smoothing: antialiased; user-select: none; }
+            /* Zero specificity, so each component's own size and colour win. */
+            :where(.aim-hud) button { font-family: inherit; font-size: 13px; color: inherit; margin: 0; }
+            :where(.aim-hud) input { font-family: inherit; }
+            .aim-hud button:focus-visible, .aim-hud input:focus-visible { outline: 2px solid var(--aim-accent); outline-offset: 2px; }
+            .aim-i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+            .aim-i.is-gold { stroke: var(--aim-gold); }
+            .aim-hud kbd { padding: 1px 5px; border: 1px solid var(--aim-border); border-radius: 4px; background: var(--aim-key); font: 700 9.5px var(--aim-font); color: var(--aim-text); }
+            .aim-kick { font-size: 9.5px; font-weight: 600; letter-spacing: 0.2em; color: var(--aim-muted); }
+            .aim-kick.is-red { color: var(--aim-red-text); }
+            .aim-top { height: 44px; flex: none; display: flex; align-items: center; gap: 8px; }
+            .aim-brand { display: none; }
+            .aim-chip, .aim-bestb { height: 44px; box-sizing: border-box; display: flex; align-items: center; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); cursor: pointer; }
+            .aim-chip { flex: 1; min-width: 0; padding: 0 6px 0 9px; gap: 6px; text-align: left; }
+            .aim-chip-i { display: flex; color: var(--aim-ac-text); }
+            .aim-chip-t { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 5px; white-space: nowrap; overflow: hidden; }
+            .aim-chip-t b { font-size: 13px; font-weight: 650; }
+            .aim-chip-t i { font-style: normal; font-size: 10.5px; color: var(--aim-muted); overflow: hidden; text-overflow: ellipsis; }
+            .aim-chip .is-chev { color: var(--aim-muted); transform: scale(0.75); margin: 0 -3px; stroke-width: 1.8; }
+            .aim-bestb { flex: none; min-width: 44px; padding: 0 10px 0 8px; gap: 5px; }
+            .aim-bestb b { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+            .aim-bestb i { display: none; font-style: normal; font-size: 12px; color: var(--aim-muted); }
+            /* Compact: the header's board button carries the score; this one opens Personal bests. Max shows both. */
+            .aim-hud:not(.is-max) .aim-bestb { width: 44px; padding: 0; justify-content: center; }
+            .aim-hud:not(.is-max) .aim-bestb b { display: none; }
+            .aim-tiles { height: 52px; flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+            .aim-tile { position: relative; min-width: 0; padding: 6px 9px 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; overflow: hidden; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); }
+            .aim-tile .l { font-size: 8px; font-weight: 600; letter-spacing: 0.08em; color: var(--aim-muted); white-space: nowrap; overflow: hidden; }
+            .aim-tile .v { display: flex; align-items: baseline; gap: 2px; font-family: var(--aim-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+            .aim-tile .v b { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+            .aim-tile .v u { text-decoration: none; font-size: 10px; font-weight: 600; color: var(--aim-muted); }
+            .aim-tile .v em { font-style: normal; font-size: 10px; font-weight: 700; color: var(--aim-ac-text); margin-left: 3px; }
+            .aim-tile .v em:empty { display: none; }
+            .aim-tile.is-hot .v b { color: var(--aim-red-text); }
+            .aim-tile .bar { display: none; position: absolute; left: 9px; right: 9px; bottom: 5px; height: 3px; border-radius: 2px; background: var(--aim-track); overflow: hidden; }
+            .aim-tile.has-bar .bar { display: block; }
+            .aim-tile .bar i { display: block; height: 100%; background: var(--aim-primary); border-radius: 2px; }
+            .aim-tile.is-hot .bar i { background: var(--aim-red); }
+            .aim-tile .pips { display: none; position: absolute; left: 9px; bottom: 7px; gap: 3px; }
+            .aim-tile.has-pips .pips { display: flex; }
+            .aim-tile .pips i { width: 12px; height: 3px; border-radius: 2px; background: var(--aim-track); }
+            .aim-tile .pips i.is-on { background: var(--aim-red); }
+
+            .aim-vp { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; border-radius: var(--aim-r); clip-path: var(--aim-clip); background: var(--aim-arena); isolation: isolate; touch-action: none; }
+            .aim-vp::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--aim-vp-border); pointer-events: none; z-index: 5; }
+            .aim-vp.is-flat { background: var(--aim-arena-flat); }
+            .aim-vp.is-wait { background: var(--aim-wait); }
+            .aim-vp.is-go { background: var(--aim-go); }
+            .aim-vp.is-soon { background: var(--aim-soon); }
+            .aim-vp.is-aim { cursor: none; }
+            .aim-cv { position: absolute; left: 0; top: 0; display: block; }
+            .aim-vchip { display: none; position: absolute; left: 10px; top: 10px; height: 30px; padding: 0 10px; align-items: center; gap: 8px; background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); pointer-events: none; z-index: 2; }
+            .aim-vchip.is-on { display: flex; }
+            .aim-vchip span { font-size: 8.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--aim-muted); }
+            .aim-vchip b { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+            .aim-vchip.is-acc b { color: var(--aim-ac-text); }
+            .aim-vbtns { display: none; position: absolute; right: 8px; top: 8px; gap: 6px; z-index: 4; }
+            .aim-hud.is-run:not(.is-3d):not(.is-max) .aim-vbtns { display: flex; }
+            .aim-vb { width: 44px; height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); cursor: pointer; padding: 0; }
+            .aim-vb .aim-i { stroke-width: 1.8; }
+            .aim-esc { display: none; position: absolute; right: 10px; top: 10px; height: 30px; padding: 0 10px; align-items: center; gap: 7px; background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 11px; color: var(--aim-muted); z-index: 2; }
+            .aim-hud.is-run.is-3d:not(.is-max):not(.is-react) .aim-esc { display: flex; }
+            .aim-custom { display: none; position: absolute; left: 10px; bottom: 10px; height: 24px; padding: 0 9px; align-items: center; gap: 6px; background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: 999px; font-size: 10px; font-weight: 600; color: var(--aim-muted); z-index: 2; pointer-events: none; }
+            .aim-hud.is-custom:not(.is-max):not(.is-done) .aim-custom { display: flex; }
+            .aim-custom i { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--aim-muted); box-sizing: border-box; }
+
+            /* Overlays */
+            .aim-ov { position: absolute; inset: 0; z-index: 3; }
+            .aim-ov:empty { display: none; }
+            .aim-ovc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+            .aim-scrimv { position: absolute; inset: 0; background: var(--aim-scrim); }
+            .aim-scrimv.is-blur { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+            .aim-hint { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11.5px; color: var(--aim-muted); }
+            .aim-idle { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: -18px; text-align: center; }
+            .aim-idle-n { font-size: 34px; font-weight: 700; letter-spacing: -0.025em; line-height: 1; margin-top: -6px; }
+            .aim-idle-m { font-size: 12px; color: var(--aim-muted); margin-top: -6px; }
+            .aim-rings { position: relative; width: 148px; height: 148px; display: flex; align-items: center; justify-content: center;
+                background: linear-gradient(var(--aim-ring), var(--aim-ring)) 50% -6px / 1px 14px no-repeat, linear-gradient(var(--aim-ring), var(--aim-ring)) 50% calc(100% + 6px) / 1px 14px no-repeat,
+                    linear-gradient(var(--aim-ring), var(--aim-ring)) -6px 50% / 14px 1px no-repeat, linear-gradient(var(--aim-ring), var(--aim-ring)) calc(100% + 6px) 50% / 14px 1px no-repeat; }
+            .aim-rings::before, .aim-rings::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--aim-ring); }
+            .aim-rings::after { inset: 20px; }
+            .aim-playbig { position: relative; z-index: 1; width: 84px; height: 84px; border: 0; border-radius: 50%; clip-path: var(--aim-clip-c); background: var(--aim-primary); color: var(--aim-on-primary) !important; display: flex; align-items: center; justify-content: center; box-shadow: var(--aim-play-glow); cursor: pointer; padding: 0; }
+            .retro-theme .aim-playbig { border-radius: 0; }
+            .aim-playbig .aim-i { transform: scale(1.8) translateX(1px); stroke-width: 1.7; }
+            .aim-lastpill { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); height: 30px; padding: 0 12px; display: flex; align-items: center; gap: 8px; background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: 999px; font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .aim-lastpill .aim-kick { font-size: 8.5px; letter-spacing: 0.16em; }
+            .aim-lastpill b { font-weight: 600; }
+            .aim-lastpill > span:last-child { color: var(--aim-muted); }
+            .aim-count { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+            .aim-count-d { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
+            .aim-count-d svg { position: absolute; left: 0; top: 0; transform: rotate(-90deg); }
+            .aim-count-t, .aim-count-ring { fill: none; stroke-width: 4; }
+            .aim-count-t { stroke: var(--aim-ring); }
+            .aim-count-ring { stroke: var(--aim-accent); stroke-linecap: round; }
+            .aim-count-n { font-size: 76px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+            .aim-count b { font-size: 15px; font-weight: 600; }
+            .aim-count > span { font-size: 11.5px; color: var(--aim-muted); }
+            .aim-card { background: var(--aim-card); border: 1px solid var(--aim-border); border-radius: var(--aim-r); clip-path: var(--aim-clip); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35); }
+            .aim-unlock { position: relative; width: 250px; padding: 22px 20px 18px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; cursor: pointer; }
+            .aim-unlock b { font-size: 16px; font-weight: 700; }
+            .aim-unlock > span:not(.aim-hint):not(.aim-lockic) { font-size: 12px; line-height: 1.45; color: var(--aim-muted); }
+            .aim-lockic { width: 56px; height: 56px; border-radius: 50%; background: var(--aim-primary); color: var(--aim-on-primary); display: flex; align-items: center; justify-content: center; }
+            .aim-lockic .aim-i { transform: scale(1.35); }
+            .aim-pausec { position: relative; width: 260px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
+            .aim-pause-t { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: -10px; }
+            .aim-pause-s { font-size: 12px; color: var(--aim-muted); font-variant-numeric: tabular-nums; margin-top: -10px; }
+            .aim-btn { height: 44px; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+            .aim-btn.is-primary { background: var(--aim-primary); color: var(--aim-on-primary) !important; border: 0; font-size: 13.5px; }
+            .aim-btn.is-red { color: var(--aim-red-text) !important; }
+            .aim-btn.is-done { border-color: var(--aim-good); }
+            .aim-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .aim-row2.is-wide { grid-template-columns: 1.25fr 1fr; }
+            .aim-rx { color: var(--aim-rx-text); text-align: center; }
+            .aim-rx.is-soft { color: var(--aim-text); }
+            .aim-wait, .aim-time, .aim-soon, .aim-go { display: flex; flex-direction: column; align-items: center; text-align: center; }
+            .aim-wait { gap: 16px; }
+            .aim-waitr { position: relative; width: 96px; height: 96px; }
+            .aim-waitr i { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--aim-rx-ring); }
+            .aim-waitr i:nth-child(2) { inset: 16px; }
+            .aim-waitr i:nth-child(3) { inset: 34px; background: var(--aim-rx-ring); border: 0; }
+            .aim-wait b { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+            .aim-wait span, .aim-time > span { font-size: 12px; color: var(--aim-rx-muted); }
+            .aim-rx.is-soft .aim-wait span, .aim-rx.is-soft .aim-time > span { color: var(--aim-muted); }
+            .aim-go { gap: 6px; color: var(--aim-go-text); }
+            .aim-go b { font-size: 128px; font-weight: 900; letter-spacing: -0.05em; line-height: 0.9; }
+            .aim-go span { font-size: 14px; font-weight: 700; letter-spacing: 0.16em; }
+            .aim-time { gap: 10px; }
+            .aim-time-v { display: flex; align-items: baseline; gap: 6px; }
+            .aim-time-v b { font-size: 80px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.9; font-variant-numeric: tabular-nums; }
+            .aim-time-v span { font-size: 24px; font-weight: 600; color: var(--aim-ac-text); }
+            .aim-time-c { height: 26px; padding: 0 10px; display: flex; align-items: center; border-radius: 999px; background: var(--aim-rx-chip); font-size: 12px; font-weight: 600; color: var(--aim-muted); font-variant-numeric: tabular-nums; }
+            .aim-time-c.is-good { color: var(--aim-good); }
+            .aim-soon { gap: 12px; color: var(--aim-soon-text); }
+            .aim-rx.is-soon:not(.is-soft) { color: var(--aim-soon-text); }
+            .aim-soonic { width: 56px; height: 56px; box-sizing: border-box; border: 2px solid currentColor; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+            .aim-soonic .aim-i { transform: scale(1.2); stroke-width: 2; }
+            .aim-soon b { font-size: 36px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+            .aim-soon-n { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; }
+            .aim-soon-n span { display: flex; gap: 4px; }
+            .aim-soon-n i { width: 9px; height: 9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid currentColor; }
+            .aim-soon-n i.is-on { background: currentColor; }
+            .aim-soon > span:last-child { font-size: 12px; line-height: 1.45; color: var(--aim-soon-muted); }
+
+            /* Results */
+            .aim-bestglow { position: absolute; left: 50%; top: 0; width: 340px; height: 240px; transform: translateX(-50%); background: radial-gradient(closest-side, var(--aim-best-glow), transparent); pointer-events: none; }
+            .aim-res { position: relative; width: min(100%, 380px); box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+            .aim-res-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+            .aim-res-h .aim-kick { letter-spacing: 0.18em; }
+            .aim-tag { height: 22px; padding: 0 9px; display: flex; align-items: center; border-radius: 999px; border: 1px solid var(--aim-border); font-size: 10px; font-weight: 600; color: var(--aim-muted); white-space: nowrap; }
+            .aim-tag.is-red { color: var(--aim-red-text); border-color: color-mix(in srgb, var(--aim-red) 50%, transparent); }
+            .aim-newbest { height: 24px; padding: 0 10px; display: flex; align-items: center; gap: 5px; border-radius: 999px; clip-path: var(--aim-clip-c); background: var(--aim-primary); color: var(--aim-on-primary); font-size: 10px; font-weight: 800; letter-spacing: 0.14em; }
+            .aim-newbest .aim-i { transform: scale(0.7); margin: 0 -4px; stroke-width: 2; }
+            .aim-res-m { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+            .aim-res-big { display: flex; align-items: baseline; gap: 6px; }
+            .aim-res-big b { font-size: 58px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.85; font-variant-numeric: tabular-nums; }
+            .aim-res-big span { font-size: 15px; font-weight: 600; color: var(--aim-muted); }
+            .aim-res-big.is-best b { background: var(--aim-primary); -webkit-background-clip: text; background-clip: text; color: transparent; }
+            .aim-res-big.is-fail b { font-size: 54px; color: var(--aim-red-text); }
+            .aim-res-sub { font-size: 11.5px; color: var(--aim-muted); margin-top: 4px; }
+            .aim-res-c { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-variant-numeric: tabular-nums; text-align: right; }
+            .aim-res-c span { font-size: 11px; color: var(--aim-muted); }
+            .aim-res-c b { font-size: 16px; font-weight: 700; color: var(--aim-muted); }
+            .aim-res-c b.is-good { color: var(--aim-good); }
+            .aim-spark-h { display: flex; justify-content: space-between; font-size: 8.5px; font-weight: 600; letter-spacing: 0.16em; color: var(--aim-muted); margin-bottom: -6px; }
+            .aim-spark { height: 38px; display: flex; align-items: flex-end; gap: 2px; }
+            .aim-spark i { flex: 1; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--aim-accent) 38%, transparent); }
+            .aim-spark i.is-hi { background: var(--aim-accent); }
+            .aim-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+            .aim-stat { height: 50px; padding: 8px 9px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); }
+            .aim-stat span { font-size: 8px; font-weight: 600; letter-spacing: 0.12em; color: var(--aim-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .aim-stat b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+            .aim-stat b.is-acc { color: var(--aim-ac-text); }
+            .aim-stat u { text-decoration: none; font-size: 10px; font-weight: 600; color: var(--aim-muted); margin-left: 2px; }
+            .aim-rbars { position: relative; height: 118px; display: flex; align-items: flex-end; gap: 8px; padding: 0 2px; border-bottom: 1px solid var(--aim-border); }
+            .aim-rbars.is-many { gap: 4px; }
+            .aim-rb { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
+            .aim-rb span { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+            .is-many .aim-rb span { font-size: 9px; }
+            .aim-rb i { width: 100%; max-width: 44px; box-sizing: border-box; border-radius: var(--aim-rc-in) var(--aim-rc-in) 2px 2px; background: color-mix(in srgb, var(--aim-accent) 35%, transparent); }
+            .aim-rb.is-best span { color: var(--aim-ac-text); }
+            .aim-rb.is-best i { background: var(--aim-primary); }
+            .aim-rb.is-pen span { color: var(--aim-red-text); }
+            .aim-rb.is-pen i { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--aim-red) 45%, transparent) 0 3px, transparent 3px 7px); border: 1px solid color-mix(in srgb, var(--aim-red) 60%, transparent); }
+            .aim-avgline { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--aim-ac-text); opacity: 0.8; }
+            .aim-rlabels { display: flex; gap: 8px; margin-top: -6px; padding: 0 2px; }
+            .aim-rbars.is-many + .aim-rlabels { gap: 4px; }
+            .aim-rlabels span { flex: 1; text-align: center; font-size: 8.5px; font-weight: 600; letter-spacing: 0.12em; color: var(--aim-muted); }
+
+            /* Footer */
+            .aim-foot { height: 44px; flex: none; display: flex; gap: 5px; }
+            .aim-hud.is-run:not(.is-max) .aim-foot { display: none; }
+            .aim-b { width: 44px; height: 44px; flex: none; box-sizing: border-box; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); cursor: pointer; }
+            .aim-b.is-primary { flex: 1; min-width: 44px; background: var(--aim-primary); color: var(--aim-on-primary) !important; border: 0; box-shadow: var(--aim-btn-sh); }
+            .aim-b.is-primary .aim-i { stroke-width: 1.8; }
+            .aim-pp span, .aim-sep, .aim-maxb .is-out, .aim-maxb span { display: none; }
+            .aim-seg { width: 88px; height: 44px; flex: none; box-sizing: border-box; padding: 3px; display: flex; gap: 2px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); }
+            .aim-seg button, .aim-segs button { flex: 1; box-sizing: border-box; border-radius: var(--aim-rc-in); background: transparent; border: 1px solid transparent; font-size: 12px; font-weight: 700; color: var(--aim-muted) !important; cursor: pointer; padding: 0; }
+            .aim-seg button.is-on, .aim-segs button.is-on { background: var(--aim-sel-bg); border-color: var(--aim-sel-bd); color: var(--aim-text) !important; }
+            .aim-seg.is-off, .aim-mode1.is-off { opacity: 0.38; pointer-events: none; }
+            .aim-mode1 { display: none; flex-direction: column; gap: 1px; }
+            .aim-mode1 b { font-size: 12px; font-weight: 800; }
+            .aim-mode1 span { font-size: 7.5px; font-weight: 600; letter-spacing: 0.1em; color: var(--aim-muted); }
+            .aim-hud.is-narrow .aim-seg { display: none; }
+            .aim-hud.is-narrow .aim-mode1 { display: flex; }
+            .aim-status, .aim-rank { display: none; }
+
+            /* Sheets */
+            .aim-sheetw { display: none; position: absolute; inset: 0; z-index: 10; }
+            .aim-hud.is-sheet .aim-sheetw { display: block; }
+            .aim-scrim { position: absolute; inset: 0; background: var(--aim-backdrop); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+            .aim-sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 24px; box-sizing: border-box; padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 12px; background: var(--aim-sheet-bg); border-top: 1px solid var(--aim-border); border-radius: var(--aim-rs); clip-path: var(--aim-clip-s); box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.35); overflow: hidden; }
+            .aim-sheet.is-crosshair, .aim-sheet.is-settings { top: 0; }
+            .aim-grab { width: 36px; height: 4px; flex: none; border-radius: 2px; background: var(--aim-track); margin: 0 auto -4px; }
+            .aim-sheet-h { height: 44px; flex: none; display: flex; align-items: center; gap: 10px; }
+            .aim-sheet-h > span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+            .aim-sheet-h .aim-kick { font-size: 9px; letter-spacing: 0.18em; }
+            .aim-sheet-h b { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+            .aim-sheet-b { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px; padding: 2px 6px 2px 0; margin-right: -6px; scrollbar-width: auto; scrollbar-color: auto; }
+            /* The game tabs' scrollbar (thin, round, theme ink), so it reads the same in every preset. */
+            .aim-sheet-b::-webkit-scrollbar { width: 4px; }
+            .aim-sheet-b::-webkit-scrollbar-track { background: transparent; margin: 6px 0; }
+            .aim-sheet-b::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--aim-text) 22%, transparent); }
+            .aim-sheet-b::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--aim-text) 40%, transparent); }
+            /* Cyberpunk's monospace is wider: the small tracked labels close up so they fit. */
+            .retro-theme .aim-hud :is(.aim-tile .l, .aim-stat span, .aim-kick, .aim-grp, .aim-brow.is-head, .aim-segs.is-diff span, .aim-vchip span) { letter-spacing: 0.03em; }
+            .aim-segs { height: 44px; flex: none; box-sizing: border-box; padding: 3px; display: flex; gap: 3px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); }
+            .aim-segs.is-diff button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+            .aim-segs.is-diff b { font-size: 12.5px; font-weight: 650; }
+            .aim-segs.is-diff span { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; color: var(--aim-muted); }
+            .aim-segs button { font-size: 12px; font-weight: 650; }
+            .aim-note { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--aim-muted); margin-top: -6px; }
+            .aim-note i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--aim-accent); }
+            .aim-grp { display: flex; justify-content: space-between; font-size: 9px; font-weight: 600; letter-spacing: 0.18em; color: var(--aim-muted); margin-bottom: -6px; }
+            .aim-scard { width: 100%; height: 58px; flex: none; box-sizing: border-box; padding: 0 12px 0 8px; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); cursor: pointer; backdrop-filter: none; box-shadow: none; }
+            .aim-scard.is-on { background: var(--aim-sel-bg); border-color: var(--aim-sel-bd); }
+            .aim-scard-i { width: 40px; height: 40px; flex: none; border-radius: 10px; clip-path: var(--aim-clip-c); background: var(--aim-glass); display: flex; align-items: center; justify-content: center; color: var(--aim-ac-text); }
+            .aim-scard.is-on .aim-scard-i { background: var(--aim-primary); color: var(--aim-on-primary); }
+            .aim-scard-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+            .aim-scard-t > span:first-child { display: flex; align-items: baseline; gap: 6px; }
+            .aim-scard-t b { font-size: 13.5px; font-weight: 650; }
+            .aim-scard-t i { font-style: normal; font-size: 10.5px; color: var(--aim-muted); }
+            .aim-scard-t > span:last-child { font-size: 11.5px; color: var(--aim-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .aim-scard-b { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-family: var(--aim-num); font-variant-numeric: tabular-nums; }
+            .aim-scard-b b { font-size: 12.5px; font-weight: 700; }
+            .aim-scard-b span { font-size: 11px; color: var(--aim-muted); }
+            .aim-xhp { height: 132px; flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+            .aim-xhbox { position: relative; overflow: hidden; border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); background: var(--aim-arena); }
+            .aim-xhbox.is-3d { background: var(--aim-room-back); }
+            .aim-xhbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+            .aim-xhbox span { position: absolute; left: 8px; bottom: 6px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.16em; color: var(--aim-muted); }
+            .aim-presets { flex: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+            .aim-preset { height: 54px; box-sizing: border-box; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); color: var(--aim-muted) !important; font-size: 9.5px; font-weight: 600; cursor: pointer; }
+            .aim-preset.is-on { background: var(--aim-sel-bg); border-color: var(--aim-sel-bd); color: var(--aim-text) !important; }
+            .aim-preset canvas { width: 30px; height: 30px; }
+            .aim-swatches, .aim-tcs { display: flex; align-items: center; gap: 4px; }
+            .aim-swatches { height: 44px; flex: none; }
+            .aim-tcs { gap: 2px; }
+            .aim-sw { position: relative; width: 38px; height: 44px; flex: none; padding: 0; background: none; border: 0; cursor: pointer; }
+            .aim-swatches .aim-sw { flex: 1 1 0; width: auto; min-width: 28px; max-width: 38px; }
+            .aim-swatches .aim-hex { flex: 0 0 96px; }
+            .aim-tcs .aim-sw { width: 32px; }
+            .aim-sw::before { content: ''; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
+            .aim-tcs .aim-sw::before { width: 22px; height: 22px; margin: -11px 0 0 -11px; }
+            .aim-sw.is-on::before { box-shadow: 0 0 0 2px var(--aim-sw-gap), 0 0 0 4px var(--aim-text); }
+            .aim-hex { flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 7px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc-in); clip-path: var(--aim-clip-c); }
+            .aim-hex i { width: 12px; height: 12px; flex: none; border-radius: 3px; }
+            .aim-hex input, .aim-code { min-width: 0; background: none; border: 0; color: var(--aim-text); font: 11.5px 'JetBrains Mono', ui-monospace, monospace; outline: none; }
+            .aim-hex input { flex: 1; width: 100%; }
+            .aim-hex input.is-bad, .aim-code.is-bad { color: var(--aim-red-text); }
+            .aim-sliders { flex: none; display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 2px; }
+            .aim-sl { min-width: 0; height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+            .aim-sl-h { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; }
+            .aim-sl-h > span { display: flex; align-items: center; gap: 6px; color: var(--aim-muted); }
+            .aim-sl-h b, .aim-big { font-family: var(--aim-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+            .aim-hud input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; min-width: 0; height: 16px; margin: 0; background: transparent; cursor: pointer; }
+            .aim-hud input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--aim-track); }
+            .aim-hud input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: var(--aim-knob); background: #FFFFFF; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+            .aim-hud input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--aim-track); }
+            .aim-hud input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: var(--aim-knob); background: #FFFFFF; }
+            .aim-tog { -webkit-appearance: none; appearance: none; position: relative; width: 40px; height: 24px; flex: none; margin: 0; border-radius: 999px; background: var(--aim-track); cursor: pointer; }
+            .aim-tog::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: left 0.15s; }
+            .aim-tog:checked { background: var(--aim-primary); }
+            .aim-tog:checked::after { left: 19px; }
+            .aim-sl .aim-tog { width: 26px; height: 15px; }
+            .aim-sl .aim-tog::after { left: 2px; top: 2px; width: 11px; height: 11px; }
+            .aim-sl .aim-tog:checked::after { left: 13px; }
+            .aim-row { min-height: 46px; flex: none; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--aim-hair); }
+            .aim-row > span:first-child { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+            .aim-row b { font-size: 13px; font-weight: 600; }
+            .aim-row i { font-style: normal; font-size: 10.5px; font-weight: 500; color: var(--aim-muted); }
+            .aim-row.is-line { min-height: 50px; }
+            .aim-row.is-sl { min-height: 56px; }
+            .aim-row .aim-grow { gap: 10px; }
+            .aim-row .aim-segs { width: 132px; height: 40px; }
+            .aim-row:last-child .aim-segs { width: 190px; }
+            .is-crosshair .aim-row { border-top: 1px solid var(--aim-border); border-bottom: 0; }
+            .aim-num { width: 64px; height: 40px; flex: none; box-sizing: border-box; text-align: center; background: var(--aim-glass); border: 1px solid var(--aim-sel-bd); border-radius: var(--aim-rc-in); color: var(--aim-text); font: 600 13px 'JetBrains Mono', ui-monospace, monospace; }
+            .aim-big { width: 64px; flex: none; text-align: right; font-size: 15px; }
+            .aim-pills { display: flex; gap: 4px; }
+            .aim-pills button { height: 36px; padding: 0 12px; border-radius: 999px; background: none; border: 1px solid var(--aim-border); font-size: 12px; color: var(--aim-muted) !important; cursor: pointer; }
+            .aim-pills button.is-on { background: var(--aim-sel-bg); border-color: var(--aim-sel-bd); color: var(--aim-text) !important; font-weight: 600; }
+            .aim-codeh { height: 44px; flex: none; display: flex; gap: 6px; }
+            .aim-code { flex: 1; width: 0; box-sizing: border-box; padding: 0 10px; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 11px; color: var(--aim-muted); }
+            .aim-legend { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10.5px; color: var(--aim-muted); }
+            .aim-legend span:first-child { display: flex; align-items: center; gap: 5px; }
+            .aim-legend i { width: 14px; height: 14px; box-sizing: border-box; border-radius: 4px; background: var(--aim-sel-bg); border: 1px solid var(--aim-sel-bd); }
+            .aim-btable { flex: none; display: flex; flex-direction: column; overflow: hidden; background: var(--aim-glass); border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); }
+            .aim-brow { height: 34px; display: grid; grid-template-columns: 1.25fr 0.55fr 1fr 1fr 1fr; align-items: center; padding: 0 10px; border-top: 1px solid var(--aim-border); font-family: var(--aim-num); font-variant-numeric: tabular-nums; }
+            .aim-brow.is-sub { border-top-color: var(--aim-hair); }
+            .aim-brow.is-head { height: 30px; border-top: 0; font-size: 8.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--aim-muted); }
+            .aim-brow b { font-family: var(--aim-font); font-size: 12px; font-weight: 650; }
+            .aim-brow.is-head b, .aim-brow.is-head span { font-size: 8.5px; font-weight: 600; }
+            .aim-brow i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--aim-muted); }
+            .aim-brow span { text-align: right; font-size: 12px; }
+            .aim-brow span.is-rk { justify-self: end; padding: 3px 6px; margin-right: -6px; border-radius: 6px; background: var(--aim-sel-bg); border: 1px solid var(--aim-sel-bd); font-weight: 700; }
+            .aim-brow span.is-none { color: var(--aim-muted); }
+            .aim-row2.is-end { margin-top: auto; }
+            .aim-btn.is-auto { padding: 0 14px; }
+
+            /* ── Max: 1280 × 800 with the HUD over the edges ── */
+            .pool-modal-panel.aim-max-panel { position: relative; width: auto; padding: 0; overflow: visible; background: none; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+            .aim-max-frame { position: absolute; left: 0; top: 0; width: 1280px; height: 800px; transform-origin: 0 0; overflow: hidden; border-radius: 14px; background: #06080A; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5); }
+            .aim-max-frame.retro-theme { border-radius: 0; background: var(--rt-bg-1); }
+            .aim-hud.is-max { position: absolute; inset: 0; width: 1280px; height: 800px; aspect-ratio: auto; display: block; }
+            .is-max .aim-vp { position: absolute; inset: 0; border-radius: 0; clip-path: none; }
+            .is-max .aim-top { position: absolute; left: 24px; right: 24px; top: 24px; z-index: 6; pointer-events: none; gap: 10px; }
+            .is-max .aim-top > * { pointer-events: auto; }
+            .is-max .aim-brand { display: flex; align-items: center; gap: 10px; }
+            .is-max .aim-logo { width: 44px; height: 44px; border-radius: 12px; clip-path: var(--aim-clip-c); background: var(--aim-primary); color: var(--aim-on-primary); display: flex; align-items: center; justify-content: center; box-shadow: var(--aim-logo-sh); }
+            .is-max .aim-logo .aim-i { transform: scale(1.2); stroke-width: 1.7; }
+            .is-max .aim-brand b { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+            .is-max .aim-chip, .is-max .aim-bestb, .is-max .aim-tile, .is-max .aim-foot, .is-max .aim-status, .is-max .aim-rank { background: var(--aim-hud); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+            .is-max .aim-chip { flex: none; padding: 0 14px; gap: 8px; }
+            .is-max .aim-chip-t b { font-size: 14px; }
+            .is-max .aim-chip-t i { font-size: 12.5px; }
+            .is-max .aim-bestb { margin-left: auto; padding: 0 14px; gap: 7px; }
+            .is-max .aim-bestb b { font-size: 13.5px; }
+            .is-max .aim-bestb i { display: inline; }
+            .is-max .aim-tiles { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); height: 62px; display: flex; gap: 8px; z-index: 6; }
+            .is-max.is-done .aim-tiles { display: none; }
+            .is-max .aim-tile { width: 132px; height: 62px; padding: 9px 12px 0; gap: 3px; }
+            .is-max .aim-tile .l { font-size: 9px; letter-spacing: 0.14em; }
+            .is-max .aim-tile .v b { font-size: 26px; }
+            .is-max .aim-tile .v u, .is-max .aim-tile .v em { font-size: 12px; }
+            .is-max .aim-tile .bar { left: 12px; right: 12px; bottom: 7px; }
+            .is-max .aim-tile .pips { left: 12px; }
+            .is-max .aim-tile .pips i { width: 16px; }
+            .is-max .aim-foot { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); height: auto; padding: 6px; gap: 6px; border: 1px solid var(--aim-border); border-radius: 16px; clip-path: var(--aim-clip-c); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35); z-index: 6; }
+            .retro-theme .is-max .aim-foot { border-radius: 0; }
+            .is-max .aim-b { background: none; border: 0; }
+            .is-max .aim-b.is-primary { flex: none; width: auto; padding: 0 18px; gap: 8px; background: var(--aim-primary); box-shadow: none; font-size: 13.5px; font-weight: 650; }
+            .is-max .aim-pp span { display: inline; }
+            .is-max .aim-seg { background: none; }
+            .is-max .aim-sep { display: block; width: 1px; margin: 8px 2px; background: var(--aim-border); }
+            .is-max .aim-maxb { width: auto; padding: 0 12px; gap: 7px; font-size: 12.5px; font-weight: 600; }
+            .is-max .aim-maxb .is-in { display: none; }
+            .is-max .aim-maxb .is-out, .is-max .aim-maxb span { display: inline; }
+            .is-max .aim-status, .is-max .aim-rank { display: flex; position: absolute; bottom: 30px; height: 34px; box-sizing: border-box; padding: 0 12px; align-items: center; gap: 8px; border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 12px; color: var(--aim-muted); z-index: 6; }
+            .is-max .aim-status { left: 24px; }
+            .is-max .aim-rank { right: 24px; }
+            .aim-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--aim-muted); }
+            .aim-status.is-on i { background: var(--aim-good); }
+            .is-max .aim-vchip { top: 96px; left: 24px; transform: scale(1.5); transform-origin: 0 0; }
+            .is-max .aim-res { width: 420px; }
+            .is-max .aim-lastpill { bottom: 110px; transform: translateX(-50%) scale(1.5); transform-origin: 50% 100%; }
+            .is-max .aim-sheet { left: 50%; right: auto; top: auto; width: 420px; height: 680px; transform: translateX(-50%); border-radius: var(--aim-r) var(--aim-r) 0 0; }
+            /* ═══ END AIMLAB THEME ═══ */
 
             .snake-game-container {
                 background: rgba(255, 255, 255, 0.08);
@@ -23154,21 +23958,6 @@
                 box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
             }
 
-            .multi-game-area {
-                width: 100%;
-                height: 368px;
-                background: rgba(0, 0, 0, 0.3);
-                border-radius: 12px;
-                position: relative;
-                overflow: hidden;
-                cursor: pointer;
-                transition: background 0.3s ease;
-                /* Force own compositing layer to isolate from parent reflows */
-                transform: translateZ(0);
-                will-change: transform;
-                contain: layout style paint;
-            }
-
             .prayer-panel {
                 width: 100%;
                 height: 368px;
@@ -23272,133 +24061,6 @@
                 background: rgba(239,68,68,0.25);
                 color: #f87171;
                 border-color: rgba(239,68,68,0.4);
-            }
-
-            .reflex-game-area {
-                cursor: pointer;
-            }
-
-            .reflex-waiting-state {
-                background: linear-gradient(135deg, #dc2626, #991b1b) !important;
-                animation: pulseRed 1s ease-in-out infinite;
-            }
-
-            .reflex-ready-state {
-                background: linear-gradient(135deg, #16a34a, #15803d) !important;
-                animation: pulseGreen 0.5s ease-in-out infinite;
-            }
-
-            @keyframes pulseRed {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.85; }
-            }
-
-            @keyframes pulseGreen {
-                0%, 100% { box-shadow: 0 0 20px rgba(22, 163, 74, 0.5); }
-                50% { box-shadow: 0 0 40px rgba(22, 163, 74, 0.8); }
-            }
-
-            .reflex-target {
-                cursor: crosshair;
-                animation: targetPulse 1s ease-in-out infinite;
-            }
-
-            @keyframes targetPulse {
-                0%, 100% {
-                    transform: scale(1);
-                    box-shadow: 0 0 30px currentColor;
-                }
-                50% {
-                    transform: scale(1.1);
-                    box-shadow: 0 0 50px currentColor;
-                }
-            }
-
-            #reflex-stats,
-            #aim-stats {
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 8px;
-                margin-top: 8px;
-                color: rgba(255, 255, 255, 0.9);
-            }
-
-            #reflex-results,
-            #aim-results {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%) scale(0.9);
-                background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
-                backdrop-filter: blur(30px);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 24px;
-                padding: 32px;
-                min-width: 300px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                z-index: 1000;
-                opacity: 0;
-                visibility: hidden;
-                transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            }
-
-            #reflex-results.active,
-            #aim-results.active {
-                opacity: 1;
-                visibility: visible;
-                transform: translate(-50%, -50%) scale(1);
-            }
-
-            .aim-game-area {
-                cursor: crosshair;
-                background:
-                    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                    rgba(0, 0, 0, 0.3);
-                background-size: 20px 20px;
-            }
-
-            .aim-target {
-                animation: targetPulse 1s ease-in-out infinite;
-                user-select: none;
-                /* Force own compositing layer to prevent parent reflow interruptions */
-                will-change: transform, opacity;
-                backface-visibility: hidden;
-            }
-
-            .bullet-hole {
-                animation: bulletHoleFade 2s ease-out forwards;
-                user-select: none;
-                pointer-events: none;
-            }
-
-            @keyframes targetAppear {
-                0% {
-                    opacity: 0;
-                    transform: scale(0);
-                }
-                100% {
-                    opacity: 1;
-                    transform: scale(1);
-                }
-            }
-
-            @keyframes bulletHoleFade {
-                0% {
-                    opacity: 0;
-                    transform: scale(0);
-                }
-                10% {
-                    opacity: 0.9;
-                    transform: scale(1.2);
-                }
-                20%, 80% {
-                    opacity: 0.8;
-                    transform: scale(1);
-                }
-                100% {
-                    opacity: 0;
-                    transform: scale(0.8);
-                }
             }
 
             @keyframes fadeOut {
@@ -24397,10 +25059,6 @@
                     color: #fff;
                 }
 
-                .multi-game-area {
-                    background: rgba(0, 0, 0, 0.04);
-                }
-
                 .prayer-panel {
                     background: linear-gradient(160deg, #f0f2f5 0%, #e8edf4 50%, #f0f2f5 100%);
                 }
@@ -24434,18 +25092,6 @@
                     background: rgba(239,68,68,0.10);
                     color: #dc2626;
                     border-color: rgba(239,68,68,0.25);
-                }
-
-                #reflex-stats,
-                #aim-stats {
-                    background: rgba(0, 0, 0, 0.06);
-                    color: rgba(0, 0, 0, 0.80);
-                }
-                #reflex-results,
-                #aim-results {
-                    background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(245,245,250,0.95));
-                    border-color: rgba(0, 0, 0, 0.12);
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
                 }
 
                 .attendance-summary:not(.retro-theme) .pool-color-swatch {
@@ -24841,10 +25487,10 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     // ABOUT (design: Attendance widget · revamped, B1 About): the (i) button opens a dialog over the
     // control bar; its close button, Escape or a click outside shuts it.
     const ATT_ABOUT_GAMES = [['g-snake', 'Snake', '3 modes, 12 stages, golden bite, 5 skins'], ['g-pool', 'Pool', '8-Ball and Snooker, 4 CPU tiers, tournaments, 10 cues'],
-        ['g-flappy', 'Flappy', 'Dynamic gap &amp; speed scaling per score'], ['g-reflex', 'RefleX', 'Screen &amp; target modes, false-start guard'],
+        ['g-flappy', 'Flappy', 'Dynamic gap &amp; speed scaling per score'], ['g-aim', 'AimLab', '6 aim &amp; reaction scenarios, 2D/3D, crosshair editor'],
         ['g-tasbih', 'Tasbih', 'Digital prayer counter with memory'], ['g-ludo', 'Ludo', 'Ludo Star rules, 3 CPU tiers, 2–4P hot-seat'],
         ['g-tetris', 'Tetris', '7-bag + next piece, ghost, wall kicks'], ['g-breakout', 'Breakout', '11 powerups, multi-ball, combo system'],
-        ['g-aim', 'Aim', 'Chaos mode, accuracy tracking, bullet holes'], ['g-board', 'Leaderboard', 'Team by total XP, finds you; per-game boards']];
+        ['g-board', 'Leaderboard', 'Team by total XP, finds you; per-game boards']];
     function attAboutClose(about, focus) {
         if (about.hidden) return;
         const btn = about.parentNode.querySelector('.developer-info');
@@ -25020,6 +25666,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <div class="toggle-switch ${userPreferences.gameModeHidden && gamesUnlocked ? 'active' : ''} ${gamesUnlocked ? '' : 'disabled'}" data-pref="gameModeHidden"></div>
                 </div>
                 ${sel('gameFps', 'VSync', [['60', 'Full (60 FPS)'], ['30', 'Half (30 FPS)']], { id: 'fps-selector', icon: 'monitor' })}
+                ${sel('gameSound', 'Game Sounds', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['off', 'Off']], { def: 'medium', icon: 'g-pool' })}
             </div>
             <div class="settings-group" role="tabpanel" data-settings-group="theme" hidden>
                 ${sel('displayTheme', 'Display Theme', [['glassmorphic', 'Glassmorphic Aurora'], ['retro-futuristic', 'Cyberpunk HUD'], ['business', 'Just Business']], { id: 'theme-selector', icon: 'f-theme' })}
@@ -25735,6 +26382,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         applyGameMode();
         // The pool canvas cannot read CSS, so it caches the theme's colours; drop them.
         if (typeof poolOnThemeChange === 'function') poolOnThemeChange();
+        if (typeof aimOnThemeChange === 'function') aimOnThemeChange();
     }
 
     // Game Mode: show/hide left and right panels
@@ -26154,7 +26802,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     function lbRanked(game, mode) {
         const cfg = LB_BOARDS[game];
         return leaderboardData.map(p => ({ p, v: lbBoardValue(p, game, mode) })).filter(r => r.v > 0)
-            .sort((a, b) => cfg.lowerIsBetter ? a.v - b.v : b.v - a.v);
+            .sort((a, b) => lbLower(game, mode) ? a.v - b.v : b.v - a.v);
     }
 
     // THE LEADERBOARD (left column; it replaced the Leaderboard tab): the team by total XP. Each game's
@@ -26375,8 +27023,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         <button id="game-switch-snake" class="game-switch-btn active" onclick="window.switchGame('snake')" title="Snake Game">${attIcon('g-snake')}</button>
                         <button id="game-switch-flappy" class="game-switch-btn" onclick="window.switchGame('flappy')" title="Flappy Bird">${attIcon('g-flappy')}</button>
                         <button id="game-switch-tetris" class="game-switch-btn" onclick="window.switchGame('tetris')" title="Tetris">${attIcon('g-tetris')}</button>
-                        <button id="game-switch-reflex" class="game-switch-btn" onclick="window.switchGame('reflex')" title="RefleX Game">${attIcon('g-reflex')}</button>
-                        <button id="game-switch-aim" class="game-switch-btn" onclick="window.switchGame('aim')" title="Chaos Aim">${attIcon('g-aim')}</button>
+                        <button id="game-switch-aim" class="game-switch-btn" onclick="window.switchGame('aim')" title="AimLab">${attIcon('g-aim')}</button>
                         <button id="game-switch-breakout" class="game-switch-btn" onclick="window.switchGame('breakout')" title="Breakout">${attIcon('g-breakout')}</button>
                         <button id="game-switch-pool" class="game-switch-btn" onclick="window.switchGame('pool')" title="8-Ball Pool">${attIcon('g-pool')}</button>
                         <button id="game-switch-ludo" class="game-switch-btn" onclick="window.switchGame('ludo')" title="Ludo">${attIcon('g-ludo')}</button>
@@ -26395,10 +27042,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         <div id="tetris-scoreboard" class="snake-scoreboard" style="display: none;">
                             <span class="snake-score gsb-aside">Ln <span id="tetris-lines">0</span> · Lv <span id="tetris-level">1</span></span>
                             ${gameScoreBtn('tetris', 'tetris-high-score', 'tetris-score')}
-                        </div>
-                        <div id="reflex-scoreboard" class="snake-scoreboard" style="display: none;">
-                            <span class="snake-score gsb-aside" id="reflex-mode-chip">${attIcon('g-reflex')} Screen</span>
-                            ${gameScoreBtn('reflex', 'reflex-high-score', 'reflex-last-score', '—')}
                         </div>
                         <div id="aim-scoreboard" class="snake-scoreboard" style="display: none;">
                             ${gameScoreBtn('aim', 'aim-high-score', 'aim-current-score')}
@@ -26435,8 +27078,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <!-- Ludo is 344×416, not 368² — a square board plus HUD strips. -->
                     <canvas id="ludo-canvas" width="344" height="416" style="display:none; cursor:pointer;"></canvas>
 
-                    <!-- Multi-Game Area (for RefleX and AimTrainer) -->
-                    <div id="multi-game-area" class="multi-game-area" style="display: none;"></div>
+                    <!-- AimLab: initAimLab() builds the panel in here (aim-dev/). -->
+                    <div id="aim-root" class="aim-root" style="display: none;"></div>
 
                     <div id="prayer-panel" class="prayer-panel" style="display: none;">
                         <div class="prayer-screen">
@@ -26446,16 +27089,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         </div>
                         <button class="prayer-plus-btn" onclick="window.prayerIncrementBtn()">+1</button>
                         <button class="prayer-reset-btn" onclick="window.prayerResetBtn()" title="Reset counter" aria-label="Reset counter">${attIcon('reset')}</button>
-                    </div>
-
-                    <div id="reflex-stats" style="display: none;"></div>
-                    <div id="aim-stats" style="display: none;">
-                        <div style="display: flex; justify-content: space-around; padding: 8px; font-size: 0.875rem;">
-                            <div><strong>Time:</strong> <span id="aim-timer-display">30</span>s</div>
-                            <div><strong>Score:</strong> <span id="aim-score-display">0</span></div>
-                            <div><strong>Accuracy:</strong> <span id="aim-accuracy-display">100</span>%</div>
-                            <div><strong>Hits:</strong> <span id="aim-hits-display">0</span>/<span id="aim-shots-display">0</span></div>
-                        </div>
                     </div>
 
                     <div id="snake-controls" class="snake-controls">
@@ -26471,17 +27104,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <!-- Per-game leaderboard, shown over whichever board is active.
                          One element for all panels: only one game is ever visible. -->
                     <div id="game-lb-overlay" class="game-lb-overlay" style="display:none;"></div>
-
-                    <div id="reflex-controls" class="snake-controls" style="display: none;">
-                        <button class="snake-btn" onclick="window.toggleReflexModeBtn()">${attIcon('swap')} Switch Mode</button>
-                        <button id="reflex-play-btn" class="snake-btn is-primary" onclick="window.startReflexGameBtn()">${attIcon('play')} Play</button>
-                        <button class="snake-btn" onclick="window.resetReflexGameBtn()">${attIcon('reset')} Reset</button>
-                    </div>
-
-                    <div id="aim-controls" class="snake-controls" style="display: none;">
-                        <button id="aim-play-btn" class="snake-btn is-primary" onclick="window.startAimGameBtn()">${attIcon('play')} Play</button>
-                        <button class="snake-btn" onclick="window.resetAimGameBtn()">${attIcon('reset')} Reset</button>
-                    </div>
 
                     <div id="flappy-controls" class="snake-controls" style="display: none;">
                         <button class="snake-btn is-primary" onclick="window.startFlappyGameBtn()">${attIcon('play')} Play</button>
@@ -26519,8 +27141,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     </div>
                 </div>
 
-                <div id="reflex-results"></div>
-                <div id="aim-results"></div>
 
                 <section class="ws-card ws-board" aria-label="Leaderboard">
                     <div class="ws-board-head"><span>${attIcon('g-board')} Leaderboard</span><span class="ws-board-tools"><span class="ws-board-sub">Total XP</span><button type="button" class="ws-board-sync ws-board-rcv" onclick="window.atcAccountDialog()" title="Password" aria-label="Password" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"></path></svg></button><button type="button" class="ws-board-sync ws-board-out" onclick="window.atcAccountDialog('logout')" title="Log out" aria-label="Log out" hidden>${achSvg('M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9', 16, 2)}</button><button type="button" class="ws-board-sync" onclick="window.lbSync()" title="Sync and refresh" aria-label="Sync and refresh">${attIcon('f-cloud', '18px')}</button></span></div>
@@ -26673,7 +27293,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         case '1': window.switchGame('snake'); break;
                         case '2': window.switchGame('flappy'); break;
                         case '3': window.switchGame('tetris'); break;
-                        case '4': window.switchGame('reflex'); break;
                         case '5': window.switchGame('aim'); break;
                         case '6': window.switchGame('breakout'); break;
                         case '7': window.switchGame('pool'); break;
@@ -26684,8 +27303,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                         case 'Escape':
                             switch(currentGame) {
                                 case 'snake': resetSnakeGame(); break;
-                                case 'reflex': resetReflexGame(); break;
-                                case 'aim': resetAimGame(); break;
                                 case 'flappy': resetFlappyGame(); break;
                                 case 'tetris': resetTetrisGame(); break;
                                 case 'breakout': resetBreakoutGame(); break;
@@ -26738,22 +27355,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             updateGameTitle(gameKey);
         };
 
-        window.startReflexGameBtn = () => {
-            startReflexGame();
-        };
-
-        window.resetReflexGameBtn = () => {
-            resetReflexGame();
-        };
-
-        window.toggleReflexModeBtn = () => {
-            toggleReflexMode();
-            updateGameTitle('reflex');
-        };
-
-        window.startAimGameBtn = () => { startAimGame(); };
-        window.resetAimGameBtn = () => { resetAimGame(); };
-
         window.startFlappyGameBtn = () => { startFlappyGame(); };
         window.resetFlappyGameBtn = () => { resetFlappyGame(); };
         window.startTetrisGameBtn = () => { startTetrisGame(); };
@@ -26783,7 +27384,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         window.prayerResetBtn = prayerReset;
         // Game Mode lock: every game entry point on window does nothing while locked.
         ['snakePlayPause', 'resetSnake', 'cycleSnakeModeBtn', 'toggleSnakeSkinTrayBtn', 'switchGame',
-            'startReflexGameBtn', 'resetReflexGameBtn', 'toggleReflexModeBtn', 'startAimGameBtn', 'resetAimGameBtn',
             'startFlappyGameBtn', 'resetFlappyGameBtn', 'startTetrisGameBtn', 'resetTetrisGameBtn', 'startBreakoutGameBtn', 'resetBreakoutGameBtn',
             'startLudoGameBtn', 'resetLudoGameBtn', 'cycleLudoModeBtn', 'toggleLudoMaximizeBtn', 'prayerIncrementBtn', 'prayerResetBtn'].forEach(name => {
             const fn = window[name];

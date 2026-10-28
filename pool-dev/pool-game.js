@@ -572,6 +572,9 @@
         const S = poolS, w = v.winner, R = poolRules();
         if (S.awardedRack === S.rackId) return;
         S.awardedRack = S.rackId;
+        // Against the CPU or online, the stinger is yours to win or lose; hot-seat cheers the winner.
+        const mine = poolMode === 'cpu' ? 1 : poolMode === 'net' && S.netRoom ? S.netRoom.seat : w;
+        poolSfx(w === mine ? 'win' : 'lose');
         // A frame that survives a reload is gone once it is decided, before anything is paid.
         poolClearSaved();
         // Tournament frames go to the bracket, not to the quick-match records or XP.
@@ -686,6 +689,8 @@
         const S = poolS, R = poolRules();
         const v = R.judge(S.frame, S.world, { call: S.called, nominate: S.nom });
         poolShowToast(R.text(v, poolNames()));
+        if (v.foul) poolSfx('foul');
+        else if (v.notice === 'century' || v.notice === 'maximum') poolSfx('century');
         R.apply(S.world, v);
         if (!v.foul && v.counted) poolAwardPots(v.shooter, v.counted.length);
         poolAfterTurn(v);
@@ -849,6 +854,9 @@
         S.netLocal = poolMode === 'net' && !raw;
         if (S.netLocal) { const c = poolCueBall(); poolNetMove({ k: 'strike', n: S.netFrameNo, shot, cue: [c.x, c.y], called: S.called, nom: S.nom }); }
         ppStrike(S.world, shot);
+        const st = S.world.log[S.world.log.length - 1];
+        poolSfx('strike', st && st.type === 'strike' ? st.speed / S.cfg.maxSpeed : 0.5);
+        S.sndAt = S.world.log.length;
         // Your shots against the CPU, by cue: the frame's win goes to the one that played most.
         if (poolMode === 'cpu' && !poolCpuTurn()) { const id = poolSeatCueId(1); S.cueShots[id] = (S.cueShots[id] || 0) + 1; }
         S.shot = null;
@@ -858,6 +866,7 @@
     function poolStepMoving() {
         const S = poolS;
         ppStep(S.world, 1 / 60);
+        poolSfxLog();
         S.world.balls.forEach(b => {
             if (b.state === 'pocketed' && !S.down.has(b.id)) {
                 S.down.add(b.id);
@@ -871,12 +880,25 @@
         ppSimulate(S.world, 0.001); poolSettle();
         return true;
     }
+    // Sound (the host's sfxPlay): the table's own events, never a replayed or fast-forwarded table.
+    function poolSfx(name, k) { if (typeof sfxPlay === 'function' && !poolS.netReplay) sfxPlay(name, k, poolS.game); }
+    // The shot's contacts since the last step, from the physics log: each by how hard it was (the
+    // balls' speed after it, against half a break), the four loudest a step.
+    function poolSfxLog() {
+        const S = poolS, log = S.world.log, from = S.sndAt || 0;
+        if (log.length <= from) { S.sndAt = log.length; return; }
+        S.sndAt = log.length;
+        const V = S.cfg.maxSpeed * 0.5, sp = id => { const b = S.world.balls.find(q => q.id === id); return b ? Math.hypot(b.vx, b.vy) / V : 0; };
+        log.slice(from).map(e => e.type === 'ball' ? ['clack', sp(e.a) + sp(e.b)] : e.type === 'cushion' ? [e.kind === 'cushion' ? 'cushion' : 'jaw', sp(e.ball)] : e.type === 'pocket' ? ['pocket', 1] : null)
+            .filter(e => e && e[1] > 0.004).sort((a, b) => b[1] - a[1]).slice(0, 4).forEach(e => poolSfx(e[0], Math.sqrt(Math.min(1, e[1]))));
+    }
     // The shot clock ran out on the player at the table.
     function poolTimeout() {
         const S = poolS, R = poolRules();
         if (poolMode === 'net' && !poolRemoteTurn()) poolNetMove({ k: 'timeout', n: S.netFrameNo, nom: S.nom });
         const v = R.timeout(S.frame, S.world);
         poolShowToast(R.text(v, poolNames()));
+        poolSfx('foul');
         poolAfterTurn(v);
     }
 
@@ -894,7 +916,11 @@
             }
         } else if (S.phase === 'aim' && poolCanAct() && !S.drag && S.clockTotal) {
             // The clock waits for the hand-off and ball in hand; a tournament can turn it off.
+            // The last five seconds tick, as the bar turns hot; the last one higher.
+            const was = Math.ceil(S.clockLeft);
             S.clockLeft -= dt / 1000;
+            const now = Math.ceil(S.clockLeft);
+            if (now !== was && now >= 1 && now <= 5) poolSfx('clock', now === 1 ? 1 : 0.5);
             if (S.clockLeft <= 0) poolTimeout();
         }
         poolAimHoldTick(dt);
@@ -1912,7 +1938,7 @@
         resume: () => poolTourResume(),
         resumeTour: () => poolTourResume(),
         bracket: () => { const T = poolS.tour; if (!T.t) return; T.screen = 'bracket'; T.tab = poolTourTab(); poolTourBump(); },
-        champion: () => { const T = poolS.tour; if (T.t && ptChampion(T.t) !== null) { T.screen = 'champion'; poolTourBump(); } },
+        champion: () => { const T = poolS.tour; if (T.t && ptChampion(T.t) !== null) { T.screen = 'champion'; poolSfx('champion'); poolTourBump(); } },
         // Leaving a screen: from the champion the tournament is let go; with no match in
         // progress, a tournament table goes back to quick matches.
         close: () => {
