@@ -507,6 +507,8 @@ function toggleGameMaxModal(cfg) {
     // (⚙️ Guideline, else the rig's saved one); ?maxlayout=full|bars (⚙️ Max View). Not saved.
     if (Q.has('snkcall') && S.frame) S.frame.call = Q.get('snkcall');
     if (Q.has('guidelen')) userPreferences.poolGuideLen = Q.get('guidelen');
+    // ?hawk=1|0: Hawkeye's max guides, this load only.
+    if (Q.has('hawk')) { poolHawkOn = Q.get('hawk') === '1'; S.guideKey = ''; }
     userPreferences.poolMaxLayout = Q.get('maxlayout') || 'full';
     // ?spin=i picks a preset, ?tipx=&tipy= any tip, ?spinopen=1 opens the picker.
     if (Q.has('spin')) { const p = PH_SPINS[+Q.get('spin') % PH_SPINS.length]; S.tip = { x: p.x, y: p.y }; }

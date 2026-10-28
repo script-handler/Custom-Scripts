@@ -446,9 +446,14 @@ function playFrame(P, maxTicks) {
     type('xhawkeye'); S.guideKey = ''; P.poolRefreshGuide();
     const hawk = P.poolShotPath(v);
     ok('Hawkeye: the word turns it on (a near miss does not), kept in this browser, and None still draws the paths',
-       !half && P.poolHawk() && P.store.poolHawk === '1' && hawk.segs.length === full.segs.length && hawk.dots.length === full.dots.length);
+       !half && P.poolHawk() && P.store.poolHawk === '1' && hawk.segs.length > none.segs.length && hawk.dots.length >= 2 && S.guide.objPath && S.guide.objPath.length > 1);
     const bank = { angle: Math.PI / 2 - 0.3, speed: 1600, tipX: 0, tipY: 0 };
     ok('…and the cue ball\'s path is followed two table lengths, not 200 u', pathLen(P.pgGuide(S.world, bank, 4 * S.cfg.halfLength).after) > 2 * pathLen(P.pgGuide(S.world, bank).after));
+    // Full ball into the end rail's middle (no pocket there): the object ball's path comes back off it.
+    const xs = P.pgGuide(S.world, { angle: 0, speed: 1600, tipX: 0, tipY: 0 }, 4 * S.cfg.halfLength, true).objPath.map(p => p[0]);
+    const far = Math.max(...xs);
+    ok('…and the object ball\'s path banks off the cushion', far > S.cfg.halfLength - 2 * S.cfg.ballR && xs[xs.length - 1] < far - 100);
+    ok('…which a normal guide does not follow', P.pgGuide(S.world, bank).objPath === undefined);
     P.poolMode = 'net';
     ok('…but not in an online match', !P.poolHawk());
     P.poolMode = 'cpu';

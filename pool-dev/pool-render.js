@@ -650,7 +650,8 @@
     // The shot's opening on the real physics: the cue ball's path to first contact
     // (squirt included), the object ball's line (throw included), and where the cue
     // ball goes next, so draw visibly bends back. reach: how far that last path is followed, table units.
-    function pgGuide(world, shot, reach = 200) {
+    // objPath: also follow the object ball alone, off the cushions, into out.objPath (Hawkeye).
+    function pgGuide(world, shot, reach = 200, objPath = false) {
         const w = ppCloneWorld(world);
         w.log = [];
         const cue0 = w.balls.find(b => b.id === 0);
@@ -684,19 +685,26 @@
             const sp = Math.hypot(ob.vx, ob.vy);
             if (sp > 1e-6) out.obj = { x: ob.x, y: ob.y, dx: ob.vx / sp, dy: ob.vy / sp };
         }
-        // Follow the cue ball alone: where its spin takes it, not later collisions (and far cheaper),
-        // far enough for the longest drawn path (3.5 diameters at a 10 aim's 1.75, pool).
-        W2.balls = [c];
-        let len = 0, px = c.x, py = c.y;
-        out.after.push([px, py]);
-        for (let i = 0; i < 240 * reach / 200 && len < reach; i++) {
-            ppStep(W2, 1 / 120);
-            const b = cueOf(W2);
-            if (b.state === 'pocketed') break;
-            len += Math.hypot(b.x - px, b.y - py); px = b.x; py = b.y;
-            out.after.push([px, py]);
-            if (b.vx === 0 && b.vy === 0) break;
-        }
+        // One ball alone: where its spin takes it, not later collisions (and far cheaper). A ball
+        // that drops ends at its pocket.
+        const follow = (W, id) => {
+            const pts = [], ball = () => W.balls[0];
+            W.balls = [W.balls.find(b => b.id === id)];
+            let len = 0, px = ball().x, py = ball().y;
+            pts.push([px, py]);
+            for (let i = 0; i < 240 * reach / 200 && len < reach; i++) {
+                ppStep(W, 1 / 120);
+                const b = ball();
+                if (b.state === 'pocketed') { if (id !== 0 && W.table.pockets[b.pocket]) pts.push([W.table.pockets[b.pocket].x, W.table.pockets[b.pocket].y]); break; }
+                len += Math.hypot(b.x - px, b.y - py); px = b.x; py = b.y;
+                pts.push([px, py]);
+                if (b.vx === 0 && b.vy === 0) break;
+            }
+            return pts;
+        };
+        if (objPath && out.obj) out.objPath = follow(ppCloneWorld(W2), out.hit);
+        // The cue ball, far enough for the longest drawn path (3.5 diameters at a 10 aim's 1.75, pool).
+        out.after = follow(W2, 0);
         return out;
     }
 
@@ -814,15 +822,20 @@
             if (dl > 2.3 * R) {
                 pgStrokeLine(ctx, view, [[g.start[0] + ux * R * 1.3, g.start[1] + uy * R * 1.3], [g.contact[0] - ux * R, g.contact[1] - uy * R]], Z, pgRgba(PG_GUIDE, 0.85), 1.5, [5, 4]);
             }
-            if (g.obj && L > 0) {
+            // A path from a ball's centre, started at its edge.
+            const fromEdge = path => {
+                let k = 0, acc = 0;
+                while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
+                return path.slice(k);
+            };
+            // Hawkeye's object ball runs its followed path, off the cushions; otherwise a straight line L long.
+            const objTail = g.obj && L > 0 && g.objPath ? fromEdge(g.objPath) : null;
+            if (objTail && objTail.length > 1) pgStrokeLine(ctx, view, objTail, Z, theme.accent, 2, null, true);
+            else if (g.obj && L > 0 && !g.objPath) {
                 pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
             }
             if (g.after.length > 1 && L > 0) {
-                const path = pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R);
-                // Start the line at the ghost ball's edge.
-                let k = 0, acc = 0;
-                while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
-                const tail = path.slice(k);
+                const tail = fromEdge(pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R));
                 if (tail.length > 1) pgStrokeLine(ctx, view, tail, Z, pgRgba(PG_GUIDE, 0.4), 1.2, [2, 4]);
             }
         }

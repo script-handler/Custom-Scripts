@@ -725,7 +725,7 @@
         const key = [S.aim.toFixed(5), Math.round(p), t.x, t.y, S.world.t, poolSeatCueId(poolPickSeat()), hawk].join();
         if (key === S.guideKey) return;
         S.guideKey = key;
-        S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined);
+        S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined, hawk);
     }
     // The shot on screen, for the HUD to keep its overlays off (phShy): the aim line to the
     // contact, the object ball's path to its pocket (else the cushion), and those points as
@@ -752,7 +752,11 @@
             const p = pockets.slice().sort((a, b) => Math.hypot(a.x - g.contact[0], a.y - g.contact[1]) - Math.hypot(b.x - g.contact[0], b.y - g.contact[1]))[0];
             if (p) dot(p.x, p.y, p.r);
         }
-        if (g.obj) {
+        if (g.objPath) {
+            // Hawkeye: the object ball's followed path, off the cushions.
+            for (let i = 1; i < g.objPath.length; i += 6) line(g.objPath[i - 1], g.objPath[Math.min(i + 5, g.objPath.length - 1)]);
+            dot(g.obj.x, g.obj.y, R);
+        } else if (g.obj) {
             const o = g.obj, { end, hit } = poolObjEnd(o);
             if (hit) dot(hit.x, hit.y, hit.r);
             dot(o.x, o.y, R);
@@ -934,8 +938,8 @@
     const POOL_GUIDE_FULL = 4;
     const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * 2 * poolS.cfg.ballR * poolHumanStats().aim));
     // Hawkeye, a hidden switch (the user, 2026-10-28): typing the word on the table turns max guides
-    // on or off. The object ball's line runs to its pocket or the cushion, the cue ball's path for
-    // two table lengths, whatever the cue or ⚙️ Guideline. Not in Settings, kept in this browser
+    // on or off. Both balls are followed after the contact, off the cushions, for up to two table
+    // lengths (or until they stop or drop), whatever the cue or ⚙️ Guideline. Not in Settings, kept in this browser
     // only, and dead online so a match against a person stays fair.
     const POOL_HAWK_WORD = 'hawkeye', POOL_HAWK_LS = 'poolHawk', POOL_HAWK_REACH = 4;
     let poolHawkOn = (() => { try { return localStorage.getItem(POOL_HAWK_LS) === '1'; } catch (e) { return false; } })();
@@ -975,9 +979,9 @@
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
-            // Hawkeye: the object ball's line to where it ends, and the cue ball's path as far as the guide followed it.
-            const o = poolHawk() && S.guide && S.guide.obj, hawkEnd = o ? poolObjEnd(o).end : null;
-            const guideLen = !poolHawk() ? poolGuideLen() : o ? Math.max(0, Math.hypot(hawkEnd[0] - o.x, hawkEnd[1] - o.y) - S.cfg.ballR) : 0;
+            // Hawkeye: both balls' followed paths in full. Its length is never 0, which reads as ⚙️ Guideline
+            // None and would hide the cue ball's path off a cushion.
+            const guideLen = poolHawk() ? POOL_HAWK_REACH * S.cfg.halfLength : poolGuideLen();
             pgRender(S.ctx, {
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
