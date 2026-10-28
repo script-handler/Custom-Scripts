@@ -368,7 +368,7 @@ function playFrame(P, maxTicks) {
     S.drag = { kind: 'power', x: 100, y: 100, ax: [0, -1], reach: 140 }; S.power = 0.6; P.poolOnUp();
     ok('…but any power above 0% plays (it used to need 3%)', S.phase === 'strike');
     for (let i = 0; i < 4000 && (S.phase === 'moving' || S.phase === 'strike'); i++) P.poolTick(16);
-    ok('the dead zone is 14 px either way', P.POOL_DEAD_PX === 14 && inZone !== undefined);
+    ok('the dead zone is 20 px either way', P.POOL_DEAD_PX === 20 && inZone !== undefined);
     P.poolOn.camera('2d'); P.poolOn.lean(80);
     ok('the camera and lean are remembered in userPreferences', P.host.userPreferences.poolCamera === '2d' && P.host.userPreferences.poolLean === 80 && P.log.saves >= 1);
     P.host.userPreferences.poolShotCam = '3d';
@@ -438,6 +438,23 @@ function playFrame(P, maxTicks) {
     const none = P.poolShotPath(v);
     ok('Aim Guide None: guide length 0, and the shot path stops at the contact', P.poolGuideLen() === 0 && none.dots.length === 1 && full.dots.length > 1 && none.segs.length < full.segs.length);
     ok('an old Long, Medium or Short, or an unknown value, reads as Full', ['long', 'medium', 'short', 'bogus'].every(v => { P.host.userPreferences.poolGuideLen = v; return P.poolGuideLen() === 112; }));
+    // Hawkeye: the typed word turns max guides on, past ⚙️ Guideline None, until typed again; never online.
+    const type = w => [...w].forEach(k => P.poolHawkKey({ key: k, target: null }));
+    const pathLen = pts => pts.reduce((s, p, i) => s + (i ? Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
+    P.host.userPreferences.poolGuideLen = 'none';
+    type('hawk eye'); const half = P.poolHawk();
+    type('xhawkeye'); S.guideKey = ''; P.poolRefreshGuide();
+    const hawk = P.poolShotPath(v);
+    ok('Hawkeye: the word turns it on (a near miss does not), kept in this browser, and None still draws the paths',
+       !half && P.poolHawk() && P.store.poolHawk === '1' && hawk.segs.length === full.segs.length && hawk.dots.length === full.dots.length);
+    const bank = { angle: Math.PI / 2 - 0.3, speed: 1600, tipX: 0, tipY: 0 };
+    ok('…and the cue ball\'s path is followed two table lengths, not 200 u', pathLen(P.pgGuide(S.world, bank, 4 * S.cfg.halfLength).after) > 2 * pathLen(P.pgGuide(S.world, bank).after));
+    P.poolMode = 'net';
+    ok('…but not in an online match', !P.poolHawk());
+    P.poolMode = 'cpu';
+    type('hawkeye');
+    ok('…and typing it again turns it off', !P.poolHawk() && !('poolHawk' in P.store));
+    P.host.userPreferences.poolGuideLen = 'full';
     const K = L.game({ seed: 5 });
     K.poolSetVariant('snooker'); K.poolNewFrame(1);
     ok('snooker\'s line is 4 of its ball diameters too, not pool\'s table units', K.poolGuideLen() === Math.round(8 * K.poolS.cfg.ballR) && K.poolGuideLen() < 70);

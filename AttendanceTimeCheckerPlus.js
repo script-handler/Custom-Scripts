@@ -6302,8 +6302,8 @@
     // ── Guides ────────────────────────────────────────────────────────
     // The shot's opening on the real physics: the cue ball's path to first contact
     // (squirt included), the object ball's line (throw included), and where the cue
-    // ball goes next, so draw visibly bends back.
-    function pgGuide(world, shot) {
+    // ball goes next, so draw visibly bends back. reach: how far that last path is followed, table units.
+    function pgGuide(world, shot, reach = 200) {
         const w = ppCloneWorld(world);
         w.log = [];
         const cue0 = w.balls.find(b => b.id === 0);
@@ -6342,7 +6342,7 @@
         W2.balls = [c];
         let len = 0, px = c.x, py = c.y;
         out.after.push([px, py]);
-        for (let i = 0; i < 240 && len < 200; i++) {
+        for (let i = 0; i < 240 * reach / 200 && len < reach; i++) {
             ppStep(W2, 1 / 120);
             const b = cueOf(W2);
             if (b.state === 'pocketed') break;
@@ -9578,8 +9578,9 @@
     const POOL_CLOCK_S = 30;                 // shot clock for human turns, in seconds
     const POOL_AIM_REACH = 240;              // px past the table's edge the aim keeps following
     // Power drag dead zone: this far either side of the press (behind the cue or in front of it)
-    // the power stays at 0%, and a release at 0% cancels, so a stroke is easy to call off.
-    const POOL_DEAD_PX = 14;
+    // the power stays at 0%, and a release at 0% cancels, so a stroke is easy to call off. 20, not
+    // 14: a hand easing back to cancel overshot it and played a soft shot (the user, 2026-10-28).
+    const POOL_DEAD_PX = 20;
     const POOL_STRIKE_MS = 90;               // the cue's forward stroke before the ball launches
     const POOL_TOAST_MS = 2200;
     const POOL_POT_XP = 5;
@@ -10262,10 +10263,11 @@
         const S = poolS;
         if (S.phase !== 'aim' && S.phase !== 'strike') { S.guide = null; return; }
         const p = S.drag ? Math.max(S.power, 5) : 50, t = poolTip();
-        const key = [S.aim.toFixed(5), Math.round(p), t.x, t.y, S.world.t, poolSeatCueId(poolPickSeat())].join();
+        const hawk = poolHawk();
+        const key = [S.aim.toFixed(5), Math.round(p), t.x, t.y, S.world.t, poolSeatCueId(poolPickSeat()), hawk].join();
         if (key === S.guideKey) return;
         S.guideKey = key;
-        S.guide = pgGuide(S.world, poolHumanShot(p));
+        S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined);
     }
     // The shot on screen, for the HUD to keep its overlays off (phShy): the aim line to the
     // contact, the object ball's path to its pocket (else the cushion), and those points as
@@ -10287,29 +10289,31 @@
         line([c.x, c.y], g.contact);
         dot(g.contact[0], g.contact[1], R);
         // ⚙️ Aim Guide None draws nothing past the contact (a tournament's Short still does).
-        if (S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full')) return { segs, dots };
+        if (!poolHawk() && (S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full'))) return { segs, dots };
         if (g.pocketed) {
             const p = pockets.slice().sort((a, b) => Math.hypot(a.x - g.contact[0], a.y - g.contact[1]) - Math.hypot(b.x - g.contact[0], b.y - g.contact[1]))[0];
             if (p) dot(p.x, p.y, p.r);
         }
         if (g.obj) {
-            const o = g.obj;
-            let hit = null, best = Infinity;
-            pockets.forEach(p => {
-                const t = (p.x - o.x) * o.dx + (p.y - o.y) * o.dy, d = Math.abs((p.x - o.x) * o.dy - (p.y - o.y) * o.dx);
-                if (t > 0 && d < p.r + R && t < best) { best = t; hit = p; }
-            });
-            let end;
-            if (hit) { end = [hit.x, hit.y]; dot(hit.x, hit.y, hit.r); }
-            else {
-                const lim = (s, d, h) => d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity;
-                const t = Math.max(0, Math.min(lim(o.x, o.dx, cfg.halfLength - R), lim(o.y, o.dy, cfg.halfWidth - R)));
-                end = [o.x + o.dx * t, o.y + o.dy * t];
-            }
+            const o = g.obj, { end, hit } = poolObjEnd(o);
+            if (hit) dot(hit.x, hit.y, hit.r);
             dot(o.x, o.y, R);
             line([o.x, o.y], end);
         }
         return { segs, dots };
+    }
+    // Where the object ball's line ends: the first pocket it runs into (hit), else the cushion.
+    function poolObjEnd(o) {
+        const cfg = poolS.cfg, R = cfg.ballR;
+        let hit = null, best = Infinity;
+        poolS.world.table.pockets.forEach(p => {
+            const t = (p.x - o.x) * o.dx + (p.y - o.y) * o.dy, d = Math.abs((p.x - o.x) * o.dy - (p.y - o.y) * o.dx);
+            if (t > 0 && d < p.r + R && t < best) { best = t; hit = p; }
+        });
+        if (hit) return { end: [hit.x, hit.y], hit };
+        const lim = (s, d, h) => d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity;
+        const t = Math.max(0, Math.min(lim(o.x, o.dx, cfg.halfLength - R), lim(o.y, o.dy, cfg.halfWidth - R)));
+        return { end: [o.x + o.dx * t, o.y + o.dy * t], hit: null };
     }
     const poolCanAct = () => !poolS.awaitStart && !poolS.handoff && !poolCpuTurn() && !poolRemoteTurn() && poolS.phase !== 'over' && poolS.phase !== 'choice' && !poolS.confirm && !poolS.sheet.open && !poolTourBlocked();
 
@@ -10471,6 +10475,25 @@
     // ball there. The old Long, Medium and Short read as Full.
     const POOL_GUIDE_FULL = 4;
     const poolGuideLen = () => (userPreferences.poolGuideLen === 'none' ? 0 : Math.round(POOL_GUIDE_FULL * 2 * poolS.cfg.ballR * poolHumanStats().aim));
+    // Hawkeye, a hidden switch (the user, 2026-10-28): typing the word on the table turns max guides
+    // on or off. The object ball's line runs to its pocket or the cushion, the cue ball's path for
+    // two table lengths, whatever the cue or ⚙️ Guideline. Not in Settings, kept in this browser
+    // only, and dead online so a match against a person stays fair.
+    const POOL_HAWK_WORD = 'hawkeye', POOL_HAWK_LS = 'poolHawk', POOL_HAWK_REACH = 4;
+    let poolHawkOn = (() => { try { return localStorage.getItem(POOL_HAWK_LS) === '1'; } catch (e) { return false; } })();
+    let poolHawkTyped = '';
+    const poolHawk = () => poolHawkOn && poolMode !== 'net';
+    function poolHawkKey(e) {
+        if (!e.key || e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey || poolTyping(e)) return;
+        poolHawkTyped = (poolHawkTyped + e.key.toLowerCase()).slice(-POOL_HAWK_WORD.length);
+        if (poolHawkTyped !== POOL_HAWK_WORD) return;
+        poolHawkTyped = '';
+        poolHawkOn = !poolHawkOn;
+        try { if (poolHawkOn) localStorage.setItem(POOL_HAWK_LS, '1'); else localStorage.removeItem(POOL_HAWK_LS); } catch (e2) { /* this tab only */ }
+        if (!poolS.toast && poolS.phase !== 'over') {
+            poolShowToast({ kind: 'notice', title: 'Hawkeye ' + (poolHawkOn ? 'on' : 'off'), sub: poolHawkOn && poolMode === 'net' ? 'Not in online matches' : '' });
+        }
+    }
     function poolDraw(dt) {
         const S = poolS, R = poolRules();
         if (!poolFit()) return;
@@ -10494,11 +10517,14 @@
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
+            // Hawkeye: the object ball's line to where it ends, and the cue ball's path as far as the guide followed it.
+            const o = poolHawk() && S.guide && S.guide.obj, hawkEnd = o ? poolObjEnd(o).end : null;
+            const guideLen = !poolHawk() ? poolGuideLen() : o ? Math.max(0, Math.hypot(hawkEnd[0] - o.x, hawkEnd[1] - o.y) - S.cfg.ballR) : 0;
             pgRender(S.ctx, {
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
                 aim: aiming ? { angle: S.aim, power: S.power, gap } : null, cue, cueT,
-                guide: aiming ? S.guide : null, guideMode: S.guideMode, guideLen: poolGuideLen(), pathK: poolHumanStats().aim,
+                guide: aiming ? S.guide : null, guideMode: poolHawk() ? 'full' : S.guideMode, guideLen, pathK: poolHawk() ? 1e3 : poolHumanStats().aim,
                 illegal: !!(S.guide && S.guide.hit > 0 && !poolLegalTarget(S.guide.hit)),
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
                 zone: S.phase === 'bih' ? S.frame.ballInHand : null,
@@ -10764,6 +10790,7 @@
         if (!S.attached || typeof currentGame !== 'undefined' && currentGame !== 'pool') return;
         // The spin picker takes its own keys (arrows move the tip, Esc closes it).
         if (e.target && e.target.closest && e.target.closest('.ph-spinpop')) return;
+        poolHawkKey(e);
         // Esc closes the React tray (online), and nothing else sees it.
         if (e.key === 'Escape' && S.reactOpen) { S.reactOpen = false; e.preventDefault(); e.stopImmediatePropagation(); return; }
         // Esc closes the Game mode sheet first, and nothing else sees it.

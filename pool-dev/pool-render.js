@@ -649,8 +649,8 @@
     // ── Guides ────────────────────────────────────────────────────────
     // The shot's opening on the real physics: the cue ball's path to first contact
     // (squirt included), the object ball's line (throw included), and where the cue
-    // ball goes next, so draw visibly bends back.
-    function pgGuide(world, shot) {
+    // ball goes next, so draw visibly bends back. reach: how far that last path is followed, table units.
+    function pgGuide(world, shot, reach = 200) {
         const w = ppCloneWorld(world);
         w.log = [];
         const cue0 = w.balls.find(b => b.id === 0);
@@ -689,7 +689,7 @@
         W2.balls = [c];
         let len = 0, px = c.x, py = c.y;
         out.after.push([px, py]);
-        for (let i = 0; i < 240 && len < 200; i++) {
+        for (let i = 0; i < 240 * reach / 200 && len < reach; i++) {
             ppStep(W2, 1 / 120);
             const b = cueOf(W2);
             if (b.state === 'pocketed') break;
