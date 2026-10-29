@@ -64,7 +64,7 @@
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scene&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chaos3d&quot;,&quot;chaos2d&quot;,&quot;rGo&quot;,&quot;ares&quot;],&quot;default&quot;:&quot;chaos3d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;2d&quot;,&quot;3d&quot;],&quot;default&quot;:&quot;3d&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scene&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chaos3d&quot;,&quot;chaos2d&quot;,&quot;rGo&quot;,&quot;ares&quot;,&quot;endless&quot;,&quot;campDone&quot;],&quot;default&quot;:&quot;chaos3d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;2d&quot;,&quot;3d&quot;],&quot;default&quot;:&quot;3d&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 const PRI = 'linear-gradient(135deg,#7048FF 0%,#3D5CF5 52%,#2563EB 100%)';
 const TOK = {
   dark: { text: '#F4F2FA', muted: '#B3B0C6', border: 'rgba(255,255,255,.16)', hud: 'rgba(18,16,28,.66)', acText: '#6CBBFF', red: '#FF5D73', redText: '#FF8396', gold: '#FFCB6B', good: '#3DDC97', primary: PRI, onPrimary: '#FFFFFF', font: "'Inter',system-ui,sans-serif", num: "'Inter',system-ui,sans-serif", rc: 12, rbar: 16, clipP: 'none', clipC: 'none', track: 'rgba(255,255,255,.14)', key: 'rgba(255,255,255,.1)', selBg: 'rgba(79,172,254,.2)', selBd: 'rgba(79,172,254,.6)', logoSh: '0 4px 14px rgba(112,72,255,.45)', brandC: '#F4F2FA', tsh: '0 1px 10px rgba(0,0,0,.5)' },
@@ -72,7 +72,7 @@ const TOK = {
   cyber: { text: '#E8FDFF', muted: '#8CB8BF', border: 'rgba(0,240,255,.4)', hud: 'rgba(2,10,14,.8)', acText: '#00F0FF', red: '#FF2E63', redText: '#FF6B8F', gold: '#FFE600', good: '#39FF88', primary: '#00F0FF', onPrimary: '#021014', font: "'JetBrains Mono',ui-monospace,monospace", num: "'JetBrains Mono',ui-monospace,monospace", rc: 0, rbar: 0, clipP: 'none', clipC: 'polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)', track: 'rgba(0,240,255,.18)', key: 'rgba(0,240,255,.12)', selBg: 'rgba(0,240,255,.14)', selBd: '#00F0FF', logoSh: '0 0 14px rgba(0,240,255,.5)', brandC: '#E8FDFF', tsh: '0 0 10px rgba(0,240,255,.5)' }
 };
 const C = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
-const ICON = { Chaos: C(6, 7, 2.6) + C(14.5, 6.5, 2) + C(11, 14.5, 3), Screen: 'M3 4.5h14v11H3zM10.8 7l-2.3 3.3h3l-2.3 3.2' };
+const ICON = { Chaos: C(6, 7, 2.6) + C(14.5, 6.5, 2) + C(11, 14.5, 3), Screen: 'M3 4.5h14v11H3zM10.8 7l-2.3 3.3h3l-2.3 3.2', Endless: 'M10 10c-2-2.6-3.4-3.6-5-3.6a3.6 3.6 0 0 0 0 7.2c1.6 0 3-1 5-3.6s3.4-3.6 5-3.6a3.6 3.6 0 0 1 0 7.2c-1.6 0-3-1-5-3.6Z', Levels: 'M4.5 17.5V3M4.5 3.5h10l-2.5 3.5 2.5 3.5h-10' };
 class Component extends DCLogic {
   renderVals() {
     const p = this.props, th = TOK[p.theme] ? p.theme : 'dark', t = TOK[th];
@@ -86,6 +86,12 @@ class Component extends DCLogic {
         : [tile('TIME', '12.7', 's', { hasBar: true, barW: '42%' }), tile('SCORE', '330', ''), tile('ACCURACY', '84', '%'), tile('STREAK', '9', '', { sub: '×2.0' })];
     const on = { bg: t.selBg, bd: t.selBd, c: t.text }, off = { bg: 'transparent', bd: 'transparent', c: t.muted };
     const s2 = isR ? off : mode === '2d' ? on : off, s3 = isR ? off : mode === '3d' ? on : off;
+    const SP = {
+      endless: { tiles: [tile('TIME', '12.6', 's', { hasBar: true, barW: '63%' }), tile('SCORE', '4,820', ''), tile('LEVEL', '4', ''), tile('STREAK', '8', '', { sub: '×1.5' })], icon: ICON.Endless, scName: 'Endless', scMeta: '2D · Normal', best: '17,200', status: 'Free cursor', rankTag: 'Normal · ranked', run: 1 },
+      campDone: { tiles: [], icon: ICON.Levels, scName: 'Levels', scMeta: '2D · Campaign', best: '26/30', status: 'Campaign complete', rankTag: 'Normal · ranked', run: 0 }
+    };
+    const X = SP[scene];
+    if (X) return { th, t, mode: '2d', vscene: scene, showTiles: !!X.run, tiles: X.tiles, isRun: !!X.run, isStop: !X.run, icon: X.icon, scName: X.scName, scMeta: X.scMeta, best: X.best, status: X.status, statusC: X.run ? t.good : t.muted, showEsc: !!X.run, rankTag: X.rankTag, segOp: 1, s2bg: on.bg, s2bd: on.bd, s2c: on.c, s3bg: off.bg, s3bd: off.bd, s3c: off.c };
     return {
       th, t, mode, vscene: scene, showTiles: !isRes, tiles, isRun: !isRes, isStop: isRes,
       icon: ICON[isR ? 'Screen' : 'Chaos'], scName: isR ? 'Screen' : 'Chaos', scMeta: isR ? 'Reaction · Normal' : `${mode.toUpperCase()} · Normal`,

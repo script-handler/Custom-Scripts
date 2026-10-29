@@ -25,11 +25,15 @@
 </div>
 <div style="height:52px;flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">
 <sc-for list="{{ tiles }}" as="tl" hint-placeholder-count="4">
-<div style="position:relative;min-width:0;padding:6px 9px 0;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;overflow:hidden;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
+<div style="position:relative;min-width:0;padding:6px 9px 0;box-sizing:border-box;display:flex;flex-direction:column;gap:2px;overflow:hidden;background:{{ tl.bg }};border:1px solid {{ tl.bd }};box-shadow:{{ tl.sh }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
 <div style="font-size:8px;font-weight:600;letter-spacing:.08em;color:{{ t.muted }};white-space:nowrap;overflow:hidden">{{ tl.l }}</div>
-<div style="display:flex;align-items:baseline;gap:2px;font-family:{{ t.num }};font-variant-numeric:tabular-nums;white-space:nowrap"><span style="font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1;color:{{ tl.vc }}">{{ tl.v }}</span><span style="font-size:10px;font-weight:600;color:{{ t.muted }}">{{ tl.u }}</span><span style="font-size:10px;font-weight:700;color:{{ t.acText }};margin-left:3px">{{ tl.sub }}</span></div>
+<div style="display:flex;align-items:baseline;gap:2px;font-family:{{ t.num }};font-variant-numeric:tabular-nums;white-space:nowrap"><span style="font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1;color:{{ tl.vc }}">{{ tl.v }}</span><span style="font-size:10px;font-weight:600;color:{{ t.muted }}">{{ tl.u }}</span><span style="font-size:10px;font-weight:700;color:{{ t.acText }};margin-left:3px">{{ tl.sub }}</span><sc-if value="{{ tl.hasHearts }}" hint-placeholder-val="{{ false }}"><span style="display:flex;gap:2px;height:20px;align-items:center"><sc-for list="{{ tl.hearts }}" as="ht" hint-placeholder-count="3"><svg viewBox="0 0 20 20" width="16" height="16" style="display:block"><path d="M10 16.4s-6.3-3.8-6.3-8.2A3.5 3.5 0 0 1 10 6.1a3.5 3.5 0 0 1 6.3 2.1c0 4.4-6.3 8.2-6.3 8.2Z" style="fill:{{ ht.f }};stroke:{{ ht.s }};stroke-width:1.7;stroke-linejoin:round"></path></svg></sc-for></span></sc-if></div>
 <sc-if value="{{ tl.hasBar }}" hint-placeholder-val="{{ false }}">
 <div style="position:absolute;left:9px;right:9px;bottom:5px;height:3px;border-radius:2px;background:{{ t.track }};overflow:hidden"><div style="width:{{ tl.barW }};height:100%;background:{{ tl.barC }};border-radius:2px"></div></div>
+</sc-if>
+<sc-if value="{{ tl.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:4px;top:4px;height:15px;padding:0 4px;display:flex;align-items:center;border-radius:4px;background:{{ t.goldC }};color:#2A1A00;font-size:9.5px;font-weight:800;line-height:1">{{ tl.badge }}</span></sc-if>
+<sc-if value="{{ tl.hasMark }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:calc(9px + (100% - 18px) * {{ tl.markF }});bottom:3px;width:2px;height:7px;margin-left:-1px;border-radius:1px;background:{{ t.text }}"></div>
 </sc-if>
 <sc-if value="{{ tl.hasPips }}" hint-placeholder-val="{{ false }}">
 <div style="position:absolute;left:9px;bottom:7px;display:flex;gap:3px"><sc-for list="{{ tl.pips }}" as="pi" hint-placeholder-count="3"><span style="width:12px;height:3px;border-radius:2px;background:{{ pi.c }}"></span></sc-for></div>
@@ -74,10 +78,128 @@
 <div style="width:36px;height:4px;border-radius:2px;background:{{ t.track }};margin:0 auto -4px;flex:none"></div>
 <div style="height:44px;flex:none;display:flex;align-items:center;gap:10px">
 <div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="font-size:9px;font-weight:600;letter-spacing:.18em;color:{{ t.muted }}">{{ sh.kicker }}</div><div style="font-size:18px;font-weight:700;letter-spacing:-.02em">{{ sh.title }}</div></div>
+<sc-if value="{{ isBoard }}" hint-placeholder-val="{{ false }}">
+<div style="width:88px;height:44px;flex:none;box-sizing:border-box;padding:3px;display:flex;gap:2px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};opacity:{{ board.segOp }}">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:{{ t.rcIn }}px;background:{{ board.s2.bg }};border:1px solid {{ board.s2.bd }};box-sizing:border-box;font-size:12px;font-weight:700;color:{{ board.s2.c }}">2D</div>
+<div style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:{{ t.rcIn }}px;background:{{ board.s3.bg }};border:1px solid {{ board.s3.bd }};box-sizing:border-box;font-size:12px;font-weight:700;color:{{ board.s3.c }}">3D</div>
+</div>
+</sc-if>
 <div style="width:44px;height:44px;box-sizing:border-box;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }};display:flex;align-items:center;justify-content:center;cursor:pointer">
 <svg width="20" height="20" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"></path></svg>
 </div>
 </div>
+<sc-if value="{{ isModes }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="height:44px;box-sizing:border-box;padding:3px;display:flex;gap:3px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }}">
+<sc-for list="{{ diffs }}" as="df" hint-placeholder-count="3">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:{{ t.rcIn }}px;background:{{ df.bg }};border:1px solid {{ df.bd }};box-sizing:border-box;cursor:pointer"><span style="font-size:12.5px;font-weight:650;color:{{ df.c }}">{{ df.n }}</span><span style="font-size:8px;font-weight:600;letter-spacing:.1em;color:{{ t.muted }}">{{ df.s }}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;justify-content:space-between;font-size:9px;font-weight:600;letter-spacing:.18em;color:{{ t.muted }}"><span>RANKED · 2D AND 3D</span><span>MEDAL · BEST 2D · 3D</span></div>
+<sc-for list="{{ rankedList }}" as="rk" hint-placeholder-count="4">
+<div style="display:flex;box-sizing:border-box;background:{{ rk.bg }};border:1px solid {{ rk.bd }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};cursor:pointer;height:52px;align-items:center;gap:9px;padding:0 10px 0 7px">
+<div style="width:36px;height:36px;flex:none;border-radius:10px;clip-path:{{ t.clipC }};background:{{ rk.ibg }};display:flex;align-items:center;justify-content:center"><svg width="20" height="20" style="fill:none;stroke:{{ rk.ic }};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ rk.icon }}"></path></svg></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;align-items:baseline;gap:6px;white-space:nowrap"><span style="font-size:13.5px;font-weight:650">{{ rk.name }}</span><span style="font-size:10.5px;color:{{ t.muted }}">{{ rk.len }}</span></div>
+<div style="font-size:11px;color:{{ t.muted }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ rk.desc }}</div>
+</div>
+<dc-import name="Medal" tier="{{ rk.m }}" size="28" theme="{{ th }}" style="width:28px;height:28px;flex:none" hint-size="28px,28px"></dc-import>
+<div style="width:62px;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-family:{{ t.num }};font-variant-numeric:tabular-nums;white-space:nowrap"><span style="font-size:12px;font-weight:700">{{ rk.b1 }}</span><span style="font-size:11px;color:{{ t.muted }}">{{ rk.b2 }}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;justify-content:space-between;font-size:9px;font-weight:600;letter-spacing:.18em;color:{{ t.muted }}"><span>PRACTICE</span><span>BEST 2D</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+<sc-for list="{{ practList }}" as="pc" hint-placeholder-count="3">
+<div style="display:flex;box-sizing:border-box;background:{{ pc.bg }};border:1px solid {{ pc.bd }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};cursor:pointer;height:60px;flex-direction:column;justify-content:center;gap:5px;padding:0 10px">
+<div style="display:flex;align-items:center;gap:6px"><svg width="20" height="20" style="flex:none;fill:none;stroke:{{ t.acText }};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ pc.icon }}"></path></svg><span style="font-size:12.5px;font-weight:650">{{ pc.name }}</span></div>
+<span style="font-size:11px;color:{{ t.muted }};font-variant-numeric:tabular-nums">{{ pc.b1 }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;justify-content:space-between;font-size:9px;font-weight:600;letter-spacing:.18em;color:{{ t.muted }}"><span>REACTION · LOWER IS BETTER</span><span>BEST</span></div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+<sc-for list="{{ reactList2 }}" as="rc" hint-placeholder-count="2">
+<div style="display:flex;box-sizing:border-box;background:{{ rc.bg }};border:1px solid {{ rc.bd }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};cursor:pointer;height:52px;align-items:center;gap:8px;padding:0 10px">
+<svg width="20" height="20" style="flex:none;fill:none;stroke:{{ t.acText }};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ rc.icon }}"></path></svg>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;font-weight:650">{{ rc.name }}</span><span style="font-size:10.5px;color:{{ t.muted }}">{{ rc.len }}</span></div>
+<span style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">{{ rc.b1 }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ isBoard }}" hint-placeholder-val="{{ false }}">
+<div style="height:44px;flex:none;box-sizing:border-box;padding:3px;display:flex;gap:2px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }}">
+<sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="6">
+<div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:{{ t.rcIn }}px;background:{{ tb.bg }};border:1px solid {{ tb.bd }};box-sizing:border-box;font-size:11.5px;font-weight:650;color:{{ tb.c }};cursor:pointer;white-space:nowrap">{{ tb.n }}</div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:{{ t.muted }};margin-top:-4px"><span style="width:6px;height:6px;border-radius:50%;background:{{ t.accent }};flex:none"></span>{{ board.cap }}</div>
+<div style="display:flex;flex-direction:column;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};overflow:hidden">
+<div style="height:28px;display:grid;grid-template-columns:{{ board.cols }};gap:8px;align-items:center;padding:0 10px;font-size:8.5px;font-weight:600;letter-spacing:.14em;color:{{ t.muted }};border-bottom:1px solid {{ t.border }}"><span>#</span><span>PLAYER</span><sc-for list="{{ board.heads }}" as="bh" hint-placeholder-count="1"><span style="text-align:right">{{ bh.t }}</span></sc-for><span style="text-align:right">{{ board.vh }}</span></div>
+<sc-for list="{{ board.rows }}" as="br" hint-placeholder-count="8">
+<div style="height:38px;display:grid;grid-template-columns:{{ board.cols }};gap:8px;align-items:center;padding:0 10px;border-top:1px solid {{ br.sep }};background:{{ br.bg }};box-shadow:{{ br.sh }};font-variant-numeric:tabular-nums">
+<span style="width:22px;height:22px;border-radius:50%;background:{{ br.rbg }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">{{ br.rk }}</span>
+<span style="min-width:0;display:flex;align-items:center;gap:8px"><span style="width:26px;height:26px;flex:none;border-radius:50%;background:{{ br.abg }};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:{{ br.ac }}">{{ br.ini }}</span><span style="font-size:12.5px;font-weight:{{ br.fw }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ br.name }}</span></span>
+<sc-for list="{{ br.ex }}" as="bx" hint-placeholder-count="1"><span style="text-align:right;font-size:12px;color:{{ t.muted }}">{{ bx.v }}</span></sc-for>
+<span style="text-align:right;font-size:12.5px;font-weight:700">{{ br.val }}</span>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ board.hasYou }}" hint-placeholder-val="{{ false }}">
+<div style="height:44px;display:grid;grid-template-columns:{{ board.cols }};gap:8px;align-items:center;padding:0 10px;background:{{ t.selBg }};border:1px solid {{ t.selBd }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};font-variant-numeric:tabular-nums">
+<span style="font-size:11px;font-weight:700;text-align:center;width:22px">{{ board.you.rk }}</span>
+<span style="display:flex;align-items:center;gap:8px"><span style="width:26px;height:26px;border-radius:50%;background:{{ t.primary }};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:{{ t.onPrimary }}">Y</span><span style="font-size:12.5px;font-weight:700">You</span></span>
+<sc-for list="{{ board.you.ex }}" as="bx" hint-placeholder-count="1"><span style="text-align:right;font-size:12px;color:{{ t.muted }}">{{ bx.v }}</span></sc-for>
+<span style="text-align:right;font-size:12.5px;font-weight:700">{{ board.you.val }}</span>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{ isRecords }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px">
+<div style="display:flex;align-items:baseline;gap:5px;font-variant-numeric:tabular-nums"><span style="font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1">28</span><span style="font-size:12.5px;font-weight:600;color:{{ t.muted }}">/ 48 medals</span></div>
+<div style="display:flex;gap:8px">
+<sc-for list="{{ legend }}" as="lg" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:4px"><dc-import name="Medal" tier="{{ lg.m }}" size="16" theme="{{ th }}" style="width:16px;height:16px" hint-size="16px,16px"></dc-import><span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">{{ lg.c }}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="height:6px;border-radius:3px;background:{{ t.track }};overflow:hidden"><div style="width:58%;height:100%;background:{{ t.primary }}"></div></div>
+</div>
+<div style="display:flex;flex-direction:column;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};overflow:hidden">
+<div style="height:26px;display:grid;grid-template-columns:minmax(0,1fr) 104px 104px;gap:8px;align-items:center;padding:0 10px;font-size:8.5px;font-weight:600;letter-spacing:.14em;color:{{ t.muted }};border-bottom:1px solid {{ t.border }}"><span>MODE</span><span>2D</span><span>3D</span></div>
+<sc-for list="{{ medRows }}" as="mr" hint-placeholder-count="6">
+<div style="height:40px;display:grid;grid-template-columns:minmax(0,1fr) 104px 104px;gap:8px;align-items:center;padding:0 10px;border-top:1px solid {{ t.hair }}">
+<span style="font-size:12.5px;font-weight:650;white-space:nowrap">{{ mr.n }}</span>
+<sc-for list="{{ mr.cells }}" as="mc" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:7px">
+<dc-import name="Medal" tier="{{ mc.m }}" size="22" theme="{{ th }}" style="width:22px;height:22px;flex:none" hint-size="22px,22px"></dc-import>
+<div style="display:flex;flex-direction:column;gap:3px"><div style="display:flex;gap:2px"><sc-for list="{{ mc.pips }}" as="mp" hint-placeholder-count="4"><span style="width:9px;height:3px;border-radius:2px;background:{{ mp.c }}"></span></sc-for></div><span style="font-size:10.5px;color:{{ t.muted }};font-family:{{ t.num }};font-variant-numeric:tabular-nums">{{ mc.b }}</span></div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="font-size:9px;font-weight:600;letter-spacing:.18em;color:{{ t.muted }}">ACHIEVEMENTS</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px">
+<sc-for list="{{ ach }}" as="ac" hint-placeholder-count="4">
+<div style="height:64px;box-sizing:border-box;padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;background:{{ t.glass }};border:1px solid {{ t.border }};border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }}">
+<div style="display:flex;align-items:center;gap:6px"><svg width="20" height="20" style="flex:none;transform:scale(.85);fill:none;stroke:{{ ac.ic }};stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="{{ ac.icon }}"></path></svg><span style="flex:1;font-size:12.5px;font-weight:650;white-space:nowrap">{{ ac.n }}</span><span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">{{ ac.v }}</span></div>
+<div style="font-size:10.5px;color:{{ t.muted }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ac.d }}</div>
+<div style="height:4px;border-radius:2px;background:{{ t.track }};overflow:hidden"><div style="width:{{ ac.w }};height:100%;background:{{ t.primary }}"></div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
 <sc-if value="{{ isScen }}" hint-placeholder-val="{{ false }}">
 <div style="display:flex;flex-direction:column;gap:6px">
 <div style="height:44px;box-sizing:border-box;padding:3px;display:flex;gap:3px;border-radius:{{ t.rc }}px;clip-path:{{ t.clipC }};background:{{ t.glass }};border:1px solid {{ t.border }}">
@@ -206,7 +328,7 @@
 </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:400,&quot;height&quot;:640},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scene&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;countdown&quot;,&quot;chaos2d&quot;,&quot;chaos3d&quot;,&quot;unlocked&quot;,&quot;paused&quot;,&quot;tracking&quot;,&quot;flick&quot;,&quot;shrink&quot;,&quot;ares&quot;,&quot;abest&quot;,&quot;rIdle&quot;,&quot;rWait&quot;,&quot;rGo&quot;,&quot;rTime&quot;,&quot;rSoon&quot;,&quot;rT2d&quot;,&quot;rT3d&quot;,&quot;rres&quot;,&quot;rfail&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sheet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;scenarios&quot;,&quot;crosshair&quot;,&quot;settings&quot;,&quot;bests&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;2d&quot;,&quot;3d&quot;],&quot;default&quot;:&quot;2d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;diff&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Easy&quot;,&quot;Normal&quot;,&quot;Hard&quot;],&quot;default&quot;:&quot;Normal&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;width&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:400,&quot;tsType&quot;:&quot;number&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:400,&quot;height&quot;:640},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scene&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;countdown&quot;,&quot;chaos2d&quot;,&quot;chaos3d&quot;,&quot;unlocked&quot;,&quot;paused&quot;,&quot;tracking&quot;,&quot;flick&quot;,&quot;shrink&quot;,&quot;ares&quot;,&quot;abest&quot;,&quot;rIdle&quot;,&quot;rWait&quot;,&quot;rGo&quot;,&quot;rTime&quot;,&quot;rSoon&quot;,&quot;rT2d&quot;,&quot;rT3d&quot;,&quot;rres&quot;,&quot;rfail&quot;,&quot;sprint&quot;,&quot;sprintMid&quot;,&quot;sprintRes&quot;,&quot;endless&quot;,&quot;endlessFrenzy&quot;,&quot;bonus&quot;,&quot;endlessOver&quot;,&quot;levels&quot;,&quot;stageIntro&quot;,&quot;stageTrack&quot;,&quot;stageHits&quot;,&quot;stageClear&quot;,&quot;stageFail&quot;,&quot;bossArmor&quot;,&quot;bossVuln&quot;,&quot;campDone&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sheet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;scenarios&quot;,&quot;crosshair&quot;,&quot;settings&quot;,&quot;bests&quot;,&quot;modes&quot;,&quot;board&quot;,&quot;records&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;2d&quot;,&quot;3d&quot;],&quot;default&quot;:&quot;2d&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;diff&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Easy&quot;,&quot;Normal&quot;,&quot;Hard&quot;],&quot;default&quot;:&quot;Normal&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;width&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:400,&quot;tsType&quot;:&quot;number&quot;},&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Levels&quot;,&quot;Screen&quot;],&quot;default&quot;:&quot;Levels&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 const PRI = 'linear-gradient(135deg,#7048FF 0%,#3D5CF5 52%,#2563EB 100%)';
 const TOK = {
   dark: { bg: 'radial-gradient(70% 45% at 0% 0%, rgba(124,92,255,.26), transparent 70%), radial-gradient(55% 35% at 100% 4%, rgba(79,172,254,.14), transparent 70%), radial-gradient(130% 100% at 30% 0%, #251F33 0%, #12101A 55%, #06080A 100%)', pBorder: 'rgba(255,255,255,.10)', text: '#F4F2FA', muted: '#A9A6BC', glass: 'rgba(255,255,255,.08)', border: 'rgba(255,255,255,.16)', hair: 'rgba(255,255,255,.08)', accent: '#4FACFE', acText: '#6CBBFF', red: '#FF5D73', redText: '#FF8396', gold: '#FFCB6B', primary: PRI, onPrimary: '#FFFFFF', font: "'Inter',system-ui,sans-serif", num: "'Inter',system-ui,sans-serif", rp: 22, rc: 12, rcIn: 9, clipP: 'none', clipC: 'none', clipS: 'none', rs: '22px 22px 0 0', track: 'rgba(255,255,255,.14)', selBg: 'rgba(79,172,254,.18)', selBd: 'rgba(79,172,254,.6)', sheetBg: 'linear-gradient(180deg, #221D31 0%, #141220 100%)', backdrop: 'rgba(4,5,8,.55)', btnSh: '0 6px 18px rgba(61,92,245,.4)', logoSh: '0 4px 14px rgba(112,72,255,.45)', knobR: '50%', room3d: 'transparent',
@@ -216,6 +338,14 @@ const TOK = {
   cyber: { bg: 'repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px), linear-gradient(rgba(0,240,255,.05) 1px, transparent 1px) 0 0/32px 32px, linear-gradient(90deg, rgba(0,240,255,.05) 1px, transparent 1px) 0 0/32px 32px, #05080B', pBorder: 'rgba(0,240,255,.4)', text: '#E8FDFF', muted: '#8CB8BF', glass: 'rgba(0,240,255,.05)', border: 'rgba(0,240,255,.36)', hair: 'rgba(0,240,255,.14)', accent: '#00F0FF', acText: '#00F0FF', red: '#FF2E63', redText: '#FF6B8F', gold: '#FFE600', primary: '#00F0FF', onPrimary: '#021014', font: "'JetBrains Mono',ui-monospace,monospace", num: "'JetBrains Mono',ui-monospace,monospace", rp: 0, rc: 0, rcIn: 0, clipP: 'polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)', clipC: 'polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)', clipS: 'polygon(14px 0,100% 0,100% 100%,0 100%,0 14px)', rs: '0', track: 'rgba(0,240,255,.18)', selBg: 'rgba(0,240,255,.14)', selBd: '#00F0FF', sheetBg: '#040B0F', backdrop: 'rgba(0,0,0,.6)', btnSh: '0 0 16px rgba(0,240,255,.45)', logoSh: '0 0 14px rgba(0,240,255,.5)', knobR: '0', room3d: 'transparent',
     arena: 'linear-gradient(rgba(0,240,255,.075) 1px, transparent 1px) 0 0/24px 24px, linear-gradient(90deg, rgba(0,240,255,.075) 1px, transparent 1px) 0 0/24px 24px, #04090C' }
 };
+const hx = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgba = (h, a) => { const [r, g, b] = hx(h); return `rgba(${r},${g},${b},${a})`; };
+const EXT = {
+  dark: { good: '#3DDC97', goldC: '#FFC24B', violet: '#B06CFF', starOff: 'rgba(255,255,255,.4)' },
+  light: { good: '#15803D', goldC: '#F0A500', violet: '#8B5CF6', starOff: 'rgba(15,23,42,.35)' },
+  cyber: { good: '#39FF88', goldC: '#FFE600', violet: '#FF4FD8', starOff: 'rgba(0,240,255,.45)' }
+};
+const TIER = ['', '#C8834F', '#AEB6C4', '#E9B23C', '#9DB6FF'];
 const C = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
 const ICON = {
   Chaos: C(6, 7, 2.6) + C(14.5, 6.5, 2) + C(11, 14.5, 3),
@@ -223,7 +353,21 @@ const ICON = {
   Tracking: 'M2.5 15.5c2.5-6 5-7 7.5-3.5s5 2.5 7.5-5' + C(10, 12, 2.4),
   Shrink: C(10, 10, 7) + C(10, 10, 3.8) + C(10, 10, 1),
   Screen: 'M3 4.5h14v11H3zM10.8 7l-2.3 3.3h3l-2.3 3.2',
-  Target: C(10, 10, 6.5) + C(10, 10, 1.6) + 'M10 1.5v2.5M10 16v2.5M1.5 10H4M16 10h2.5'
+  Target: C(10, 10, 6.5) + C(10, 10, 1.6) + 'M10 1.5v2.5M10 16v2.5M1.5 10H4M16 10h2.5',
+  Sprint: C(14, 10, 3.5) + 'M2.5 7h6M1.5 10h6M2.5 13h6',
+  Endless: 'M10 10c-2-2.6-3.4-3.6-5-3.6a3.6 3.6 0 0 0 0 7.2c1.6 0 3-1 5-3.6s3.4-3.6 5-3.6a3.6 3.6 0 0 1 0 7.2c-1.6 0-3-1-5-3.6Z',
+  Levels: 'M4.5 17.5V3M4.5 3.5h10l-2.5 3.5 2.5 3.5h-10',
+  Shield: 'M10 2.8 16 5v4.6c0 3.7-2.6 6.4-6 7.6-3.4-1.2-6-3.9-6-7.6V5Z'
+};
+const RANKED = [
+  { n: 'Chaos', len: '30 s', d: '3 live targets, endless respawns', b1: '730', b2: '540', m: 4 },
+  { n: 'Sprint 50', ic: 'Sprint', len: '50 targets', d: 'Clear 50, fastest total wins', b1: '11,560', b2: '9,870', m: 3 },
+  { n: 'Endless', len: 'survival', d: 'Hits add time; bonus = frenzy', b1: '17,200', b2: '12,450', m: 2 },
+  { n: 'Levels', len: '10 stages', d: 'Goals, stars and a boss', b1: '14/30', b2: '6/30', m: 0 }
+];
+const BRD = {
+  Levels: { ex: ['STAGE'], vh: 'SCORE', cols: '24px minmax(0,1fr) 46px 60px', cap: 'Normal runs · ranked by stage, then score', rows: [['Priya N.', '10/10', '52,340'], ['Marcus L.', '10/10', '49,880'], ['Aiko T.', '9/10', '41,205'], ['Dev R.', '8/10', '36,950'], ['Sofia M.', '8/10', '34,410'], ['Jonah K.', '7/10', '29,775'], ['Lena W.', '7/10', '27,060'], ['Omar F.', '6/10', '25,190']], you: ['9', '6/10', '24,310'] },
+  Screen: { ex: [], vh: 'AVG', cols: '24px minmax(0,1fr) 72px', cap: 'Screen has no camera, so 2D | 3D is off · lower is better', rows: [['Aiko T.', '176 ms'], ['Dev R.', '183 ms'], ['Marcus L.', '191 ms'], ['You', '198 ms'], ['Lena W.', '204 ms'], ['Priya N.', '209 ms'], ['Omar F.', '217 ms'], ['Sofia M.', '226 ms']] }
 };
 const SCN = [
   { n: 'Chaos', g: 'aim', len: '30 s', d: 'Three live targets; hit one, another spawns. Drift at Hard.', b1: '730', b2: '540' },
@@ -244,18 +388,41 @@ const INFO = {
   rIdle: { g: 'r', st: ['0', '5', '—', '—', '0'] }, rWait: { g: 'r', run: 1, st: ['3', '5', '198', '211', '0'] }, rGo: { g: 'r', run: 1, st: ['3', '5', '198', '211', '0'] },
   rTime: { g: 'r', run: 1, st: ['3', '5', '214', '212', '0'] }, rSoon: { g: 'r', run: 1, st: ['3', '5', '198', '211', '2'] },
   rT2d: { g: 'r', sc: 'Target', run: 1, st: ['4', '8', '268', '281', '0'] }, rT3d: { g: 'r', sc: 'Target', mode: '3d', run: 1, st: ['6', '8', '322', '334', '1'] },
-  rres: { g: 'r', st: ['5', '5', '268', '231', '1'] }, rfail: { g: 'r', st: ['2', '5', '251', '—', '3'] }
+  rres: { g: 'r', st: ['5', '5', '268', '231', '1'] }, rfail: { g: 'r', st: ['2', '5', '251', '—', '3'] },
+  sprint: { sc: 'Sprint 50', ic: 'Sprint', run: 1, T: [['TIME', '18.62', 's'], ['LEFT', '23', '/50', { bar: .54 }], ['ACCURACY', '92', '%'], ['STREAK', '11', '', { sub: '×1.5' }]] },
+  sprintMid: { sc: 'Sprint 50', ic: 'Sprint', T: [['TIME', '27.84', 's'], ['LEFT', '0', '/50', { bar: 1 }], ['ACCURACY', '93', '%'], ['STREAK', '31', 'best']] },
+  sprintRes: { sc: 'Sprint 50', ic: 'Sprint', T: [['TIME', '27.84', 's'], ['LEFT', '0', '/50', { bar: 1 }], ['ACCURACY', '93', '%'], ['STREAK', '31', 'best']] },
+  endless: { sc: 'Endless', run: 1, T: [['TIME', '12.6', 's', { bar: .63 }], ['SCORE', '4,820', ''], ['LEVEL', '4', ''], ['STREAK', '8', '', { sub: '×1.5' }]] },
+  endlessFrenzy: { sc: 'Endless', run: 1, T: [['TIME', '4.2', 's', { bar: .21, hot: 1 }], ['SCORE', '6,140', '', { badge: '×2' }], ['LEVEL', '5', ''], ['STREAK', '14', '', { sub: '×2.0' }]] },
+  bonus: { sc: 'Endless', run: 1, T: [['TIME', '9.8', 's', { bar: .49 }], ['SCORE', '5,360', ''], ['LEVEL', '5', ''], ['STREAK', '12', '', { sub: '×2.0' }]] },
+  endlessOver: { sc: 'Endless', T: [['TIME', '0.0', 's', { bar: 0 }], ['SCORE', '18,940', ''], ['LEVEL', '7', 'best'], ['STREAK', '26', 'best']] },
+  levels: { sc: 'Levels', T: [['STAGE', '6', '/10'], ['STARS', '14', '/30'], ['LIVES', '', '', { hearts: 3 }], ['SCORE', '24,310', '']] },
+  stageIntro: { sc: 'Levels', T: [['STAGE', '4', '/10'], ['STARS', '14', '/30'], ['LIVES', '', '', { hearts: 3 }], ['SCORE', '24,310', '']] },
+  stageTrack: { sc: 'Levels', run: 1, T: [['TIME', '9.2', 's', { bar: .61 }], ['GOAL', '74', '%', { bar: .74, mark: .7, barC: 'good' }], ['STAGE', '4', '/10'], ['LIVES', '', '', { hearts: 3 }]] },
+  stageHits: { sc: 'Levels', run: 1, T: [['TIME', '14.0', 's', { bar: .47 }], ['GOAL', '12', '/20', { bar: .6 }], ['STAGE', '5', '/10'], ['LIVES', '', '', { hearts: 3 }]] },
+  stageClear: { sc: 'Levels', T: [['TIME', '6.0', 's', { bar: .4 }], ['GOAL', '89', '%', { bar: .89, mark: .7, barC: 'good' }], ['STAGE', '4', '/10'], ['LIVES', '', '', { hearts: 3 }]] },
+  stageFail: { sc: 'Levels', T: [['TIME', '0.0', 's', { bar: 0 }], ['GOAL', '61', '%', { bar: .61, mark: .7, barC: 'red' }], ['STAGE', '4', '/10'], ['LIVES', '', '', { hearts: 2 }]] },
+  bossArmor: { sc: 'Levels', run: 1, T: [['TIME', '38.4', 's', { bar: .64 }], ['BOSS', '9', '/12', { bar: .75, barC: 'red' }], ['STAGE', '10', '/10'], ['LIVES', '', '', { hearts: 2 }]] },
+  bossVuln: { sc: 'Levels', run: 1, T: [['TIME', '36.9', 's', { bar: .61 }], ['BOSS', '8', '/12', { bar: .67, barC: 'red' }], ['STAGE', '10', '/10'], ['LIVES', '', '', { hearts: 2 }]] },
+  campDone: { sc: 'Levels', T: [['STAGE', '10', '/10'], ['STARS', '26', '/30'], ['LIVES', '', '', { hearts: 2 }], ['SCORE', '48,620', '']] }
 };
+Object.assign(BEST, { 'Sprint 502d': '11,560', 'Sprint 503d': '9,870', Endless2d: '17,200', Endless3d: '12,450', Levels2d: '14/30' });
 class Component extends DCLogic {
   renderVals() {
-    const p = this.props, th = TOK[p.theme] ? p.theme : 'dark', t = TOK[th];
+    const p = this.props, th = TOK[p.theme] ? p.theme : 'dark', t = Object.assign({}, TOK[th], EXT[th]);
     const W = +p.width || 400, narrow = W < 380, sheet = p.sheet || '';
     const scene = INFO[p.scene] ? p.scene : 'idle', I = INFO[scene], g = I.g || 'aim';
     const sc = I.sc || (g === 'aim' ? 'Chaos' : 'Screen'), mode = p.mode || I.mode || '2d', diff = p.diff || I.diff || 'Normal';
     const running = !!I.run && !sheet, vh = running ? 492 : 438, noCam = sc === 'Screen';
     const s = I.st;
-    const tile = (l, v, u, x) => Object.assign({ l, v, u, sub: '', vc: t.text, hasBar: false, barW: '0%', barC: '', hasPips: false, pips: [] }, x || {});
-    const tiles = g === 'aim'
+    const tile = (l, v, u, x) => Object.assign({ l, v, u, sub: '', vc: t.text, hasBar: false, barW: '0%', barC: '', hasPips: false, pips: [], bg: t.glass, bd: t.border, sh: 'none', hasBadge: false, badge: '', hasHearts: false, hearts: [], hasMark: false, markF: 0 }, x || {});
+    const mk = ([l, v, u, x = {}]) => {
+      const o = tile(l, v, u, { sub: x.sub || '', hasBar: x.bar != null, barW: Math.round((x.bar || 0) * 100) + '%', barC: x.barC === 'red' ? t.red : x.barC === 'good' ? t.good : t.primary, hasBadge: !!x.badge, badge: x.badge || '', hasMark: x.mark != null, markF: x.mark || 0 });
+      if (x.hot) Object.assign(o, { bg: rgba(t.red, .16), bd: t.red, sh: `0 0 0 3px ${rgba(t.red, .2)}, 0 0 18px ${rgba(t.red, .5)}`, vc: t.redText, barC: t.red });
+      if (x.hearts != null) Object.assign(o, { hasHearts: true, hearts: [0, 1, 2].map(i => i < x.hearts ? { f: t.red, s: t.red } : { f: 'none', s: t.muted }) });
+      return o;
+    };
+    const tiles = I.T ? I.T.map(mk) : g === 'aim'
       ? [tile('TIME', s[0], 's', { hasBar: true, barW: `${Math.round(s[1] * 100)}%`, barC: s[1] < .3 ? t.red : t.primary, vc: s[1] < .3 && s[1] > 0 ? t.redText : t.text }), tile('SCORE', s[2], ''), tile('ACCURACY', s[3], s[3] === '—' ? '' : '%'), tile('STREAK', s[4], '', { sub: s[5] === 'best' ? '' : s[5], u: s[5] === 'best' ? 'best' : '' })]
       : [tile('ROUND', s[0], '/' + s[1]), tile('LAST', s[2], s[2] === '—' ? '' : 'ms'), tile('AVERAGE', s[3], s[3] === '—' ? '' : 'ms'), tile(narrow ? 'FALSE ST.' : 'FALSE STARTS', s[4], '/3', { vc: +s[4] >= 2 ? t.redText : t.text, hasPips: true, pips: [0, 1, 2].map(i => ({ c: i < +s[4] ? t.red : t.track })) })];
     const sel = on => on ? { bg: t.selBg, bd: t.selBd, c: t.text } : { bg: 'transparent', bd: 'transparent', c: t.muted };
@@ -274,15 +441,30 @@ class Component extends DCLogic {
     const tcolors = ['#FF5D73', '#FFB547', '#4CF0B0', '#4FACFE', '#B06CFF'].map((c, i) => ({ c, sh: i === 0 ? ring(th === 'light' ? '#0F172A' : '#FFFFFF') : 'none' }));
     const rowsSrc = [['Chaos', '2D', '810', '730', '520', 1], ['', '3D', '600', '540', '—'], ['Flick', '2D', '1,410', '1,260', '940'], ['', '3D', '1,050', '980', '—'], ['Tracking', '2D', '2,040', '1,880', '1,320'], ['', '3D', '1,560', '1,410', '—'], ['Shrink', '2D', '690', '610', '520'], ['', '3D', '—', '—', '—'], ['Screen', '—', '241', '219', '205', 1, 1], ['Target', '2D', '301', '286', '263', 1, 1], ['', '3D', '—', '341', '—', 0, 1]];
     const bestRows = rowsSrc.map((r, i) => ({ n: r[0], m: r[1], e: r[2], nv: r[3], h: r[4], ec: r[2] === '—' ? t.muted : t.text, hc: r[4] === '—' ? t.muted : t.text, nbg: r[5] ? t.selBg : 'transparent', nbd: r[5] ? t.selBd : 'transparent', sep: i === 0 ? '0 solid transparent' : `1px solid ${r[0] ? t.border : t.hair}` }));
-    const sheets = { scenarios: ['CHOOSE', 'Scenario'], crosshair: ['CROSSHAIR', 'Crosshair editor'], settings: ['AIMLAB', 'Settings'], bests: ['RECORDS', 'Personal bests'] };
+    const sheets = { scenarios: ['CHOOSE', 'Scenario'], modes: ['CHOOSE', 'Scenario'], crosshair: ['CROSSHAIR', 'Crosshair editor'], settings: ['AIMLAB', 'Settings'], bests: ['RECORDS', 'Personal bests'], board: ['TEAM · THIS WEEK', 'Team board'], records: ['MEDALS · ACHIEVEMENTS', 'Records'] };
+    const rcard = x => { const on = x.n === sc; return { name: x.n, len: x.len, desc: x.d, b1: '2D ' + x.b1, b2: '3D ' + x.b2, m: x.m, icon: ICON[x.ic || x.n], bg: on ? t.selBg : t.glass, bd: on ? t.selBd : t.border, ibg: on ? t.primary : t.glass, ic: on ? t.onPrimary : t.acText }; };
+    const rankedList = RANKED.map(rcard);
+    const practList = [['Flick', '2D 1,260'], ['Tracking', '2D 1,880'], ['Shrink', '2D 610']].map(([n, b1]) => ({ name: n, b1, icon: ICON[n], bg: t.glass, bd: t.border }));
+    const reactList2 = [['Screen', '5 rounds', '198 ms'], ['Target', '8 rounds', '286 ms']].map(([n, len, b1]) => ({ name: n, len, b1, icon: ICON[n], bg: t.glass, bd: t.border }));
+    const tab = p.tab || 'Levels', B = BRD[tab] || BRD.Levels, AV = [t.accent, t.violet, t.goldC, t.good, t.red];
+    const board = { cols: B.cols, heads: B.ex.map(x => ({ t: x })), vh: B.vh, cap: B.cap, segOp: tab === 'Screen' ? .38 : 1, s2: sel(tab !== 'Screen'), s3: sel(false), hasYou: !!B.you,
+      you: B.you ? { rk: B.you[0], ex: B.you.slice(1, -1).map(v => ({ v })), val: B.you[B.you.length - 1] } : { rk: '', ex: [], val: '' },
+      rows: B.rows.map((r, i) => { const me = r[0] === 'You'; return { rk: String(i + 1), rbg: i < 3 ? rgba(TIER[3 - i], .32) : 'transparent', ini: me ? 'Y' : r[0].split(' ').map(s => s[0]).join('').replace('.', ''), abg: me ? t.primary : rgba(AV[i % 5], .24), ac: me ? t.onPrimary : t.text, name: r[0], ex: r.slice(1, -1).map(v => ({ v })), val: r[r.length - 1], bg: me ? t.selBg : 'transparent', sh: me ? `inset 0 0 0 1px ${t.selBd}` : 'none', fw: me ? 700 : 500, sep: i ? t.border : 'transparent' }; }) };
+    const tabs = ['Chaos', 'Sprint', 'Endless', 'Levels', 'Screen', 'Target'].map(n => Object.assign({ n }, sel(n === tab)));
+    const MED = [['Chaos', 4, 3, '730', '540'], ['Sprint 50', 3, 2, '11,560', '9,870'], ['Endless', 2, 1, '17,200', '12,450'], ['Levels', 0, 0, '14/30', '6/30'], ['Flick', 4, 3, '1,260', '980'], ['Tracking', 3, 3, '1,880', '1,410']];
+    const mcell = (m, b) => ({ m, b, pips: [1, 2, 3, 4].map(j => ({ c: j <= m ? TIER[j] : t.track })) });
+    const medRows = MED.map(r => ({ n: r[0], cells: [mcell(r[1], r[3]), mcell(r[2], r[4])] }));
+    const legend = [[1, '10'], [2, '9'], [3, '7'], [4, '2']].map(([m, c]) => ({ m, c }));
+    const ach = [['Sprinter', 'Sprint', 'Gold in Sprint 50, five times', '3/5', .6], ['Survivor', 'Endless', 'Survive 2:00 in Endless', '1:42', .85], ['Giant Slayer', 'Shield', 'Beat the Stage 10 boss', '0/1', 0], ['Campaigner', 'Levels', 'Collect all 30 stars', '14/30', .47]].map(([n, ic, d, v, f]) => ({ n, icon: ICON[ic], d, v, w: Math.round(f * 100) + '%', ic: f ? t.acText : t.muted }));
     const sh = sheets[sheet] ? { kicker: sheets[sheet][0], title: sheets[sheet][1] } : { kicker: '', title: '' };
     const s2 = sel(mode === '2d'), s3 = sel(mode === '3d');
     return {
       th, t, W, scene, mode, running, vw: W - 32, vh, showFooter: !running, custom: diff !== 'Normal',
-      chip: { icon: ICON[sc], name: sc, meta: noCam ? diff : (narrow || sc.length > 5) ? mode.toUpperCase() + (diff !== 'Normal' && !narrow ? ' · ' + diff : '') : `${mode.toUpperCase()} · ${diff}` },
+      chip: { icon: ICON[I.ic || sc], name: sc, meta: noCam ? diff : (narrow || sc.length > 5) ? mode.toUpperCase() + (diff !== 'Normal' && !narrow ? ' · ' + diff : '') : `${mode.toUpperCase()} · ${diff}` },
       best: BEST[sc + mode] || BEST[sc + '2d'] || '—', tiles,
       segWide: !narrow, segNarrow: narrow, segOp: noCam ? .38 : 1, seg2: noCam ? sel(false) : s2, seg3: noCam ? sel(false) : s3, modeU: mode.toUpperCase(),
-      hasSheet: !!sheets[sheet], sheetTop: sheet === 'crosshair' || sheet === 'settings' ? 10 : 24, sh,
+      hasSheet: !!sheets[sheet], sheetTop: sheet === 'crosshair' || sheet === 'settings' || sheet === 'records' ? 10 : 24, sh,
+      isModes: sheet === 'modes', isBoard: sheet === 'board', isRecords: sheet === 'records', rankedList, practList, reactList2, board, tabs, medRows, legend, ach,
       isScen: sheet === 'scenarios', isXh: sheet === 'crosshair', isSet: sheet === 'settings', isBests: sheet === 'bests',
       diffs: [['Easy', 'BIG · SLOW'], ['Normal', 'RANKED'], ['Hard', 'SMALL · DRIFT']].map(([n, s]) => Object.assign({ n, s }, sel(n === diff))),
       aimList: SCN.filter(x => x.g === 'aim').map(card), reactList: SCN.filter(x => x.g === 'r').map(card),

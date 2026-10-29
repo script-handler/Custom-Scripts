@@ -186,6 +186,10 @@ const send = (player, players, opts) => dispatch({ player, build_token: 'tok-now
     ok('…and takes a better one', r.player('c1').gameModeBests['reflex:screen'] === 181);
     r = await send(next({ 'reflex:target': 0 }, 1), [stored({ 'reflex:target': 250 })]);
     ok('a RefleX 0 (never scored) does not replace a real time', r.player('c1').gameModeBests['reflex:target'] === 250);
+    // AimLab's ranked boards (aim-dev): aim:* rank high first, Target 3D low first by its reflex: prefix.
+    r = await send(next({ 'aim:sprintFps': 9800, 'aim:levels': 41000, 'aim:levelsStage': 9, 'aim:endless': 12000, 'reflex:targetFps': 310 }, 1), [stored({ 'aim:sprintFps': 10400, 'aim:levelsStage': 7, 'reflex:targetFps': 290 })]);
+    const ga = r.player('c1').gameModeBests;
+    ok('AimLab keys are kept: aim:* keeps the higher, reflex:targetFps the lower', ga['aim:sprintFps'] === 10400 && ga['aim:levels'] === 41000 && ga['aim:levelsStage'] === 9 && ga['aim:endless'] === 12000 && ga['reflex:targetFps'] === 290, ga);
     r = await send(next(undefined, 1), [stored(before)]);
     ok('a client that sends no gameModeBests keeps the stored ones', JSON.stringify(r.player('c1').gameModeBests) === JSON.stringify(before));
     r = await send(next(undefined, 1), [stored(undefined)]);

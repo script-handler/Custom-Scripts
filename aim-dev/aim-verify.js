@@ -85,7 +85,81 @@ sec('scoring');
     for (let i = 0; i < 300; i++) { const q = tr.tg[0]; L.aimTick(tr, 16, { x: q.x, y: q.y }, rnd); }
     ok(tr.onMs > 4000 && tr.score > 0 && L.aimLiveAcc(tr) >= 99, 'Tracking scores time on target');
 }
-ok(L.aimRanked('chaos', '2d', 'normal') && !L.aimRanked('chaos', '3d', 'normal') && !L.aimRanked('chaos', '2d', 'hard') && L.aimRanked('screen', '3d', 'normal') && L.aimRanked('target', '2d', 'normal') && !L.aimRanked('target', '3d', 'normal') && !L.aimRanked('flick', '2d', 'normal'), 'ranked: Chaos 2D, Screen, Target 2D at Normal');
+ok(L.aimLegacy('chaos', '2d', 'normal') && !L.aimLegacy('chaos', '3d', 'normal') && !L.aimLegacy('chaos', '2d', 'hard') && L.aimLegacy('screen', '3d', 'normal') && L.aimLegacy('target', '2d', 'normal') && !L.aimLegacy('target', '3d', 'normal') && !L.aimLegacy('flick', '2d', 'normal'), 'legacy records: Chaos 2D, Screen, Target 2D at Normal, as before');
+ok(['chaos', 'sprint', 'endless'].every(id => L.aimRanked(id, '2d', 'normal') && L.aimRanked(id, '3d', 'normal') && !L.aimRanked(id, '2d', 'hard')) && L.aimRanked('levels', '3d', 'easy') && L.aimRanked('target', '3d', 'normal') && !L.aimRanked('flick', '2d', 'normal'), 'ranked: every ranked mode in 2D and 3D at Normal; Levels always; practice never');
+
+// ── 2b. The ranked modes: Sprint, Endless, the bonus target, Levels ──
+sec('modes');
+{
+    const sp2 = () => L.aimSpace2d(368, 492, [{ x: 252, y: 0, w: 116, h: 64 }], 1);
+    // A bot: every gap ms it shoots the bonus, a vulnerable boss, a minion or a target; p = hit rate.
+    const play = (run, gap, p, rnd, cap) => {
+        L.aimStart(run, null, rnd);
+        let t = 0, next = gap;
+        while (!run.over && t < (cap || 6e5)) {
+            const q = run.tg[0], track = run.base === 'tracking';
+            L.aimTick(run, 16, track && q && rnd() < p ? { x: q.x, y: q.y } : null, rnd); t += 16;
+            if (t < next || track) continue;
+            next += gap;
+            const k = run.tg.find(x => x.kind === 'bonus') || run.tg.find(x => x.kind === 'boss' && !x.armor) || run.tg.find(x => x.kind === 'minion') || run.tg.find(x => !x.kind);
+            L.aimShoot(run, k && rnd() < p ? { x: k.x, y: k.y } : run.sp.ang ? { x: 33, y: 17.5 } : { x: 2, y: 2 }, rnd);
+            for (let i = 0; i < run.tg.length; i++) for (let j = i + 1; j < run.tg.length; j++) { const a = run.tg[i], b = run.tg[j]; ok(L.aimDist(run.sp, a, b) >= a.r + b.r - 0.5, `${run.id} ${a.kind || 'target'}/${b.kind || 'target'} overlap`); }
+        }
+        return t;
+    };
+    for (const mode of ['2d', '3d']) {
+        const sp = () => mode === '3d' ? L.aimSpace3d() : sp2();
+        const s = L.aimNewRun('sprint', mode, 'normal', sp()); play(s, 600, 0.9, seeded(5));
+        const sm = L.aimSummary(s), bk = L.aimBreakdown(s, sm);
+        ok(s.over && s.hits === 50, `${mode} Sprint ends on the 50th hit`);
+        ok(s.pen === (s.shots - s.hits) * 500, `${mode} Sprint: each miss adds 0.5 s`);
+        ok(bk.total === bk.lines.reduce((a, l) => a + l[1], 0) && bk.lines[0][1] === 5000 && bk.lines.every(l => l[1] >= 0), `${mode} Sprint breakdown sums to its total`);
+        for (const [gap, p] of [[700, 0.85], [160, 1]]) {
+            const e = L.aimNewRun('endless', mode, 'normal', sp()), t = play(e, gap, p, seeded(9), 15 * 60e3);
+            ok(e.over && t < 10 * 60e3, `${mode} Endless always ends (${gap} ms a shot, ${p * 100}%): ${(t / 1000).toFixed(0)} s`);
+            const b = L.aimBreakdown(e, L.aimSummary(e));
+            ok(b.total === b.lines.reduce((a, l) => a + l[1], 0) && b.lines[2][1] === 250 * e.bonusKills, `${mode} Endless breakdown sums; bonus kills pay 250`);
+        }
+        let r = 1;
+        L.AIM_STAGES.forEach((G, i) => {
+            const run = L.aimNewRun('levels', mode, 'normal', sp(), i, r); play(run, 450, 0.95, seeded(i + 3));
+            const sm2 = L.aimSummary(run), b2 = L.aimBreakdown(run, sm2), st = L.aimStars(run, sm2);
+            ok(run.clear && st >= 1, `${mode} stage ${i + 1} (${G.name}) can be cleared`);
+            ok(b2.total === b2.lines.reduce((a, l) => a + l[1], 0), `${mode} stage ${i + 1} breakdown sums`);
+            r = L.aimSkillNext(r, st);
+            ok(r >= 0.8 && r <= 1.25, 'skill stays within 0.8–1.25');
+        });
+    }
+    ok(L.AIM_STAGES.length === 10 && L.AIM_STAGES[9].goal === 'boss' && L.AIM_STAGES.every(G => G.s3 > G.s2 && G.len > 0 && G.n > 0), 'ten stages, the boss last, every star bar set');
+    let r = 1; for (let i = 0; i < 20; i++) r = L.aimSkillNext(r, 3); ok(r === 1.25, 'skill caps at 1.25');
+    for (let i = 0; i < 20; i++) r = L.aimSkillNext(r, 0); ok(r === 0.8, 'skill floors at 0.8');
+    // The bonus: a lapsed window refills it; untouched, it escapes at 6 s.
+    const e = L.aimNewRun('endless', '2d', 'normal', sp2()), rnd = seeded(11);
+    L.aimStart(e, null, rnd);
+    const bonus = L.aimAddTarget(e, null, rnd, 'bonus');
+    ok(bonus && bonus.hp === 3 && Math.abs(bonus.r - e.tg[0].r * 1.6) < 1e-9, 'bonus: 3 hits, 1.6× a target');
+    L.aimShoot(e, { x: bonus.x, y: bonus.y }, rnd); ok(bonus.hp === 2 && bonus.win > e.el, 'a bonus hit opens the 1.5 s window');
+    for (let i = 0; i < 100; i++) L.aimTick(e, 16, null, rnd);
+    ok(bonus.hp === 3, 'the window lapses: health refills');
+    for (let i = 0; i < 3; i++) L.aimShoot(e, { x: bonus.x, y: bonus.y }, rnd);
+    ok(e.bonusKills === 1 && e.frenzy > e.el && !e.tg.includes(bonus), 'three quick hits kill it: Frenzy starts');
+    const b2 = L.aimAddTarget(e, null, rnd, 'bonus');
+    for (let i = 0; i < 400 && e.tg.includes(b2); i++) L.aimTick(e, 16, null, rnd);
+    ok(!e.tg.includes(b2) && e.el - b2.born >= 6000 && e.el - b2.born < 6100, 'an untouched bonus escapes at 6 s');
+    // The boss: armoured until a minion dies, then 3 s open.
+    const bs = L.aimNewRun('levels', '2d', 'normal', sp2(), 9, 1); L.aimStart(bs, null, rnd);
+    const boss = bs.tg.find(t => t.kind === 'boss'), min = bs.tg.find(t => t.kind === 'minion');
+    ok(boss && bs.tg.filter(t => t.kind === 'minion').length === 2 && boss.hp === 12, 'boss stage: the boss (12) and two minions');
+    L.aimShoot(bs, { x: boss.x, y: boss.y }, rnd); ok(boss.hp === 12 && bs.shots === 0, 'armoured: a shot deflects and is not counted');
+    L.aimShoot(bs, { x: min.x, y: min.y }, rnd); L.aimShoot(bs, { x: boss.x, y: boss.y }, rnd);
+    ok(boss.hp === 11 && !boss.armor, 'a minion down opens the boss');
+    for (let i = 0; i < 200; i++) L.aimTick(bs, 16, null, rnd);
+    ok(boss.armor, 'the boss closes again after 3 s');
+    ok(['chaos', 'sprint', 'endless', 'levels', 'flick', 'tracking'].every(id => L.AIM_MEDALS[id].every(t => t.every((v, i) => !i || v > t[i - 1]))), 'medal floors rise Bronze → Platinum');
+    ok(L.aimMedal('sprint', '2d', 11000) === 3 && L.aimMedal('sprint', '2d', 10999) === 2 && L.aimMedal('levels', '2d', 26) === 3 && L.aimMedal('chaos', '3d', 0) === 0, 'medal tiers read the floors');
+    const st = { camp: {} }, c = L.aimCamp(st, '2d');
+    ok(c.stars.length === 10 && c.lives === 3 && c.skill === 1 && L.aimCamp(st, '2d') === st.camp['2d'], 'a campaign starts at stage 1 with 3 lives');
+}
 
 // ── 3. 3D hits: the aim ray against the target's angular radius ──
 sec('3D');
@@ -174,8 +248,10 @@ ok(!src.includes("switchGame('reflex')"), 'no RefleX switcher button');
 ok(/case 'aim':\s*aimDetach\(\)/.test(src), 'cleanupCurrentGame detaches AimLab');
 ok(src.includes("if (game === 'reflex') return aimReactLbMode()"), "the reflex board follows AimLab's Reaction scenario");
 ok(!src.includes("gameScoreBtn('reflex'") && src.includes("gameScoreBtn('aim', 'aim-high-score', 'aim-current-score')"), 'one board button in the header (no second RefleX one)');
-ok(/aim:\s*\{[^\n]*\n\s*modes: \{ chaos: 'Chaos', screen: 'Screen', target: 'Target' \}/.test(src) && src.includes("if (game === 'aim')    return aimLbMode();"), "AimLab's board has Chaos, Screen and Target tabs, opened on the scenario played");
-ok(src.includes("if (game === 'aim') { if (mode === 'screen' || mode === 'target') return lbBoardValue(player, 'reflex', mode);"), "the reaction tabs read RefleX's records");
+ok(src.includes("modes: { chaos: 'Chaos', sprint: 'Sprint', endless: 'Endless', levels: 'Levels', screen: 'Screen', target: 'Target' }") && src.includes("if (game === 'aim')    return aimLbMode();") && src.includes('dims: true'), "AimLab's board: six tabs and a 2D | 3D toggle, opened on the mode played");
+ok(src.includes("if (mode === 'screen' || mode === 'target') return lbBoardValue(player, 'reflex', mode);") && src.includes("(mode === 'targetFps' ? 'reflex:' : 'aim:') + mode"), "the reaction tabs read RefleX's records; the rest read aim:<mode>[Fps]");
+ok(src.includes("put(k, aimB[m + '|' + d + '|normal'])") && src.includes("put('reflex:targetFps', aimB['target|3d|normal'])"), 'collectGameModeBests sends the ranked bests');
+ok(['aimSprinter', 'aimSurvivor', 'aimGiantSlayer', 'aimCampaigner'].every(k => new RegExp(k + ':\\s*\\{ name').test(src) && new RegExp(k + ': \\d+').test(src)), 'the four AimLab achievements, each with XP');
 ok(/if \(typeof aimOnThemeChange === 'function'\) aimOnThemeChange\(\)/.test(src), 'a theme change reaches AimLab');
 
 console.log(`\n${fail ? '✗' : '✓'} ${pass} passed, ${fail} failed`);

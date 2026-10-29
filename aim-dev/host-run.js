@@ -20,7 +20,7 @@ function page() {
     let script = fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8');
     const end = script.lastIndexOf('})();');
     const probe = `
-    window.__aim = { S: aimS, AIM_SCEN, aimDist, get xp() { return userXP; }, get currentGame() { return currentGame; }, get prefs() { return userPreferences; }, applyPreferences };
+    window.__aim = { S: aimS, AIM_SCEN, aimDist, aimAddTarget, aimCamp, aimOv, collectGameModeBests, setBoard(a) { leaderboardData = a; }, get xp() { return userXP; }, get currentGame() { return currentGame; }, get prefs() { return userPreferences; }, applyPreferences };
 `;
     script = script.slice(0, end) + probe + script.slice(end);
     return `<!doctype html><html><head><meta charset="utf-8"><title>Attendance</title></head>
@@ -34,10 +34,11 @@ window.$ = sel => ({ before: el => { const t = document.querySelector(sel); if (
 <script>${script.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
 }
 
-async function main() {
-    fs.mkdirSync(OUT, { recursive: true });
-    const port = 9700 + Math.floor(Math.random() * 200);
-    const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'aim-host-')),
+// Headless Chrome on the stand-in portal, the real userscript loaded: { send, ev, errors, proc, ws, bail }.
+// perf-check.js boots through this too; gpu: true keeps the GPU (real compositing and canvas).
+async function boot(opts) {
+    const port = 9700 + Math.floor(Math.random() * 200), gpu = opts && opts.gpu;
+    const proc = spawn(CHROME, ['--headless=new', gpu ? '--enable-gpu-rasterization' : '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'aim-host-')),
         '--no-first-run', '--no-default-browser-check', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
     const bail = setTimeout(() => { console.log('✗ TIMEOUT'); try { proc.kill(); } catch (_) {} process.exit(2); }, 300000);
     let target;
@@ -67,8 +68,13 @@ async function main() {
     await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
     await send('Page.navigate', { url: PORTAL });
-
     const ev = async x => { const r = await send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true }); if (r.result && r.result.exceptionDetails) throw new Error(x.slice(0, 90) + ': ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text)); return r.result?.result?.value; };
+    return { send, ev, errors, proc, ws, bail };
+}
+
+async function main() {
+    fs.mkdirSync(OUT, { recursive: true });
+    const { send, ev, errors, proc, ws, bail } = await boot();
     let pass = 0, fail = 0;
     const ok = (n, c, d) => { if (c) { pass++; console.log('  ✓ ' + n); } else { fail++; console.log('  ✗ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d) : '')); } };
     const head = t => console.log('\n── ' + t);
@@ -119,7 +125,12 @@ async function main() {
     ok('clicks on targets hit', st.hits >= 20, st);
     ok('Chaos score is hits × 10', st.score === st.hits * 10, st);
     ok('no two targets ever overlapped', maxOverlap === 0);
-    const tile = await ev("Array.from(document.querySelectorAll('.aim-tile')).map(t => t.textContent)");
+    // Live numbers are CSS counters (aimSet): rebuild what each tile shows from them.
+    const tile = await ev(`Array.from(document.querySelectorAll('.aim-tile')).map(t => Array.from(t.querySelectorAll('.l, .v > *')).map(e => {
+        if (!e.classList.contains('aim-cnt')) return e.textContent;
+        const p = k => e.style.getPropertyValue(k).trim();
+        return p('--a') + (e.classList.contains('is-k') ? ',' + p('--b').padStart(3, '0') : '') + (e.classList.contains('is-d') ? '.' + p('--c') : '');
+    }).join(''))`);
     ok('the tiles show the run', tile[1].includes(String(st.score)) && /ACCURACY\d+%/.test(tile[2]), tile);
     { const t = await ev("(() => { const t = window.__aim.S.run.tg[1]; return [t.x, t.y]; })()"); const p = await vpPt(t[0] + 60, t[1]); await mouse('mouseMoved', p[0], p[1]); }
     await sleep(120); await shot('A3-play-2d', '.snake-game-container');
@@ -140,7 +151,7 @@ async function main() {
     ok('Quit returns to idle', await waitFor("window.__aim.S.phase === 'idle'", 1000));
 
     head('sheets');
-    for (const s of ['scenarios', 'crosshair', 'settings', 'bests']) {
+    for (const s of ['scenarios', 'crosshair', 'settings', 'records']) {
         await click('.aim-chip');
         if (s !== 'scenarios') await ev("(() => { const b = document.createElement('button'); b.setAttribute('data-act', 'sheet:" + s + "'); document.querySelector('.aim-hud').appendChild(b); b.click(); b.remove(); })()");
         await sleep(250);
@@ -161,8 +172,8 @@ async function main() {
     ok('Screen is selected, the camera toggle disabled', await ev("window.__aim.S.st.scen === 'screen' && document.querySelector('.aim-seg').classList.contains('is-off')"));
     ok('one board button in the header', await ev("!document.getElementById('reflex-lb-btn') && getComputedStyle(document.getElementById('aim-lb-btn')).display !== 'none'"));
     await click('#aim-lb-btn'); await sleep(300);
-    const tabs = await ev("Array.from(document.querySelectorAll('#game-lb-overlay .game-lb-tab')).map(t => [t.textContent.replace(/[^A-Za-z]/g, ''), t.classList.contains('is-active')])");
-    ok('the board has Chaos, Screen and Target tabs, open on Screen', tabs.length === 3 && tabs.map(t => t[0]).join() === 'Chaos,Screen,Target' && tabs[1][1], tabs);
+    const tabs = await ev("Array.from(document.querySelectorAll('#game-lb-overlay .game-lb-tabs .game-lb-tab')).map(t => [t.textContent.replace(/[^A-Za-z]/g, ''), t.classList.contains('is-active')])");
+    ok('the board has the six ranked tabs, open on Screen', tabs.map(t => t[0]).join() === 'Chaos,Sprint,Endless,Levels,Screen,Target' && tabs[4][1], tabs);
     await shot('LB-aim-screen', '.snake-game-container');
     await ev("window.closeGameLeaderboard && window.closeGameLeaderboard()");
     await shot('R1-idle', '.snake-game-container');
@@ -224,6 +235,120 @@ async function main() {
     await sleep(400);
     ok('Max closes and the HUD returns to the panel', await ev("!document.querySelector('.aim-max-frame') && !!document.querySelector('#aim-root .aim-hud:not(.is-max)')"));
 
+    head('ranked modes (M1–M15)');
+    const act = a => ev("(() => { const b = document.createElement('button'); b.setAttribute('data-act', " + JSON.stringify(a) + "); document.querySelector('.aim-hud').appendChild(b); b.click(); b.remove(); })()");
+    const scen = async (id, m) => { await act('quit'); await ev("(() => { const S = window.__aim.S; S.st.scen = '" + id + "'; S.st.mode = '" + (m || '2d') + "'; S.st.diff = 'normal'; S.hudKey = ''; S.ovKey = ''; })()"); await act('quit'); };
+    const shootTarget = async kind => { const t = await ev("(() => { const t = window.__aim.S.run.tg.find(q => " + (kind ? "q.kind === '" + kind + "'" : '!q.kind') + "); return t ? [t.x, t.y] : null; })()"); if (!t) return false; const p = await vpPt(t[0], t[1]); await clickAt(p[0], p[1]); await sleep(40); return true; };
+    await click('.aim-chip'); await sleep(250);
+    ok('the scenario sheet groups Ranked, Practice and Reaction', await ev("document.querySelectorAll('.aim-sheet .aim-scard').length === 4 && document.querySelectorAll('.aim-sheet .aim-pcard').length === 3 && document.querySelectorAll('.aim-sheet .aim-rcard').length === 2 && document.querySelectorAll('.aim-sheet .aim-scard .aim-medal').length === 4"));
+    await shot('M1-scenarios', '.snake-game-container');
+    await act('sheet:');
+
+    await scen('sprint');
+    await click('.aim-playbig');
+    ok('Sprint runs', await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.id === 'sprint' && window.__aim.S.run.tg.length === 3", 9000));
+    for (let i = 0; i < 8; i++) await shootTarget();
+    { const p = await vpPt(8, 400); await clickAt(p[0], p[1]); }
+    ok('a miss adds 0.5 s', await ev("window.__aim.S.run.pen === 500"));
+    ok('the TIME tile counts up in hundredths', await ev("(() => { const b = document.querySelector('.aim-tile b'); return b.classList.contains('is-d2') && b.classList.contains('aim-cnt'); })()"));
+    await sleep(80); await shot('M2-sprint', '.snake-game-container');
+    await ev("window.__aim.S.run.hits = 49");
+    await shootTarget();
+    ok('the 50th hit ends Sprint in a breakdown', await waitFor("window.__aim.S.phase === 'ares' && !!document.querySelector('.aim-brk')", 2000));
+    await sleep(700); await shot('M3a-sprint-counting', '.snake-game-container');
+    ok('the lines land one by one', await ev("document.querySelectorAll('.aim-lines > .is-in').length >= 1 && !document.querySelector('.aim-brk.is-done')"));
+    await waitFor("window.__aim.S.res.shown", 4000); await sleep(200);
+    await shot('M3-sprint-results', '.snake-game-container');
+    const spr = await ev("(() => { const r = window.__aim.S.res, b = document.querySelector('.aim-brk-total'); return { total: r.total, sum: r.lines.reduce((a, l) => a + l[1], 0), shown: b.style.getPropertyValue('--a') + (b.classList.contains('is-k') ? ',' + b.style.getPropertyValue('--b').padStart(3, '0') : ''), best: JSON.parse(localStorage.getItem('aimLab')).bests['sprint|2d|normal'] }; })()");
+    ok('the total is the sum of its lines, shown and saved', spr.total === spr.sum && spr.shown.replace(/^0,/, '') === spr.total.toLocaleString('en-US') && spr.best === spr.total, spr);
+
+    await scen('endless');
+    await click('.aim-playbig');
+    ok('Endless runs', await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.id === 'endless'", 9000));
+    for (let i = 0; i < 6; i++) await shootTarget();
+    ok('hits add time', await ev("window.__aim.S.run.left > 15000 - window.__aim.S.run.el"));
+    await shot('M4-endless', '.snake-game-container');
+    await ev("(() => { const S = window.__aim.S, r = S.run, b = window.__aim.aimAddTarget(r, null, Math.random, 'bonus'); return !!b; })()");
+    await shootTarget('bonus');
+    ok('the bonus takes a hit and opens its window', await ev("(() => { const b = window.__aim.S.run.tg.find(q => q.kind === 'bonus'); return !!b && b.hp === 2 && b.win > 0; })()"));
+    { const t = await ev("(() => { const b = window.__aim.S.run.tg.find(q => q.kind === 'bonus'); return [b.x + 30, b.y + 20]; })()"); const p = await vpPt(t[0], t[1]); await mouse('mouseMoved', p[0], p[1]); }
+    await sleep(60); await shot('M5-bonus', '.snake-game-container');
+    await shootTarget('bonus'); await shootTarget('bonus');
+    ok('three hits kill it: Frenzy ×2', await ev("window.__aim.S.run.bonusKills === 1 && window.__aim.S.run.el < window.__aim.S.run.frenzy"));
+    await ev("window.__aim.S.run.left = 4200");
+    await sleep(150);
+    ok('Frenzy: the edge glows, the score tile shows ×2, the clock runs hot', await ev("document.querySelector('.aim-vp').classList.contains('is-frenzy') && document.querySelectorAll('.aim-tile')[1].classList.contains('has-badge') && document.querySelector('.aim-tile').classList.contains('is-alarm')"));
+    await shot('M4b-endless-frenzy', '.snake-game-container');
+    await ev("window.__aim.S.run.left = 1");
+    ok('the clock running out ends Endless', await waitFor("window.__aim.S.phase === 'ares' && window.__aim.S.res.id === 'endless'", 2000));
+    await waitFor("window.__aim.S.res.shown", 4000); await sleep(200);
+    await shot('M6-endless-over', '.snake-game-container');
+
+    await scen('levels');
+    await sleep(200);
+    ok('Levels opens on the campaign map', await ev("document.querySelectorAll('.aim-node').length === 10 && !!document.querySelector('.aim-node.is-cur')"));
+    await ev("(() => { const S = window.__aim.S, c = window.__aim.aimCamp(S.st, '2d'); Object.assign(c, { stage: 5, score: 24310, skill: 1.08, stars: [3, 3, 2, 3, 3, 0, 0, 0, 0, 0] }); S.ovKey = ''; S.hudKey = ''; window.__aim.aimOv(); })()");
+    await sleep(150); await shot('M7-levels-map', '.snake-game-container');
+    await click('.aim-node[data-act="stage:3"]');
+    ok('a cleared stage opens its card as a replay', await ev("window.__aim.S.phase === 'intro' && window.__aim.S.stageSel === 3 && /REPLAY/.test(document.querySelector('.aim-intro').textContent)"));
+    await shot('M8-stage-intro', '.snake-game-container');
+    await click('.aim-intro [data-act="play"]');
+    ok('Start plays the stage', await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.G.name === 'Tracking'", 9000));
+    { const t = await ev("(() => { const t = window.__aim.S.run.tg[0]; return [t.x, t.y]; })()"); const p = await vpPt(t[0], t[1]); await mouse('mouseMoved', p[0], p[1]); }
+    await sleep(400); await shot('M9-stage-track', '.snake-game-container');
+    ok('the GOAL tile shows % on target with the 70% mark', await ev("(() => { const t = document.querySelectorAll('.aim-tile')[1]; return t.classList.contains('has-mark') && /GOAL/.test(t.textContent); })()"));
+    await ev("(() => { const r = window.__aim.S.run; r.onMs = r.len * 0.9; r.el = r.len - 1; })()");
+    ok('a tracking stage on goal clears with stars', await waitFor("window.__aim.S.phase === 'ares' && window.__aim.S.res.kind === 'stage'", 2000));
+    await waitFor("window.__aim.S.res.shown", 4000); await sleep(200);
+    await shot('M10-stage-clear', '.snake-game-container');
+    ok('a replay keeps the campaign where it was', await ev("window.__aim.aimCamp(window.__aim.S.st, '2d').stage === 5 && window.__aim.aimCamp(window.__aim.S.st, '2d').lives === 3"));
+    await act('again');
+    ok('Next stage opens the current stage', await ev("window.__aim.S.phase === 'intro' && window.__aim.S.stageSel === 5"));
+    await click('.aim-intro [data-act="play"]');
+    await waitFor("window.__aim.S.phase === 'run'", 9000);
+    for (let i = 0; i < 4; i++) await shootTarget();
+    await shot('M9b-stage-hits', '.snake-game-container');
+    await ev("(() => { const r = window.__aim.S.run; r.el = r.len - 1; })()");
+    ok('time out fails the stage and costs a life', await waitFor("window.__aim.S.phase === 'ares' && window.__aim.S.res.kind === 'fail'", 2000) && await ev("window.__aim.aimCamp(window.__aim.S.st, '2d').lives === 2"));
+    await sleep(150); await shot('M11-stage-fail', '.snake-game-container');
+    await ev("(() => { const S = window.__aim.S, c = window.__aim.aimCamp(S.st, '2d'); Object.assign(c, { stage: 9, stars: [3, 3, 3, 2, 3, 3, 2, 3, 2, 0], score: 46000 }); })()");
+    await act('stage:9'); await click('.aim-intro [data-act="play"]');
+    ok('the boss stage: a boss and two minions', await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.tg.filter(t => t.kind === 'minion').length === 2 && window.__aim.S.run.tg.some(t => t.kind === 'boss')", 9000));
+    await shootTarget('boss');
+    ok('the armoured boss deflects', await ev("window.__aim.S.run.tg.find(t => t.kind === 'boss').hp === 12 && window.__aim.S.run.shots === 0"));
+    await sleep(60); await shot('M12-boss-armour', '.snake-game-container');
+    await shootTarget('minion'); await shootTarget('boss');
+    ok('a minion down opens the boss', await ev("(() => { const b = window.__aim.S.run.tg.find(t => t.kind === 'boss'); return b.hp === 11 && !b.armor; })()"));
+    await sleep(60); await shot('M12b-boss-vulnerable', '.snake-game-container');
+    await ev("(() => { const b = window.__aim.S.run.tg.find(t => t.kind === 'boss'); b.hp = 1; })()");
+    await shootTarget('boss');
+    ok('beating the boss completes the campaign', await waitFor("window.__aim.S.phase === 'ares' && window.__aim.S.res.kind === 'camp'", 2000));
+    await sleep(200); await shot('M13-campaign-complete', '.snake-game-container');
+    const lv = await ev("(() => { const b = JSON.parse(localStorage.getItem('aimLab')).bests; return { score: b['levels|2d|normal'], stage: b['levels|2d|normal|stage'] }; })()");
+    ok('the campaign best keeps its stage (10) with its score', lv.stage === 10 && lv.score > 46000, lv);
+    await click('.aim-bestb'); await sleep(300);
+    ok('Records: medals per mode × camera and four achievements', await ev("document.querySelectorAll('.aim-sheet.is-records .aim-mrow:not(.is-head)').length === 6 && document.querySelectorAll('.aim-sheet .aim-ach').length === 4"));
+    await shot('M15-records', '.snake-game-container');
+    await act('sheet:');
+    await ev("window.__aim.setBoard([['Priya N.', 10, 52340], ['Marcus L.', 10, 49880], ['Aiko T.', 9, 41205], ['Dev R.', 8, 36950], ['Sofia M.', 8, 34410]].map(([n, st, v], i) => ({ clientId: 'p' + i, displayName: n, gameBests: { aim: 700 - i * 40 }, gameModeBests: { 'aim:levels': v, 'aim:levelsStage': st, 'aim:sprintFps': 9000 + i * 300, 'reflex:screen': 180 + i * 7 } })))");
+    await click('#aim-lb-btn'); await sleep(300);
+    const lb = await ev("({ tabs: Array.from(document.querySelectorAll('#game-lb-overlay .game-lb-tabs .game-lb-tab')).map(t => t.textContent.replace(/[^A-Za-z]/g, '')), on: (document.querySelector('#game-lb-overlay .game-lb-tabs .is-active') || {}).textContent, dims: document.querySelectorAll('#game-lb-overlay .game-lb-dims .game-lb-tab').length })");
+    ok('the board: six tabs, 2D | 3D, open on Levels', lb.tabs.join() === 'Chaos,Sprint,Endless,Levels,Screen,Target' && /Levels/.test(lb.on) && lb.dims === 2, lb);
+    await shot('M14-board-levels', '.snake-game-container');
+    await ev("window.setGameLeaderboardMode('screen')");
+    ok('Screen disables 2D | 3D', await ev("Array.from(document.querySelectorAll('#game-lb-overlay .game-lb-dims .game-lb-tab')).every(b => b.disabled)"));
+    await shot('M14b-board-screen', '.snake-game-container');
+    await ev("window.setGameLeaderboardMode('sprint'); window.setGameLeaderboardDim('3d')");
+    ok('3D shows the Fps board', await ev("document.querySelector('#game-lb-overlay .game-lb-foot').textContent.startsWith('3D')"));
+    await ev("window.closeGameLeaderboard()");
+    await act('max'); await sleep(500);
+    await shot('M13-max-campaign', '.aim-max-frame');
+    await scen('endless');
+    await act('play'); await waitFor("window.__aim.S.phase === 'run'", 9000);
+    for (let i = 0; i < 3; i++) { const t = await ev("(() => { const t = window.__aim.S.run.tg.find(q => !q.kind); return t ? [t.x, t.y] : null; })()"); const p = await vpPt(t[0], t[1]); await clickAt(p[0], p[1]); await sleep(40); }
+    await sleep(80); await shot('M4-max-endless', '.aim-max-frame');
+    await act('quit'); await ev("document.querySelector('.aim-maxb').click()"); await sleep(400);
+
     head('themes');
     await ev("(() => { const b = document.createElement('button'); b.setAttribute('data-act', 'quit'); document.querySelector('.aim-hud').appendChild(b); b.click(); b.remove(); window.__aim.S.st.mode = '2d'; })()");
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
@@ -232,6 +357,9 @@ async function main() {
     await click('.aim-playbig'); await waitFor("window.__aim.S.phase === 'run'", 9000);
     { const t = await ev("(() => { const t = window.__aim.S.run.tg[0]; return [t.x + 50, t.y]; })()"); const p = await vpPt(t[0], t[1]); await mouse('mouseMoved', p[0], p[1]); }
     await sleep(600); await shot('L1-light-play-2d', '.snake-game-container');
+    await scen('levels'); await sleep(300); await shot('L7-light-map', '.snake-game-container');
+    await click('.aim-bestb'); await sleep(300); await shot('L15-light-records', '.snake-game-container'); await act('sheet:');
+    await scen('chaos'); await click('.aim-playbig'); await waitFor("window.__aim.S.phase === 'run'", 9000);
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
     await ev("(() => { const p = window.__aim.prefs; p.displayTheme = 'retro-futuristic'; window.__aim.applyPreferences(); })()");
     await sleep(1600);
@@ -241,13 +369,17 @@ async function main() {
     await ev("(() => { const r = window.__aim.S.run; if (r) r.el = r.len - 100; })()");
     await waitFor("window.__aim.S.phase === 'ares'", 3000); await sleep(300);
     await shot('C4-cyber-results', '.snake-game-container');
-    const clipped = () => ev("Array.from(document.querySelectorAll('.aim-hud :is(.aim-stat span, .aim-tile .l, .aim-legend span, .aim-brow > *, .aim-kick)')).filter(e => e.getClientRects().length && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)");
+    const clipped = () => ev("Array.from(document.querySelectorAll('.aim-hud :is(.aim-stat span, .aim-tile .l, .aim-mrow > *, .aim-ach b, .aim-ach em, .aim-mtot b, .aim-kick, .aim-lines span, .aim-lines b, .aim-brk-medal b)')).filter(e => e.getClientRects().length && e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)");
     ok('Cyberpunk results: no label cut off', !(await clipped()).length, await clipped());
     await click('.aim-bestb'); await sleep(300);
-    await shot('C-cyber-bests', '.snake-game-container');
-    ok('Cyberpunk bests: no label cut off', !(await clipped()).length, await clipped());
-    ok('…and the legend is not clipped at the top', await ev("(() => { const l = document.querySelector('.aim-legend').getBoundingClientRect(), b = document.querySelector('.aim-sheet-b').getBoundingClientRect(); return l.top >= b.top - 0.5; })()"));
+    await shot('C-cyber-records', '.snake-game-container');
+    ok('Cyberpunk records: no label cut off', !(await clipped()).length, await clipped());
+    ok('…and the medal total is not clipped at the top', await ev("(() => { const l = document.querySelector('.aim-mtot').getBoundingClientRect(), b = document.querySelector('.aim-sheet-b').getBoundingClientRect(); return l.top >= b.top - 0.5; })()"));
     await click('.aim-sheet-h [data-act="sheet:"]');
+    await scen('levels'); await sleep(300); await shot('C7-cyber-map', '.snake-game-container');
+    await click('.aim-node.is-cur'); await sleep(250); await shot('C8-cyber-intro', '.snake-game-container');
+    ok('Cyberpunk stage card: no label cut off', !(await clipped()).length, await clipped());
+    await scen('chaos');
 
     head('switching away');
     await ev("window.switchGame('snake')");
@@ -264,4 +396,5 @@ async function main() {
     clearTimeout(bail); try { ws.close(); proc.kill(); } catch (_) {}
     process.exit(fail ? 1 : 0);
 }
-main().catch(e => { console.error(e); process.exit(2); });
+if (require.main === module) main().catch(e => { console.error(e); process.exit(2); });
+module.exports = { boot, sleep };

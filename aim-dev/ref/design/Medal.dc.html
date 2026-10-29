@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;width:{{ s }}px;height:{{ s }}px;flex:none">
+<sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:1px;border-radius:50%;border:1.5px dashed {{ emptyC }};box-sizing:border-box"></div>
+</sc-if>
+<sc-if value="{{ full }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;border-radius:{{ r }};clip-path:{{ clip }};background:{{ fill }};box-shadow:{{ sh }}"></div>
+<div style="position:absolute;inset:{{ ins }}px;border-radius:{{ r }};clip-path:{{ clip }};box-shadow:inset 0 0 0 1.5px {{ ink2 }}"></div>
+<svg viewBox="0 0 20 20" width="{{ is }}" height="{{ is }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)"><path d="M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5L10 14.2l-4.5 2.4.9-5-3.6-3.5 5-.7Z" style="fill:{{ starF }};stroke:{{ ink }};stroke-width:1.6;stroke-linejoin:round"></path></svg>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:48,&quot;height&quot;:48},&quot;tier&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;min&quot;:0,&quot;max&quot;:4,&quot;tsType&quot;:&quot;number&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:32,&quot;tsType&quot;:&quot;number&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const TIERS = [null,
+  { b: '#C8834F', hi: '#F1BE8E', lo: '#7A4520', ink: '#4A2409' },
+  { b: '#C3CAD6', hi: '#F4F7FB', lo: '#6E7787', ink: '#323946' },
+  { b: '#F2BE45', hi: '#FFE9A8', lo: '#9A6410', ink: '#5A3800' },
+  { b: '#BFD3FF', hi: '#FFFFFF', lo: '#6A6FD1', ink: '#262872' }];
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, s = +p.size || 32, tier = Math.max(0, Math.min(4, +p.tier || 0)), th = p.theme || 'dark', T = TIERS[tier];
+    const cy = th === 'cyber';
+    return {
+      s, empty: !T, full: !!T,
+      emptyC: th === 'light' ? 'rgba(15,23,42,.35)' : cy ? 'rgba(0,240,255,.45)' : 'rgba(255,255,255,.35)',
+      r: cy ? '0' : '50%', clip: cy ? 'polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%)' : 'none',
+      fill: T ? `radial-gradient(circle at 35% 28%, ${T.hi} 0%, ${T.b} 45%, ${T.lo} 100%)` : 'none',
+      sh: T ? (cy ? `0 0 ${s * .35}px ${T.b}88` : `0 ${s * .06}px ${s * .2}px rgba(0,0,0,.3), inset 0 -${s * .05}px ${s * .1}px rgba(0,0,0,.18)`) : 'none',
+      ins: Math.round(s * .14), ink: T ? T.ink : 'transparent', ink2: T ? T.ink + '55' : 'transparent', starF: T ? T.hi + 'aa' : 'none', is: Math.round(s * .5)
+    };
+  }
+}
+</script>
+</body>
+</html>

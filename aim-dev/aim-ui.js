@@ -11,8 +11,17 @@
         max: 'M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4', exit: 'M7.5 3.5v4h-4M12.5 3.5v4h4M7.5 16.5v-4h-4M12.5 16.5v-4h4',
         close: 'M5.5 5.5l9 9M14.5 5.5l-9 9', chev: 'M6 8l4 4 4-4', copy: 'M7 7h9v9H7zM13 4H4v9', warn: 'M10 4.5v7M10 15v.5',
         trophy: 'M6.5 3.5h7v4a3.5 3.5 0 0 1-7 0ZM6.5 5H4.2a2.4 2.4 0 0 0 2.6 3M13.5 5h2.3a2.4 2.4 0 0 1-2.6 3M10 11v3M7 16.5h6',
-        lock: 'M10 3c-3 0-4.5 2-4.5 4.5v5C5.5 15 7 17 10 17s4.5-2 4.5-4.5v-5C14.5 5 13 3 10 3ZM10 6v2.5'
+        lock: 'M10 3c-3 0-4.5 2-4.5 4.5v5C5.5 15 7 17 10 17s4.5-2 4.5-4.5v-5C14.5 5 13 3 10 3ZM10 6v2.5',
+        sprint: aimC(14, 10, 3.5) + 'M2.5 7h6M1.5 10h6M2.5 13h6', endless: 'M10 10c-2-2.6-3.4-3.6-5-3.6a3.6 3.6 0 0 0 0 7.2c1.6 0 3-1 5-3.6s3.4-3.6 5-3.6a3.6 3.6 0 0 1 0 7.2c-1.6 0-3-1-5-3.6Z',
+        levels: 'M4.5 17.5V3M4.5 3.5h10l-2.5 3.5 2.5 3.5h-10', shield: 'M10 2.8 16 5v4.6c0 3.7-2.6 6.4-6 7.6-3.4-1.2-6-3.9-6-7.6V5Z',
+        star: 'M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5L10 14.2l-4.5 2.4.9-5-3.6-3.5 5-.7Z', heart: 'M10 16.4s-6.3-3.8-6.3-8.2A3.5 3.5 0 0 1 10 6.1a3.5 3.5 0 0 1 6.3 2.1c0 4.4-6.3 8.2-6.3 8.2Z',
+        padlock: 'M6.5 9V7a3.5 3.5 0 0 1 7 0v2M5 9h10v7.5H5Z'
     };
+    // Stars, hearts and medals (design Medal): filled or empty, the colours from the theme.
+    const aimStar = (on, cls) => `<svg class="aim-star${on ? ' is-on' : ''}${cls ? ' ' + cls : ''}" viewBox="0 0 20 20" aria-hidden="true"><path d="${AIM_ICON.star}"/></svg>`;
+    const aimStars3 = (n, cls) => [0, 1, 2].map(j => aimStar(j < n, cls)).join('');
+    const aimHeart = on => `<svg class="aim-heart${on ? ' is-on' : ''}" viewBox="0 0 20 20" aria-hidden="true"><path d="${AIM_ICON.heart}"/></svg>`;
+    const aimMedalHtml = (tier, size) => `<span class="aim-medal t${tier}" style="--ms:${size}px" title="${tier ? AIM_TIER[tier] : 'No medal yet'}">${tier ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${AIM_ICON.star}"/></svg>` : ''}</span>`;
     const aimSvg = (d, cls) => `<svg class="aim-i${cls ? ' ' + cls : ''}" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="${d}"/></svg>`;
     const aimEsc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const aimFmt = n => Math.round(n).toLocaleString('en-US');
@@ -30,6 +39,11 @@
     const aimIs3d = () => aimMode() === '3d';
     const aimDiffName = d => AIM_DIFF[d].name;
     const aimLive = () => aimS.phase === 'count' || aimS.phase === 'run';
+    const aimIsCamp = () => aimS.st.scen === 'levels';
+    // The difficulty shown: Levels runs at its own (Campaign).
+    const aimDiffLabel = () => aimIsCamp() ? 'Campaign' : aimDiffName(aimS.st.diff);
+    const aimSecs = ms => (ms / 1000).toFixed(1);
+    const aimClock = ms => { const s = ms / 1000; return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
 
     // Through the host's shared bank (sfxTone): ⚙️ Game Sounds is the master, AimLab's Sound its own switch.
     function aimBeep(f, ms, type, vol) { if (aimS.st && aimS.st.set.sound && typeof sfxTone === 'function') sfxTone(f, ms, type, vol || 0.08); }
@@ -43,10 +57,11 @@
             track: g('track') || 'rgba(255,255,255,.16)', cyber: g('cyber') === '1', light: g('light') === '1', popSh: g('pop-shadow') || 'rgba(0,0,0,.6)',
             ceil: g('room-ceil') || '#0C0B12', side: g('room-side') || '#15131E', back: g('room-back') || '#1D1A2A', floor: g('room-floor') || '#100F18',
             grid: g('room-grid') || 'rgba(146,128,255,.26)', wgrid: g('room-wgrid') || 'rgba(255,255,255,.045)', edge: g('room-edge') || 'rgba(255,255,255,.1)',
-            light2: g('room-light') || 'rgba(160,140,255,.22)', vign: g('vign') || 'rgba(0,0,0,.5)', shadow: g('shadow') || 'rgba(0,0,0,.9)', font: g('font') || 'Inter, system-ui, sans-serif' };
+            light2: g('room-light') || 'rgba(160,140,255,.22)', vign: g('vign') || 'rgba(0,0,0,.5)', shadow: g('shadow') || 'rgba(0,0,0,.9)', font: g('font') || 'Inter, system-ui, sans-serif',
+            good: g('good') || '#3DDC97', gold: g('gold') || '#FFCB6B', goldC: g('gold-c') || '#FFC24B', violet: g('violet') || '#B06CFF' };
         S.tokAt = performance.now();
     }
-    function aimOnThemeChange() { aimReadTok(); aimSyncMaxTheme(); }
+    function aimOnThemeChange() { aimReadTok(); aimSyncMaxTheme(); aimS.drawKey = ''; }
     const aimHex = h => { const n = parseInt(String(h).replace('#', ''), 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
     const aimRgba = (h, a) => { const c = aimHex(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
     const aimMix = (a, b, t) => { const x = aimHex(a), y = aimHex(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
@@ -55,13 +70,14 @@
     function aimBuild(root) {
         const S = aimS, I = AIM_ICON, h = document.createElement('div');
         h.className = 'aim-hud';
-        const tile = '<div class="aim-tile"><span class="l"></span><span class="v"><b></b><u></u><em></em></span><span class="bar"><i></i></span><span class="pips"><i></i><i></i><i></i></span></div>';
+        const tile = '<div class="aim-tile"><span class="l"></span><span class="v"><b></b><u></u><em></em></span><span class="hearts">' + aimHeart(1) + aimHeart(1) + aimHeart(1) + '</span>' +
+            '<span class="badge"></span><span class="bar"><i></i></span><span class="mark"></span><span class="pips"><i></i><i></i><i></i></span></div>';
         h.innerHTML =
             `<div class="aim-top"><div class="aim-brand"><span class="aim-logo">${aimSvg(I.brand)}</span><b>AimLab</b></div>` +
             `<button type="button" class="aim-chip" data-act="sheet:scenarios" aria-label="Choose scenario"><span class="aim-chip-i"></span><span class="aim-chip-t"><b></b><i></i></span>${aimSvg(I.chev, 'is-chev')}</button>` +
-            `<button type="button" class="aim-bestb" data-act="sheet:bests" aria-label="Personal bests">${aimSvg(I.trophy, 'is-gold')}<b></b><i>best</i></button></div>` +
+            `<button type="button" class="aim-bestb" data-act="sheet:records" aria-label="Records">${aimSvg(I.trophy, 'is-gold')}<b></b><i>best</i></button></div>` +
             `<div class="aim-tiles">${tile + tile + tile + tile}</div>` +
-            `<div class="aim-vp"><canvas class="aim-cv"></canvas><div class="aim-vchip"><span></span><b></b></div>` +
+            `<div class="aim-vp"><canvas class="aim-cv"></canvas><div class="aim-vchip"><div><span></span><b></b><em></em></div><i class="bar"><i></i></i></div>` +
             `<div class="aim-vbtns"><button type="button" class="aim-vb" data-act="pause" aria-label="Pause">${aimSvg(I.pause)}</button><button type="button" class="aim-vb" data-act="max" aria-label="Max view">${aimSvg(I.max)}</button></div>` +
             `<div class="aim-esc"><kbd>Esc</kbd><span>Pause</span></div><div class="aim-custom"><i></i>Custom · not ranked</div><div class="aim-ov"></div></div>` +
             `<div class="aim-foot"><button type="button" class="aim-b is-primary aim-pp" data-act="playpause" aria-label="Play">${aimSvg(I.play)}<span>Play</span></button>` +
@@ -100,6 +116,11 @@
         document.addEventListener('visibilitychange', aimOnBlur);
         document.addEventListener('pointerlockchange', aimOnLockChange);
         document.addEventListener('pointerlockerror', aimOnLockError);
+        window.addEventListener('scroll', aimRectDirty, true);
+        window.addEventListener('resize', aimRectDirty);
+        // The tokens are read on a theme change (applyPreferences → aimOnThemeChange, or the OS scheme), not polled.
+        S.scheme = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+        if (S.scheme && S.scheme.addEventListener) S.scheme.addEventListener('change', aimOnThemeChange);
         if (window.ResizeObserver) { S.ro = new ResizeObserver(aimResize); S.ro.observe(vp); }
         aimReadTok(); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
         S.lastMs = 0; S.raf = requestAnimationFrame(aimLoop);
@@ -121,6 +142,10 @@
         document.removeEventListener('visibilitychange', aimOnBlur);
         document.removeEventListener('pointerlockchange', aimOnLockChange);
         document.removeEventListener('pointerlockerror', aimOnLockError);
+        window.removeEventListener('scroll', aimRectDirty, true);
+        window.removeEventListener('resize', aimRectDirty);
+        if (S.scheme && S.scheme.removeEventListener) S.scheme.removeEventListener('change', aimOnThemeChange);
+        S.scheme = null;
         if (S.ro) { S.ro.disconnect(); S.ro = null; }
         if (aimLive() || S.phase === 'paused') aimQuit();
         S.sheet = '';
@@ -140,7 +165,7 @@
         S.vp.classList.toggle('is-aim', S.phase === 'count' || (S.phase === 'run' && !aimScen().noCam));
         // Plain and Grid drop the arena's dots (Grid draws its lines on the canvas).
         S.vp.classList.toggle('is-flat', S.st.set.bg !== 'room');
-        S.hudKey = '';
+        S.hudKey = ''; S.drawKey = ''; aimRectDirty();
     }
     function aimSpace() {
         const S = aimS;
@@ -160,23 +185,38 @@
             S.cv.style.width = W + 'px'; S.cv.style.height = H + 'px';
         }
         S.hud.classList.toggle('is-narrow', !S.max && S.hud.clientWidth < 352);
+        aimRectDirty(); S.drawKey = '';
         if (S.run && !aimIs3d()) aimRescale(S.run, aimSpace());
         aimFitOv();
     }
+    // The viewport's page rect, cached; resize, scroll, layout and Max drop it.
+    function aimRect() { const S = aimS; if (!S.rect) S.rect = S.vp.getBoundingClientRect(); return S.rect; }
+    function aimRectDirty() { aimS.rect = null; }
     function aimLocal(e) {
-        const S = aimS, r = S.vp.getBoundingClientRect();
+        const S = aimS, r = aimRect();
         return { x: (e.clientX - r.left) * S.W / (r.width || 1), y: (e.clientY - r.top) * S.H / (r.height || 1) };
     }
     const aimAim = () => aimIs3d() ? { x: aimS.yaw, y: aimS.pitch } : aimS.ptr;
 
     // ── Flow ──────────────────────────────────────────────────────────
-    function aimPlay() {
+    // Levels: Play opens the stage card first (M8); its Start plays. stage: the one chosen on the map.
+    function aimIntro(stage) {
+        const S = aimS, c = aimCamp(S.st, aimMode());
+        if (c.stage >= AIM_STAGES.length) Object.assign(c, { stage: 0, lives: 3, score: 0 });
+        S.stageSel = stage === undefined ? c.stage : Math.min(stage, c.stage);
+        S.res = null; S.run = null; S.sheet = ''; S.phase = 'intro';
+        aimLayout(); aimOv(); aimSheet(); aimSyncScoreBtn();
+    }
+    function aimPlay(stage) {
         const S = aimS, sc = aimScen(), now = performance.now();
+        if (aimIsCamp() && S.phase !== 'intro' && stage === undefined) { aimIntro(); return; }
+        if (aimIsCamp() && stage !== undefined) S.stageSel = stage;
         S.res = null; S.sheet = ''; S.yaw = 0; S.pitch = 0; S.run = null; S.R = null;
+        aimReadTok();
         if (sc.group === 'aim') { S.phase = 'count'; S.count = AIM_COUNT_MS; S.lastBeep = 4; }
         else { S.phase = 'run'; S.R = aimReactNew(S.st.scen, S.st.diff); aimReactNext(S.R, now); }
         aimLayout(); aimResize();
-        if (sc.group === 'aim') S.run = aimNewRun(S.st.scen, aimMode(), S.st.diff, aimSpace());
+        if (sc.group === 'aim') S.run = aimNewRun(S.st.scen, aimMode(), S.st.diff, aimSpace(), S.stageSel || 0, aimIsCamp() ? aimCamp(S.st, aimMode()).skill : 1);
         if (aimIs3d()) aimLock(true);
         aimOv(); aimSheet(); aimSyncScoreBtn();
     }
@@ -207,7 +247,7 @@
             S.count -= dt;
             const n = Math.ceil(S.count / 1000);
             if (n !== S.lastBeep && n > 0) { S.lastBeep = n; aimBeep(660, 90, 'sine', 0.07); }
-            if (S.count <= 0) { S.phase = 'run'; aimBeep(990, 140, 'sine', 0.08); aimFill(S.run, aimAim()); aimLayout(); aimOv(); }
+            if (S.count <= 0) { S.phase = 'run'; aimBeep(990, 140, 'sine', 0.08); aimStart(S.run, aimAim()); aimLayout(); aimOv(); }
             else aimOvCount();
             return;
         }
@@ -231,28 +271,79 @@
         S.raf = requestAnimationFrame(aimLoop);
         const dt = S.lastMs ? Math.min(50, ts - S.lastMs) : 0;
         S.lastMs = ts;
-        if (ts - S.tokAt > 500) aimReadTok();
+        // The pointer, once a frame, against the rect read here while layout is clean.
+        if (S.ptrC) { const r = aimRect(); S.ptr = { x: (S.ptrC[0] - r.left) * S.W / (r.width || 1), y: (S.ptrC[1] - r.top) * S.H / (r.height || 1) }; }
         aimStep(dt, ts);
         aimDraw();
         if (S.R) aimReactPainted(S.R, ts);
         aimHudSync();
+        if (S.phase === 'ares' && S.res && S.res.lines && !S.res.shown) aimBrkStep(ts);
     }
 
     // ── Results ───────────────────────────────────────────────────────
     function aimXp(fn) { const x0 = typeof userXP === 'object' && userXP ? userXP.totalXP || 0 : 0; try { fn(); } catch (_) {} return Math.max(0, (typeof userXP === 'object' && userXP ? userXP.totalXP || 0 : 0) - x0); }
     function aimFinish() {
         const S = aimS, run = S.run, st = S.st, sm = aimSummary(run), id = run.id, mode = run.mode, diff = run.diff;
-        const key = aimBestKey(id, mode, diff), prev = aimBestOf(st, id, mode, diff), ranked = aimRanked(id, mode, diff), isBest = sm.score > prev && sm.score > 0;
-        if (isBest) st.bests[key] = sm.score;
-        if (ranked && sm.score > lsInt('aimChaosHighScore')) saveAimHighScore(sm.score);
-        st.last[key] = { score: sm.score, acc: sm.acc };
+        if (id === 'levels') { aimFinishStage(run, sm); return; }
+        // Sprint and Endless rank on the breakdown's total (design M3, M6); the others on their score.
+        const bk = id === 'sprint' || id === 'endless' ? aimBreakdown(run, sm) : null, score = bk ? bk.total : sm.score;
+        const key = aimBestKey(id, mode, diff), prev = aimBestOf(st, id, mode, diff), ranked = aimRanked(id, mode, diff), isBest = score > prev && score > 0;
+        if (isBest) st.bests[key] = score;
+        if (aimLegacy(id, mode, diff) && score > lsInt('aimChaosHighScore')) saveAimHighScore(score);
+        st.last[key] = { score, acc: sm.acc };
+        const medal = diff === 'normal' ? aimMedal(id, mode, score) : 0;
+        if (id === 'sprint' && medal >= 3) st.rec.golds++;
+        if (id === 'endless') st.rec.survive = Math.max(st.rec.survive, Math.round(run.el));
         aimSave(st);
         // The aim XP table is Chaos's: other scenarios pay on a Chaos-sized score, Sharpshooter stays Chaos Normal's.
-        const xpScore = Math.round((id === 'chaos' ? sm.score : id === 'tracking' ? sm.score / 3 : sm.hits * 10) * (diff === 'easy' ? 0.5 : 1));
-        const xp = aimXp(() => awardGameXP('aim', { score: xpScore, accuracy: id === 'chaos' && diff === 'normal' ? sm.acc : Math.min(sm.acc, 94), hits: sm.hits, isHighScore: ranked && isBest }));
-        S.res = Object.assign({ kind: 'aim', id, mode, diff, prev, isBest, ranked, xp }, sm);
+        const xpScore = Math.round((id === 'chaos' ? sm.score : id === 'tracking' ? sm.score / 3 : bk ? Math.min(600, score / 20) : sm.hits * 10) * (diff === 'easy' ? 0.5 : 1));
+        const xp = aimXp(() => awardGameXP('aim', { score: xpScore, accuracy: id === 'chaos' && diff === 'normal' ? sm.acc : Math.min(sm.acc, 94), hits: sm.hits, isHighScore: ranked && isBest,
+            sprintGolds: diff === 'normal' ? st.rec.golds : 0, survived: diff === 'normal' && id === 'endless' ? run.el / 1000 : 0 }));
+        S.res = Object.assign({ kind: 'aim', id, mode, diff, prev, isBest, ranked, xp }, sm, { score, time: run.el + (run.pen || 0), lvl: run.lvl || 0 });
+        if (bk) {
+            const nx = diff === 'normal' ? aimNextMedal(id, mode, score) : null, D = AIM_DIFF[diff].name.toUpperCase();
+            Object.assign(S.res, { lines: bk.lines, total: score, t0: performance.now(), kicker: AIM_SCEN[id].name.toUpperCase() + ' · ' + mode.toUpperCase() + ' · ' + D,
+                tag: ranked ? 'Ranked · posted' : diff !== 'normal' ? 'Custom · not ranked' : '', medal,
+                next: diff !== 'normal' ? 'Medals are for Normal runs' : nx ? aimFmt(nx.need) + ' to ' + AIM_TIER[nx.tier] : 'Top medal', nextP: nx ? (score - nx.from) / (nx.to - nx.from) : 1,
+                side: id === 'sprint' ? ['Time', ((run.el + run.pen) / 1000).toFixed(2) + ' s'] : ['Survived', aimClock(run.el)],
+                stats: id === 'endless' ? [['BEST LEVEL', run.lvl, ''], ['BONUS KILLS', run.bonusKills, ''], ['XP EARNED', '+' + xp, 'xp', 1]] : null });
+        }
         S.phase = 'ares'; S.run = null;
         aimBeep(isBest ? 1320 : 740, 260, 'triangle', 0.08);
+        aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
+    }
+    // A stage ends: stars, the skill rating, the campaign (a first clear adds its score; a fail costs a life
+    // unless it is a replay). The board keeps the campaign that cleared the most stages, then scored most.
+    function aimFinishStage(run, sm) {
+        const S = aimS, st = S.st, mode = run.mode, c = aimCamp(st, mode), i = run.stage, replay = i < c.stage;
+        const stars = aimStars(run, sm), bk = aimBreakdown(run, sm), had = c.stars[i], key = aimBestKey('levels', mode, 'normal'), pc = st.rec['camp' + mode] || 0;
+        c.skill = aimSkillNext(run.skill, stars);
+        let kind = run.clear ? 'stage' : 'fail';
+        if (run.clear) {
+            c.stars[i] = Math.max(had, stars);
+            if (!replay) {
+                c.score += bk.total; c.stage = i + 1;
+                const pb = st.bests[key] || 0, ps = st.bests[key + '|stage'] || 0;
+                if (c.stage > ps || (c.stage === ps && c.score > pb)) { st.bests[key] = c.score; st.bests[key + '|stage'] = c.stage; }
+                if (c.stage >= AIM_STAGES.length) kind = 'camp';
+            }
+            if (i === AIM_STAGES.length - 1) st.rec.boss = 1;
+        } else if (!replay) { c.lives--; if (c.lives <= 0) kind = 'over'; }
+        const total = c.score, stage = c.stage, starsAll = aimStarSum(c), lives = c.lives;
+        if (kind === 'camp') st.rec['camp' + mode] = Math.max(pc, total);
+        if (kind === 'camp' || kind === 'over') Object.assign(c, { stage: 0, lives: 3, score: 0 });
+        aimSave(st);
+        const xpScore = run.clear ? 200 + 60 * stars : Math.min(150, sm.hits * 5);
+        const xp = aimXp(() => awardGameXP('aim', { score: xpScore, accuracy: Math.min(sm.acc, 94), hits: sm.hits, isHighScore: kind === 'camp', bossBeaten: run.clear && i === AIM_STAGES.length - 1, stars: starsAll }));
+        const G = run.G, cb = AIM_SCEN[G.base];
+        S.res = Object.assign({ kind, id: 'levels', mode, diff: 'normal', ranked: true, xp, stage: i, G, replay, stars, had, total, reached: stage, starsAll, lives, clear: run.clear,
+            left: Math.max(0, run.len - run.el), goalN: run.goalN, hp: (run.tg.find(t => t.kind === 'boss') || { hp: 0 }).hp }, sm);
+        if (kind === 'stage') Object.assign(S.res, { lines: bk.lines, total: bk.total, t0: performance.now(), kicker: 'STAGE ' + (i + 1) + ' · ' + G.name.toUpperCase() + ' · CLEAR',
+            tag: stars > had ? '+' + (stars - had) + ' star' + (stars - had > 1 ? 's' : '') + ' · ' + starsAll + '/30' : replay ? 'Replay' : starsAll + '/30 stars',
+            side: [cb.name === 'Tracking' ? 'On target' : 'Accuracy', sm.acc + '%'], label: 'STAGE SCORE' });
+        if (kind === 'camp') Object.assign(S.res, { medal: aimMedal('levels', mode, starsAll), prev: pc });
+        S.phase = 'ares'; S.run = null;
+        aimBeep(run.clear ? 1320 : 220, 260, 'triangle', 0.08);
         aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
     }
     function aimReactFinish() {
@@ -281,15 +372,17 @@
         aimLock(false); aimLayout(); aimResize(); aimOv(); aimSyncScoreBtn();
     }
 
-    // One header button, the team board: its tabs are the ranked scenarios (Chaos, Screen, Target),
-    // and it shows and opens the one being played; the aim scenarios with no board show Chaos.
+    // One header button, the team board: its tabs are the ranked modes (Chaos, Sprint, Endless, Levels,
+    // Screen, Target) with a 2D | 3D toggle, and it opens on the one being played (practice shows Chaos).
     function aimReactLbMode() { return aimS.st && aimS.st.scen === 'target' ? 'target' : 'screen'; }
-    function aimLbMode() { return aimS.st && aimScen().group === 'react' ? aimReactLbMode() : 'chaos'; }
+    function aimLbMode() { const S = aimS; return !S.st ? 'chaos' : aimScen().group === 'react' ? aimReactLbMode() : AIM_RANKED.indexOf(S.st.scen) >= 0 ? S.st.scen : 'chaos'; }
+    function aimLbDim() { return aimS.st && aimLbMode() !== 'screen' && AIM_RANKED.concat('target').indexOf(aimS.st.scen) >= 0 ? aimMode() : '2d'; }
     function aimSyncScoreBtn() {
         const S = aimS; if (!S.st || typeof updateGameScoreBtn !== 'function') return;
-        const m = aimLbMode(), res = S.res && S.res.ranked ? S.res : null;
-        if (m === 'chaos') updateGameScoreBtn('aim', S.run && aimRanked(S.run.id, S.run.mode, S.run.diff) ? Math.round(S.run.score) : res && res.kind === 'aim' ? res.score : null, aimBestOf(S.st, 'chaos', '2d', 'normal'));
-        else updateGameScoreBtn('aim', res && res.id === m ? res.best : null, aimBestOf(S.st, m, '2d', 'normal') || null, ' ms');
+        const m = aimLbMode(), d = aimLbDim(), res = S.res && S.res.ranked && S.res.id === m && S.res.mode === d ? S.res : null, best = aimBestOf(S.st, m, d, 'normal');
+        if (m === 'screen' || m === 'target') updateGameScoreBtn('aim', res ? res.best : null, best || null, ' ms');
+        else if (m === 'chaos') updateGameScoreBtn('aim', S.run && S.run.id === 'chaos' && aimRanked('chaos', S.run.mode, S.run.diff) && S.run.mode === d ? Math.round(S.run.score) : res ? res.score : null, best);
+        else updateGameScoreBtn('aim', res && m !== 'levels' ? res.score : null, best);
     }
 
     // ── Pointer lock (3D): raw movement first, as pool does ──
@@ -344,9 +437,10 @@
             S.pitch = Math.max(-40, Math.min(40, S.pitch + (S.st.set.invY ? my : -my) * k));
             return;
         }
-        S.ptr = aimLocal(e);
+        // No layout read here: a 1000 Hz mouse would force one per event. aimLoop converts it.
+        S.ptrC = [e.clientX, e.clientY];
     }
-    function aimOnLeave() { aimS.ptr = null; }
+    function aimOnLeave() { aimS.ptr = null; aimS.ptrC = null; }
     function aimOnBlur() { if ((document.hidden || !document.hasFocus()) && aimLive()) aimPause(); }
     const aimTyping = e => { const t = e.target; return !!t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable); };
     function aimOnKey(e) {
@@ -357,10 +451,17 @@
             if (S.sheet) { take(); aimSheetOpen(''); }
             else if (aimLive()) { take(); aimPause(); }
             else if (S.phase === 'paused' && !aimIs3d()) { take(); aimResume(); }
-        } else if ((e.code === 'Space' || e.key === ' ') && !S.sheet && (S.phase === 'idle' || S.phase === 'ares' || S.phase === 'rres')) {
+            else if (S.phase === 'intro') { take(); aimQuit(); }
+        } else if ((e.code === 'Space' || e.key === ' ') && !S.sheet && (S.phase === 'idle' || S.phase === 'intro' || S.phase === 'ares' || S.phase === 'rres')) {
             if (!S.hud.offsetParent && !S.max) return;
-            take(); aimPlay();
+            take(); aimAgain();
         }
+    }
+    // Play again, or the result's own next step: Levels' next stage, a retry, a new campaign.
+    function aimAgain() {
+        const S = aimS, r = S.res;
+        if (S.phase === 'ares' && r && r.id === 'levels') { if (r.kind === 'fail' && r.stage !== undefined) aimPlay(r.stage); else aimIntro(r.kind === 'stage' ? undefined : 0); }
+        else aimPlay();
     }
     function aimOnClick(e) {
         const b = e.target.closest('[data-act]');
@@ -368,11 +469,18 @@
         const S = aimS, [act, arg] = b.getAttribute('data-act').split(':');
         const st = S.st, save = () => aimSave(st);
         switch (act) {
-            case 'play': case 'again': case 'restart': aimPlay(); break;
-            case 'playpause': if (aimLive()) aimPause(); else if (S.phase === 'paused') aimResume(); else aimPlay(); break;
+            case 'play': aimPlay(); break;
+            case 'again': aimAgain(); break;
+            // Restart replays what was running (a stage restarts itself, not the campaign).
+            case 'restart': aimPlay(aimIsCamp() && (S.run || S.phase === 'intro') ? S.stageSel : undefined); break;
+            case 'playpause': if (aimLive()) aimPause(); else if (S.phase === 'paused') aimResume(); else if (S.phase === 'ares' || S.phase === 'rres') aimAgain(); else aimPlay(); break;
             case 'pause': aimPause(); break;
             case 'resume': aimResume(); break;
             case 'quit': aimQuit(); break;
+            case 'stage': aimIntro(+arg); break;
+            case 'replay': aimIntro(S.res ? S.res.stage : +arg); break;
+            case 'map': aimQuit(); break;
+            case 'newcamp': { const c = aimCamp(st, aimMode()); Object.assign(c, { stage: 0, lives: 3, score: 0 }); save(); aimIntro(0); break; }
             case 'lock': aimLock(true); break;
             case 'max': aimToggleMax(); break;
             case 'sheet': aimSheetOpen(arg || ''); break;
@@ -397,7 +505,7 @@
             case 'board': aimSheetOpen(''); if (typeof toggleGameLeaderboard === 'function') toggleGameLeaderboard('aim', true); break;
             case 'reset':
                 if (!S.confirmReset) { S.confirmReset = true; b.textContent = 'Confirm reset'; break; }
-                st.bests = {}; st.last = {}; save(); S.confirmReset = false; aimSheet(); aimOv(); break;
+                st.bests = {}; st.last = {}; st.camp = {}; st.rec = { golds: 0, survive: 0, boss: 0 }; save(); S.confirmReset = false; aimQuit(); aimSheet(); break;
         }
     }
     // Sheet inputs: data-set="xh.len" / "set.sens", numbers, checkboxes, the crosshair code.
@@ -477,9 +585,26 @@
     }
     // A spawn scales 0.3 → 1.12 → 1 over 180 ms; it can be hit from frame 1.
     function aimSpawnScale(age) { const a = Math.max(0, Math.min(1, age / 180)); return a < 0.61 ? [0.3 + 0.82 * a / 0.61, 0.35 + 0.65 * a / 0.61] : [1.12 - 0.12 * (a - 0.61) / 0.39, 1]; }
+    // 2D discs come from sprites: painted once per colour, size (0.5 px steps), theme and DPR, then one
+    // drawImage a frame, so no per-frame gradient or shadowBlur (a weak GPU's cost, 2D only).
+    const aimSprites = new Map();
     function aimDisc(c, x, y, r, col, k, op) {
+        const T = aimS.tok, d = aimS.dpr || 1, q = Math.max(1, Math.round(r * 2) / 2), pad = Math.ceil(q * 1.1 + 5);
+        const key = col + '|' + q + '|' + (T.cyber ? 'c' : T.light ? 'l' : 'd') + '|' + d;
+        let sp = aimSprites.get(key);
+        if (!sp) {
+            if (aimSprites.size > 96) aimSprites.clear();
+            sp = document.createElement('canvas'); sp.width = sp.height = Math.ceil((q + pad) * 2 * d);
+            const g = sp.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.translate(q + pad, q + pad);
+            aimDiscPaint(g, q, col);
+            aimSprites.set(key, sp);
+        }
+        const s = (q + pad) * k;
+        c.save(); c.globalAlpha = op; c.drawImage(sp, x - s, y - s, s * 2, s * 2); c.restore();
+    }
+    function aimDiscPaint(c, r, col) {
         const T = aimS.tok;
-        c.save(); c.globalAlpha = op; c.translate(x, y); c.scale(k, k);
+        c.save();
         if (T.cyber) {
             const g = c.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, aimRgba(col, 0.3)); g.addColorStop(0.2, aimRgba(col, 0.3)); g.addColorStop(0.21, aimRgba(col, 0.1)); g.addColorStop(1, aimRgba(col, 0.1));
             c.shadowColor = aimRgba(col, 0.6); c.shadowBlur = r * 0.64;
@@ -506,7 +631,16 @@
         c.restore();
     }
     // Hit: a burst ring, a flash and 8 shards; the popup rises 24 px and fades by 600 ms.
-    function aimBurst(c, x, y, r, col, bp, pts, sub, k) {
+    const aimPopC = (T, c) => c === 'good' ? T.good : c === 'red' ? T.redText : c === 'gold' ? T.gold : c === 'muted' ? T.muted : c === 'accent' ? T.accent : T.text;
+    function aimPopText(c, x, y, pts, sub, pc, bp, k) {
+        const T = aimS.tok, py = y - 30 * k - 24 * bp * k, m = 46 * k;
+        x = Math.max(m, Math.min(aimS.W - m, x));
+        c.save(); c.globalAlpha = Math.max(0, 1 - bp); c.textAlign = 'center'; c.shadowColor = T.popSh; c.shadowBlur = 8;
+        if (pts) { c.fillStyle = aimPopC(T, pc); c.font = `800 ${18 * k}px ${T.font}`; c.fillText(pts, x, py); }
+        if (sub) { c.fillStyle = pc ? aimPopC(T, pc) : T.accent; c.font = `700 ${9.5 * k}px ${T.font}`; c.fillText(sub, x, py + (pts ? 13 : 0) * k); }
+        c.restore();
+    }
+    function aimBurst(c, x, y, r, col, bp, pts, sub, k, pc) {
         const T = aimS.tok, s = r * 2;
         c.save();
         c.globalAlpha = 0.8 * (1 - bp) + 0.05; c.lineWidth = 1.5; c.strokeStyle = col; c.beginPath(); c.arc(x, y, s * (1.1 + bp * 0.9) / 2, 0, 6.2832); c.stroke();
@@ -517,13 +651,59 @@
             c.globalAlpha = 1 - bp * 0.7; c.fillStyle = i % 2 ? col : (T.light ? aimMix(col, '#000000', 0.1) : '#FFFFFF');
             c.save(); c.translate(x + Math.cos(a) * d, y + Math.sin(a) * d); c.rotate(a); c.fillRect(-w / 2, -1.25, w, 2.5); c.restore();
         }
-        if (pts) {
-            c.globalAlpha = Math.max(0, 1 - bp); c.textAlign = 'center'; c.shadowColor = T.popSh; c.shadowBlur = 8;
-            const py = y - 30 * k - 24 * bp * k;
-            c.fillStyle = T.text; c.font = `800 ${18 * k}px ${T.font}`; c.fillText(pts, x, py);
-            if (sub) { c.fillStyle = T.accent; c.font = `700 ${9.5 * k}px ${T.font}`; c.fillText(sub, x, py + 13 * k); }
-        }
         c.restore();
+        if (pts || sub) aimPopText(c, x, y, pts, sub, pc, bp, k);
+    }
+    // Ring segments around a target (the bonus's health, design M5): n arcs with 4% gaps, the first `on` lit.
+    function aimSegRing(c, x, y, rr, n, on, colOn, colOff, w) {
+        const L = 6.2832 / n, gap = 6.2832 * 0.04;
+        c.save(); c.lineWidth = w;
+        for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + i * L + gap / 2; c.strokeStyle = i < on ? colOn : colOff; c.beginPath(); c.arc(x, y, rr, a, a + L - gap); c.stroke(); }
+        c.restore();
+    }
+    // Bonus and boss (design Target kinds bonus / boss), drawn at screen x, y with radius r.
+    function aimDrawBig(c, t, x, y, r, el, is3d, col, k) {
+        const T = aimS.tok, ink = T.cyber ? '#00F0FF' : T.light ? '#0F172A' : '#FFFFFF', off = T.light ? 'rgba(15,23,42,.16)' : T.cyber ? 'rgba(0,240,255,.2)' : 'rgba(255,255,255,.2)';
+        if (t.kind === 'bonus') {
+            const esc = el - t.born >= AIM_BONUS_LIFE - AIM_BONUS_ESC, op = esc ? 0.72 : 1;
+            (is3d ? aimSphere : aimDisc)(c, x, y, r, T.goldC, 1, op);
+            aimSegRing(c, x, y, r * 1.6, AIM_BONUS_HP, t.hp, T.goldC, off, 4 * k);
+            if (t.win && t.win > el) { c.save(); c.lineWidth = 2 * k; c.lineCap = 'round'; c.strokeStyle = ink; c.beginPath(); c.arc(x, y, r * 1.96, -Math.PI / 2, -Math.PI / 2 + 6.2832 * (t.win - el) / AIM_BONUS_WIN); c.stroke(); c.restore(); }
+            if (esc) {
+                c.save(); c.setLineDash([4 * k, 5 * k]); c.lineWidth = 1.5 * k; c.strokeStyle = T.redText; c.beginPath(); c.arc(x, y, r * 2.28, 0, 6.2832); c.stroke(); c.restore();
+                aimTag(c, x, y + r * 2.28 + 14 * k, 'ESCAPING IN ' + Math.max(1, Math.ceil((AIM_BONUS_LIFE - (el - t.born)) / 1000)) + ' S', T.gold, k);
+            }
+            return;
+        }
+        const steel = T.light ? ['#C3CADB', '#8A93AA', '#5A6278'] : T.cyber ? ['#1A4B56', '#0B262E', '#041216'] : ['#8A85A8', '#4A4562', '#2A2738'];
+        c.save();
+        if (!t.armor) { c.globalAlpha = 0.6; c.lineWidth = 2; c.strokeStyle = col; c.beginPath(); c.arc(x, y, r * 1.18, 0, 6.2832); c.stroke(); c.globalAlpha = 0.28; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r * 1.42, 0, 6.2832); c.stroke(); c.globalAlpha = 1; }
+        const g = c.createRadialGradient(x - r * 0.24, y - r * 0.36, 0, x, y, r); g.addColorStop(0, steel[0]); g.addColorStop(0.48, steel[1]); g.addColorStop(1, steel[2]);
+        if (!t.armor) { c.shadowColor = aimRgba(col, 0.6); c.shadowBlur = r * 0.9; }
+        c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fillStyle = g; c.fill(); c.shadowBlur = 0;
+        c.lineWidth = 2; c.strokeStyle = T.cyber ? '#00F0FF' : T.light ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.3)'; c.stroke();
+        const seam = T.cyber ? 'rgba(0,240,255,.55)' : T.light ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.22)';
+        c.globalAlpha = t.armor ? 1 : 0.4; c.strokeStyle = seam; c.lineWidth = 1.5; c.beginPath(); c.arc(x, y, r * 0.7, 0, 6.2832); c.stroke();
+        c.beginPath(); for (let i = 0; i < 12; i++) { const a = (15 + i * 30) * Math.PI / 180; c.moveTo(x + Math.cos(a) * r * 0.72, y + Math.sin(a) * r * 0.72); c.lineTo(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9); } c.stroke();
+        c.globalAlpha = 1;
+        const core = r * (t.armor ? 0.36 : 0.56), cg = c.createRadialGradient(x, y, 0, x, y, core);
+        if (t.armor) { cg.addColorStop(0, steel[1]); cg.addColorStop(1, steel[2]); } else { cg.addColorStop(0, '#FFFFFF'); cg.addColorStop(0.18, aimMix(col, '#ffffff', 0.3)); cg.addColorStop(0.55, col); cg.addColorStop(1, aimMix(col, '#000000', 0.35)); c.shadowColor = aimRgba(col, 0.8); c.shadowBlur = r * 0.3; }
+        c.beginPath(); c.arc(x, y, core, 0, 6.2832); c.fillStyle = cg; c.fill(); c.shadowBlur = 0;
+        if (t.armor) { c.translate(x, y); const q = core / 10 * 0.9; c.scale(q, q); c.translate(-10, -10); c.lineWidth = 1.5 / q; c.strokeStyle = T.cyber ? '#00F0FF' : T.light ? '#F1F5F9' : '#D5D0E8'; c.stroke(new Path2D(AIM_ICON.shield)); }
+        c.restore();
+        // The health bar above it: BOSS · n / 12, twelve segments.
+        // Below the boss when above it would run under the corner chips.
+        const bw = 140 * k, bx = x - bw / 2, up = y - r - 34 * k, by = up < 52 * k ? y + r + 22 * k : up;
+        c.save(); c.font = `700 ${9.5 * k}px ${T.font}`; c.shadowColor = T.popSh; c.shadowBlur = 6;
+        c.fillStyle = T.text; c.textAlign = 'left'; c.fillText('BOSS', bx, by); c.textAlign = 'right'; c.fillStyle = t.armor ? T.muted : T.redText; c.fillText(t.hp + ' / ' + AIM_STAGES[9].n, bx + bw, by); c.shadowBlur = 0;
+        const n = AIM_STAGES[9].n, sw = (bw - 2 * (n - 1)) / n;
+        for (let i = 0; i < n; i++) { c.fillStyle = i < t.hp ? T.red : T.track; c.fillRect(bx + i * (sw + 2), by + 5 * k, sw, 6 * k); }
+        c.restore();
+        if (t.armor) aimTag(c, x, by > y ? y - r - 14 * k : y + r + 22 * k, 'ARMOURED · HIT A MINION', T.muted, k);
+    }
+    function aimTag(c, x, y, s, col, k) {
+        const T = aimS.tok;
+        c.save(); c.font = `700 ${9.5 * k}px ${T.font}`; c.textAlign = 'center'; c.fillStyle = col; c.shadowColor = T.popSh; c.shadowBlur = 6; c.fillText(s, x, y); c.restore();
     }
     function aimDrawXh(c, x, y, cfg, k, open) {
         const r = n => Math.round(n * 2) / 2, L = r(cfg.len * k), T = r(cfg.thick * k), G = r((cfg.gap + (open || 0)) * k), ow = cfg.outline ? r(cfg.ow * k) : 0;
@@ -544,6 +724,13 @@
     function aimDraw() {
         const S = aimS, c = S.ctx, W = S.W, H = S.H;
         if (!c || !W) return;
+        // Outside a run nothing moves: redraw only when what is shown changes.
+        if (!aimLive()) {
+            const key = [S.phase, W, H, S.dpr, aimMode(), S.st.scen, S.st.set.bg, S.st.set.tcolor, S.st.set.fov, S.yaw, S.pitch, S.tokAt, S.max,
+                S.phase === 'paused' && S.ptr ? S.ptr.x + ',' + S.ptr.y : '', JSON.stringify(S.st.xh)].join('|');
+            if (key === S.drawKey) return;
+            S.drawKey = key;
+        } else S.drawKey = '';
         c.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
         c.clearRect(0, 0, W, H);
         const sc = aimScen(), is3d = aimIs3d(), T = S.tok, col = S.st.set.tcolor, k = S.max ? 1.7 : 1;
@@ -561,7 +748,7 @@
             const s = aimProj(C, q); return [s[0], s[1], C.f * AIM_D * Math.tan(r * Math.PI / 180) / q[2], q];
         };
         const tg = run ? run.tg : R && R.tg ? [R.tg] : [], el = run ? run.el : 0;
-        if (run && run.id === 'tracking' && run.trail.length > 1) {
+        if (run && run.base === 'tracking' && run.trail.length > 1) {
             c.beginPath(); run.trail.forEach((p, i) => { const s = at(p, 1); if (s) i ? c.lineTo(s[0], s[1]) : c.moveTo(s[0], s[1]); });
             c.globalAlpha = 0.45; c.lineWidth = 2.5; c.lineCap = 'round'; c.strokeStyle = T.accent; c.stroke(); c.globalAlpha = 1;
         }
@@ -583,20 +770,23 @@
         for (const t of order) {
             const s = at(t, t.r); if (!s) continue;
             const age = run ? el - t.born : performance.now() - t.born, sp = aimSpawnScale(age);
-            if (run && run.id === 'shrink') { const g = at(t, t.r0 * 1.12); c.save(); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.strokeStyle = aimRgba(col, 0.5); c.beginPath(); c.arc(g[0], g[1], g[2], 0, 6.2832); c.stroke(); c.restore(); }
-            (is3d ? aimSphere : aimDisc)(c, s[0], s[1], s[2], col, sp[0], sp[1]);
-            if (run && run.id === 'tracking') {
+            if (t.kind === 'bonus' || t.kind === 'boss') { aimDrawBig(c, t, s[0], s[1], s[2] * sp[0], el, is3d, col, k); continue; }
+            if (run && run.shr && !t.kind) { const g = at(t, t.r0 * 1.12); c.save(); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.strokeStyle = aimRgba(col, 0.5); c.beginPath(); c.arc(g[0], g[1], g[2], 0, 6.2832); c.stroke(); c.restore(); }
+            (is3d ? aimSphere : aimDisc)(c, s[0], s[1], s[2], t.kind === 'minion' ? T.violet : col, sp[0], sp[1]);
+            if (run && run.base === 'tracking') {
                 const rr = s[2] * 1.6, a = aimLiveAcc(run) || 0;
                 c.save(); c.lineWidth = 3; c.strokeStyle = T.track; c.beginPath(); c.arc(s[0], s[1], rr, 0, 6.2832); c.stroke();
                 c.strokeStyle = T.accent; c.lineCap = 'round'; c.beginPath(); c.arc(s[0], s[1], rr, -Math.PI / 2, -Math.PI / 2 + 6.2832 * a / 100); c.stroke(); c.restore();
             }
         }
         for (const f of run ? run.fx : []) {
-            const bp = (el - f.at) / AIM_FX_MS, s = at(f, f.r); if (!s) continue;
+            const bp = (el - f.at) / AIM_FX_MS, s = at(f, f.r || 1); if (!s) continue;
+            if (f.pop) { aimPopText(c, s[0], s[1] + (f.dy || 0) * k, f.pts, f.sub, f.c, bp, k); continue; }
+            if (f.esc) { c.save(); c.globalAlpha = 0.7 * (1 - bp); c.setLineDash([4, 5]); c.lineWidth = 1.5; c.strokeStyle = T.goldC; c.beginPath(); c.arc(s[0], s[1], s[2] * (1 + bp), 0, 6.2832); c.stroke(); c.restore(); continue; }
             if (f.vanish) {
                 c.save(); c.globalAlpha = 0.7 * (1 - bp); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.strokeStyle = T.red; c.beginPath(); c.arc(s[0], s[1], 28 * k, 0, 6.2832); c.stroke();
                 c.setLineDash([]); c.fillStyle = T.redText; c.font = `700 ${9 * k}px ${T.font}`; c.textAlign = 'center'; c.fillText('MISS', s[0], s[1] + 28 * k + 12 * k); c.restore();
-            } else aimBurst(c, s[0], s[1], s[2], col, bp, f.pts, f.sub, k);
+            } else aimBurst(c, s[0], s[1], s[2], f.col === 'bonus' ? T.goldC : f.col === 'minion' ? T.violet : col, bp, f.pts, f.sub, k, f.c);
         }
         // Crosshair: centred in 3D, at the pointer in 2D while aiming.
         const show = is3d ? !sc.noCam && (aimLive() || S.phase === 'paused' || S.phase === 'idle') : (aimLive() || S.phase === 'paused') && S.ptr && !sc.noCam;
@@ -604,21 +794,69 @@
     }
 
     // ── HUD (tiles, chips) — text only changes when its value does ──
-    const aimSet = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+    // Numbers that change every frame are shown through CSS counters (custom properties): on this page
+    // a text change costs a full restyle (~10 ms on a slow PC), a style write a few µs (perf-check.js).
+    const AIM_NUM = /^(\d{1,3})(?:,(\d{3}))?(?:\.(\d{1,2}))?$/;
+    const aimSet = (el, v) => {
+        if (!el || el._v === v) return;
+        el._v = v;
+        const m = AIM_NUM.exec(v);
+        if (!m) { if (el._num) { el._num = false; el.classList.remove('aim-cnt'); } if (el.textContent !== v) el.textContent = v; return; }
+        if (!el._num) { el._num = true; el.textContent = ''; el.classList.add('aim-cnt'); }
+        el.style.setProperty('--a', m[1]); el.style.setProperty('--b', m[2] || '0'); el.style.setProperty('--c', m[3] || '0');
+        el.classList.toggle('is-k', m[2] !== undefined); el.classList.toggle('is-d', !!m[3] && m[3].length === 1); el.classList.toggle('is-d2', !!m[3] && m[3].length === 2);
+    };
     function aimTiles() {
-        const S = aimS, sc = aimScen(), run = S.run, R = S.R, res = S.res, st = S.st;
+        const S = aimS, sc = aimScen(), run = S.run, R = S.R, res = S.res, st = S.st, id = st.scen, r = res && res.kind !== 'react' ? res : null;
+        const acc = run ? aimLiveAcc(run) : r && r.acc !== undefined ? r.acc : null, accT = ['ACCURACY', acc === null ? '—' : String(acc), acc === null ? '' : '%', ''];
+        const streak = (mult) => ['STREAK', String(run ? run.streak : r ? r.bestStreak || 0 : 0), r && !run ? 'best' : '', mult > 1 ? '×' + mult : ''];
+        if (id === 'sprint') {
+            const n = sc.goal, hits = run ? run.hits : r ? r.hits : 0, t = run ? run.el + run.pen : r ? r.time : 0;
+            return [['TIME', (t / 1000).toFixed(2), 's', ''], ['LEFT', String(n - hits), '/' + n, '', { bar: hits / n }], accT, streak(1)];
+        }
+        if (id === 'endless') {
+            const left = run ? run.left : r ? 0 : 15000, fr = !!run && run.el < run.frenzy;
+            return [['TIME', aimSecs(left), 's', '', { bar: st.set.timerBar ? Math.min(1, left / 20000) : -1, hot: !!run && left < 5000, alarm: !!run && left < 5000 }],
+                ['SCORE', aimFmt(run ? run.score : r ? r.score : 0), '', '', { badge: fr ? '×2' : '' }], ['LEVEL', String(run ? run.lvl : r ? r.lvl : 1), r && !run ? 'best' : '', ''], streak(run ? aimMult(run.streak) : 1)];
+        }
+        if (id === 'levels') {
+            const c = aimCamp(st, aimMode()), sr = r && (r.kind === 'stage' || r.kind === 'fail') ? r : null;
+            if (!run && !sr) {
+                const done = r && (r.kind === 'camp' || r.kind === 'over');
+                return [['STAGE', String(done ? r.reached : Math.min(S.phase === 'intro' ? S.stageSel + 1 : c.stage + 1, AIM_STAGES.length)), '/' + AIM_STAGES.length, ''],
+                    ['STARS', String(done ? r.starsAll : aimStarSum(c)), '/30', ''], ['LIVES', '', '', '', { hearts: done ? r.lives : c.lives }], ['SCORE', aimFmt(done ? r.total : c.score), '', '']];
+            }
+            const G = run ? run.G : sr.G, len = G.len * 1000, left = run ? Math.max(0, run.len - run.el) : sr.left, i = run ? run.stage : sr.stage;
+            const n = run ? run.goalN : sr.goalN, a = acc || 0, hp = run ? (run.tg.find(t => t.kind === 'boss') || { hp: run.clear ? 0 : G.n }).hp : sr.hp;
+            const goal = G.goal === 'track' ? ['GOAL', String(a), '%', '', { bar: a / 100, mark: G.n / 100, barC: a >= G.n ? 'good' : 'red' }]
+                : G.goal === 'boss' ? ['BOSS', String(hp), '/' + G.n, '', { bar: hp / G.n, barC: 'red' }] : ['GOAL', String(n), '/' + G.n, '', { bar: n / G.n }];
+            return [['TIME', aimSecs(left), 's', '', { bar: st.set.timerBar ? left / len : -1, hot: !!run && left < len * 0.2 }], goal, ['STAGE', String(i + 1), '/' + AIM_STAGES.length, ''], ['LIVES', '', '', '', { hearts: c.lives }]];
+        }
         if (sc.group === 'aim') {
-            const len = sc.len * 1000, left = run ? Math.max(0, run.len - run.el) : res ? 0 : len, frac = left / len;
-            const acc = run ? aimLiveAcc(run) : res && res.kind === 'aim' ? res.acc : null, m = run && run.id !== 'chaos' ? aimMult(run.streak) : 1;
+            const len = sc.len * 1000, left = run ? Math.max(0, run.len - run.el) : res ? 0 : len, frac = left / len, m = run && run.id !== 'chaos' ? aimMult(run.streak) : 1;
             return [['TIME', (left / 1000).toFixed(1), 's', '', { bar: st.set.timerBar ? frac : -1, hot: frac < 0.3 && frac > 0 }],
-                ['SCORE', aimFmt(run ? run.score : res && res.kind === 'aim' ? res.score : 0), '', ''],
-                ['ACCURACY', acc === null ? '—' : String(acc), acc === null ? '' : '%', ''],
-                ['STREAK', String(run ? run.streak : res && res.kind === 'aim' ? res.bestStreak : 0), res && !run ? 'best' : '', m > 1 ? '×' + m : '']];
+                ['SCORE', aimFmt(run ? run.score : r ? r.score : 0), '', ''], accT, streak(m)];
         }
         const n = R ? R.rounds : sc.rounds, t = R ? R.times : res && res.kind === 'react' ? res.times : [], fs = R ? R.fs : res && res.kind === 'react' ? res.fs : 0;
         const last = t.length ? t[t.length - 1] : null, avg = t.length ? Math.round(aimMean(t)) : null;
         return [['ROUND', String(R ? R.round : res ? n : 0), '/' + n, ''], ['LAST', last === null ? '—' : aimFmt(last), last === null ? '' : 'ms', ''],
             ['AVERAGE', avg === null ? '—' : aimFmt(avg), avg === null ? '' : 'ms', ''], [S.hud.classList.contains('is-narrow') ? 'FALSE ST.' : 'FALSE STARTS', String(fs), '/3', '', { pips: fs, hot: fs >= 2 }]];
+    }
+    // In-viewport chip, per mode while running: [label, value, unit, colour, bar 0–1].
+    function aimChip() {
+        const S = aimS, run = S.run, R = S.R;
+        if (S.phase !== 'run') return null;
+        if (R) return R.id === 'target' ? ['ROUND ' + R.round + ' / ' + R.rounds, aimIs3d() ? 'Flick & click' : 'Click it', ''] : null;
+        if (!run) return null;
+        const bonus = run.tg.find(t => t.kind === 'bonus'), boss = run.tg.find(t => t.kind === 'boss');
+        if (run.el < run.frenzy && run.id === 'endless') return ['FRENZY ×2', aimSecs(run.frenzy - run.el), 's', 'gold', (run.frenzy - run.el) / AIM_FRENZY_MS];
+        if (bonus) return ['BONUS', String(bonus.hp), bonus.hp > 1 ? 'hits left' : 'hit left', 'gold'];
+        if (boss) return boss.armor ? ['STAGE 10', 'Boss', ''] : ['VULNERABLE', aimSecs(Math.max(0, boss.vuln - run.el)), 's', 'red', (boss.vuln - run.el) / AIM_VULN_MS];
+        if (run.G) return run.G.goal === 'track' ? ['NEED', run.G.n + '% · ' + run.G.len + ' s', '', 'acc'] : ['NEED', run.G.goal === 'bonus' ? run.G.n + ' bonus · ' + run.G.len + ' s' : run.G.n + ' hits · ' + run.G.len + ' s', ''];
+        if (run.id === 'tracking') return ['ON TARGET', String(aimLiveAcc(run) || 0), '%', 'acc'];
+        if (run.id === 'flick') return ['AVG TTK', run.kills.length ? String(Math.round(aimMean(run.kills.map(x => x.ttk)))) : '—', run.kills.length ? 'ms' : ''];
+        if (run.id === 'shrink') return ['LIFETIME', aimSecs(run.shr), 's'];
+        return null;
     }
     function aimHudSync() {
         const S = aimS, st = S.st, sc = aimScen(), mode = aimMode().toUpperCase(), narrow = S.hud.classList.contains('is-narrow');
@@ -626,44 +864,54 @@
             const el = S.tiles[i], x = d[4] || {};
             aimSet(el.children[0], d[0]); aimSet(el.querySelector('b'), d[1]); aimSet(el.querySelector('u'), d[2]); aimSet(el.querySelector('em'), d[3]);
             el.classList.toggle('is-hot', !!x.hot);
+            el.classList.toggle('is-alarm', !!x.alarm);
             el.classList.toggle('has-bar', x.bar >= 0);
-            if (x.bar >= 0) el.querySelector('.bar i').style.width = Math.round(x.bar * 100) + '%';
+            el.classList.toggle('is-good', x.barC === 'good'); el.classList.toggle('is-red', x.barC === 'red');
+            // A transform (no layout), written only when it moves 0.5%: a style write every frame costs a
+            // full restyle on this page (the host's :has() rules).
+            if (x.bar >= 0) { const b = Math.round(Math.max(0, Math.min(1, x.bar)) * 200) / 200; if (el._bar !== b) { el._bar = b; el.querySelector('.bar i').style.transform = 'scaleX(' + b + ')'; } }
+            el.classList.toggle('has-mark', x.mark !== undefined);
+            if (x.mark !== undefined && el._mark !== x.mark) { el._mark = x.mark; el.querySelector('.mark').style.setProperty('--m', x.mark); }
             el.classList.toggle('has-pips', x.pips !== undefined);
             if (x.pips !== undefined) Array.from(el.querySelectorAll('.pips i')).forEach((p, j) => p.classList.toggle('is-on', j < x.pips));
+            el.classList.toggle('has-hearts', x.hearts !== undefined);
+            if (x.hearts !== undefined) Array.from(el.querySelectorAll('.aim-heart')).forEach((p, j) => p.classList.toggle('is-on', j < x.hearts));
+            el.classList.toggle('has-badge', !!x.badge);
+            if (x.badge) aimSet(el.querySelector('.badge'), x.badge);
         });
         const key = [st.scen, st.diff, mode, narrow, S.phase, S.max].join('|');
         if (key !== S.hudKey) {
             S.hudKey = key;
-            const dn = aimDiffName(st.diff), meta = sc.noCam ? dn : (narrow || sc.name.length > 5) ? mode + (st.diff !== 'normal' && !narrow ? ' · ' + dn : '') : mode + ' · ' + dn;
+            const dn = aimDiffLabel(), camp = aimIsCamp(), meta = sc.noCam ? dn : (narrow || sc.name.length > 5) && !camp ? mode + (st.diff !== 'normal' && !narrow ? ' · ' + dn : '') : mode + ' · ' + dn;
             S.hud.querySelector('.aim-chip-i').innerHTML = aimSvg(AIM_ICON[st.scen]);
             aimSet(S.hud.querySelector('.aim-chip-t b'), sc.name); aimSet(S.hud.querySelector('.aim-chip-t i'), S.max ? (sc.group === 'react' ? 'Reaction · ' + dn : mode + ' · ' + dn) : meta);
             const b = aimBestOf(st, st.scen, aimMode(), st.diff);
-            aimSet(S.hud.querySelector('.aim-bestb b'), b ? aimFmt(b) + (sc.group === 'react' ? ' ms' : '') : '—');
+            aimSet(S.hud.querySelector('.aim-bestb b'), camp ? aimStarSum(aimCamp(st, aimMode())) + '/30' : b ? aimFmt(b) + (sc.group === 'react' ? ' ms' : '') : '—');
             S.hud.querySelectorAll('.aim-seg button').forEach(x => x.classList.toggle('is-on', !sc.noCam && x.getAttribute('data-act') === 'mode:' + aimMode()));
             S.hud.querySelector('.aim-seg').classList.toggle('is-off', !!sc.noCam);
             S.hud.querySelector('.aim-mode1').classList.toggle('is-off', !!sc.noCam);
             aimSet(S.hud.querySelector('.aim-mode1 b'), mode);
             const live = aimLive(), pp = S.hud.querySelector('.aim-pp');
-            pp.innerHTML = aimSvg(live ? AIM_ICON.pause : AIM_ICON.play) + `<span>${live ? 'Pause' : S.phase === 'paused' ? 'Resume' : 'Play'}</span>`;
+            pp.innerHTML = aimSvg(live ? AIM_ICON.pause : AIM_ICON.play) + `<span>${live ? 'Pause' : S.phase === 'paused' ? 'Resume' : S.phase === 'intro' ? 'Start' : 'Play'}</span>`;
             pp.setAttribute('aria-label', live ? 'Pause' : 'Play');
-            S.hud.classList.toggle('is-custom', st.diff !== 'normal');
+            S.hud.classList.toggle('is-custom', st.diff !== 'normal' && !camp);
             const ranked = aimRanked(st.scen, aimMode(), st.diff);
             aimSet(S.hud.querySelector('.aim-rank'), dn + ' · ' + (ranked ? 'ranked' : st.diff === 'normal' ? 'local best (' + mode + ')' : 'not ranked'));
         }
         const done = S.phase === 'ares' || S.phase === 'rres';
-        aimSet(S.hud.querySelector('.aim-status span'), done ? 'Run complete' : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor');
+        aimSet(S.hud.querySelector('.aim-status span'), done ? (aimIsCamp() && S.res && S.res.kind === 'camp' ? 'Campaign complete' : 'Run complete') : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor');
         S.hud.querySelector('.aim-status').classList.toggle('is-on', !done && (aimLive() || S.locked));
-        // In-viewport chip: per scenario, while running.
-        let chip = null;
-        const run = S.run, R = S.R;
-        if (S.phase === 'run' && run) {
-            if (run.id === 'tracking') chip = ['ON TARGET', (aimLiveAcc(run) || 0) + '%', 1];
-            else if (run.id === 'flick') chip = ['AVG TTK', run.kills.length ? Math.round(aimMean(run.kills.map(x => x.ttk))) + ' ms' : '—'];
-            else if (run.id === 'shrink') chip = ['LIFETIME', (AIM_SCEN.shrink.life * AIM_DIFF[run.diff].life / 1000).toFixed(1) + ' s'];
-        } else if (S.phase === 'run' && R && R.id === 'target') chip = ['ROUND ' + R.round + ' / ' + R.rounds, aimIs3d() ? 'Flick & click' : 'Click it'];
-        const vc = S.hud.querySelector('.aim-vchip');
+        const chip = aimChip(), vc = S.hud.querySelector('.aim-vchip');
         vc.classList.toggle('is-on', !!chip);
-        if (chip) { aimSet(vc.children[0], chip[0]); aimSet(vc.children[1], chip[1]); vc.classList.toggle('is-acc', !!chip[2]); }
+        if (chip) {
+            const p = vc.firstChild.children;
+            aimSet(p[0], chip[0]); aimSet(p[1], chip[1]); aimSet(p[2], chip[2] || '');
+            ['acc', 'gold', 'red'].forEach(c => vc.classList.toggle('is-' + c, chip[3] === c));
+            vc.classList.toggle('has-bar', chip[4] !== undefined);
+            if (chip[4] !== undefined) { const b = Math.round(Math.max(0, Math.min(1, chip[4])) * 100) / 100; if (vc._bar !== b) { vc._bar = b; vc.querySelector('.bar i').style.transform = 'scaleX(' + b + ')'; } }
+        }
+        // Frenzy: the viewport edge glows gold (M4b).
+        S.vp.classList.toggle('is-frenzy', !!S.run && S.run.id === 'endless' && S.run.el < S.run.frenzy && S.phase === 'run');
     }
 
     // ── Overlays (DOM over the canvas): rebuilt only when the state they show changes ──
@@ -681,17 +929,22 @@
         const S = aimS; if (!S.hud) return;
         aimVpBg();
         const sc = aimScen(), st = S.st, R = S.R, mode = aimMode().toUpperCase(), dn = aimDiffName(st.diff), I = AIM_ICON, kbd = k => `<kbd>${k}</kbd>`;
-        let key = S.phase + '|' + st.scen + '|' + st.diff + '|' + mode + '|' + S.locked, h = '';
+        let key = S.phase + '|' + st.scen + '|' + st.diff + '|' + mode + '|' + S.locked + '|' + S.stageSel + '|' + (S.res ? S.res.kind : ''), h = '';
         if (R && S.phase === 'run') key += '|' + R.phase + '|' + R.round + '|' + R.fs + '|' + R.times.length;
         if (key === S.ovKey) return;
         S.ovKey = key;
         const needLock = aimIs3d() && !S.locked && aimLive();
         if (needLock) {
             h = `<div class="aim-scrimv"></div><div class="aim-ovc"><button type="button" class="aim-card aim-unlock" data-act="lock"><span class="aim-lockic">${aimSvg(I.lock)}</span><b>Click to lock mouse</b><span>Mouse turns the camera. The crosshair stays centred.</span><span class="aim-hint">${kbd('Esc')}to release and pause</span></button></div>`;
+        } else if (S.phase === 'idle' && aimIsCamp()) {
+            h = aimOvMap();
+        } else if (S.phase === 'intro') {
+            h = aimOvIntro();
         } else if (S.phase === 'idle') {
             const last = st.last[aimBestKey(st.scen, aimMode(), st.diff)], b = aimBestOf(st, st.scen, aimMode(), st.diff), react = sc.group === 'react';
-            const kick = react ? 'REACTION · ' + sc.name.toUpperCase() : 'AIM · SCENARIO';
+            const kick = react ? 'REACTION · ' + sc.name.toUpperCase() : AIM_RANKED.indexOf(st.scen) >= 0 ? 'AIM · RANKED' : 'AIM · SCENARIO';
             const meta = react ? `${sc.rounds} rounds · ${(sc.minDelay * AIM_DIFF[st.diff].delay[0] / 1000).toFixed(1).replace('.0', '')}–${(sc.maxDelay * AIM_DIFF[st.diff].delay[1] / 1000).toFixed(1).replace('.0', '')} s delay · ${dn}${sc.noCam ? '' : ' · ' + mode}`
+                : st.scen === 'sprint' ? `${sc.goal} targets · +0.5 s a miss · ${dn} · ${mode}` : st.scen === 'endless' ? `15 s · hits add 2–5 s · ${dn} · ${mode}`
                 : `${sc.count === 1 ? (st.scen === 'tracking' ? 'Moving target' : '1 target') : sc.count + ' targets'} · ${sc.len} s · ${dn} · ${mode}`;
             const lastT = !last ? 'No runs yet' : react ? (last.fail ? 'failed run' : 'avg ' + aimFmt(last.avg) + ' ms') : aimFmt(last.score) + ' pts · ' + last.acc + '%';
             h = `<div class="aim-ovc"><div class="aim-idle"><div class="aim-kick">${kick}</div><div class="aim-idle-n">${sc.name}</div><div class="aim-idle-m">${meta}</div>` +
@@ -700,10 +953,11 @@
                 `<div class="aim-lastpill"><span class="aim-kick">LAST</span><b>${lastT}</b>${b ? `<span>· best ${aimFmt(b)}${react ? ' ms' : ''}</span>` : ''}</div>`;
         } else if (S.phase === 'count') {
             h = `<div class="aim-scrimv"></div><div class="aim-ovc"><div class="aim-count"><div class="aim-count-d"><svg viewBox="0 0 132 132" width="132" height="132"><circle cx="66" cy="66" r="60" class="aim-count-t"/><circle cx="66" cy="66" r="60" class="aim-count-ring"/></svg><span class="aim-count-n">3</span></div>` +
-                `<b>Get ready</b><span>${sc.name} · ${sc.len} s · aim at the first target</span></div></div>`;
+                `<b>Get ready</b><span>${aimIsCamp() ? 'Stage ' + (S.stageSel + 1) + ' · ' + aimStageGoal(AIM_STAGES[S.stageSel]) : st.scen === 'sprint' ? sc.name + ' · clear 50 · the clock counts up' : st.scen === 'endless' ? 'Endless · 15 s · hits add time' : sc.name + ' · ' + sc.len + ' s · aim at the first target'}</span></div></div>`;
         } else if (S.phase === 'paused') {
             const run = S.run, acc = run ? aimLiveAcc(run) : null;
-            const line = run ? `${sc.name} · ${((run.len - run.el) / 1000).toFixed(1)} s left` : `${sc.name} · round ${R ? R.round : 1} of ${sc.rounds}`;
+            const line = !run ? `${sc.name} · round ${R ? R.round : 1} of ${sc.rounds}` : run.id === 'sprint' ? `${sc.name} · ${sc.goal - run.hits} left` : run.id === 'endless' ? `Endless · ${aimSecs(run.left)} s left`
+                : run.G ? `Stage ${run.stage + 1} · ${aimSecs(run.len - run.el)} s left` : `${sc.name} · ${((run.len - run.el) / 1000).toFixed(1)} s left`;
             const sub = run ? `${aimFmt(run.score)} pts · ${acc === null ? '—' : acc + '%'} accuracy` : `${R ? R.times.length : 0} rounds timed · ${R ? R.fs : 0}/3 false starts`;
             h = `<div class="aim-scrimv is-blur"></div><div class="aim-ovc"><div class="aim-card aim-pausec"><div class="aim-kick">PAUSED</div><div class="aim-pause-t">${line}</div><div class="aim-pause-s">${sub}</div>` +
                 `<button type="button" class="aim-btn is-primary" data-act="resume">${aimSvg(I.play)}Resume</button><div class="aim-row2"><button type="button" class="aim-btn" data-act="restart">${aimSvg(I.restart)}Restart</button><button type="button" class="aim-btn is-red" data-act="quit">${aimSvg(I.close)}Quit</button></div>` +
@@ -721,8 +975,10 @@
                 h = `<div class="aim-ovc aim-rx is-soon"><div class="aim-soon"><span class="aim-soonic">${aimSvg(I.warn)}</span><b>${R.fromWait ? 'Too soon' : 'Missed'}</b><div class="aim-soon-n">False start ${R.fs} of 3<span>${[0, 1, 2].map(i => `<i class="${i < R.fs ? 'is-on' : ''}"></i>`).join('')}</span></div>` +
                     `<span>${R.fromWait ? 'Wait for green' : 'Click the target itself'}. Round re-arms in 1.2 s.<br>A third false start ends the run.</span></div></div>`;
             }
-        } else if (S.phase === 'ares' && S.res) h = aimOvAimRes(S.res);
-        else if (S.phase === 'rres' && S.res) h = aimOvReactRes(S.res);
+        } else if (S.phase === 'ares' && S.res) {
+            const r = S.res;
+            h = r.lines ? aimOvBrk(r) : r.kind === 'fail' || r.kind === 'over' ? aimOvFail(r) : r.kind === 'camp' ? aimOvCamp(r) : aimOvAimRes(r);
+        } else if (S.phase === 'rres' && S.res) h = aimOvReactRes(S.res);
         S.hud.querySelector('.aim-ov').innerHTML = h;
         if (S.phase === 'count') aimOvCount();
         aimLayout(); aimFitOv();
@@ -737,6 +993,83 @@
             const k = Math.min(S.max ? 1.5 : 1, (S.H - 12) / h, (S.W - 8) / w);
             if (k !== 1) el.style.transform = 'scale(' + k.toFixed(3) + ')';
         });
+    }
+    const aimBtns = (a, b) => `<div class="aim-row2 is-wide">${a}${b}</div>`;
+    const aimBtnP = (act, label, icon) => `<button type="button" class="aim-btn is-primary" data-act="${act}">${icon ? aimSvg(icon) : ''}${label}</button>`;
+    const aimBtnG = (act, label) => `<button type="button" class="aim-btn" data-act="${act}">${label}</button>`;
+    // Levels idle (M7): the campaign map, ten nodes on a winding path; Continue opens the current stage.
+    const AIM_NODES = [[20, 70], [50, 70], [80, 70], [80, 50], [50, 50], [20, 50], [20, 30], [50, 30], [80, 30], [50, 12]];
+    function aimOvMap() {
+        const S = aimS, c = aimCamp(S.st, aimMode()), cur = Math.min(c.stage, 9), P = AIM_NODES, path = a => 'M' + a.map(p => p.join(' ')).join('L');
+        const nodes = P.map((p, i) => {
+            const st = i < c.stage ? 'is-done' : i === cur ? 'is-cur' : 'is-lock', boss = i === P.length - 1;
+            const inner = st === 'is-lock' ? aimSvg(AIM_ICON.padlock) : String(i + 1);
+            return `<button type="button" class="aim-node ${st}${boss ? ' is-boss' : ''}" style="left:${p[0]}%;top:${p[1]}%" data-act="stage:${i}"${st === 'is-lock' ? ' disabled' : ''} aria-label="Stage ${i + 1}, ${AIM_STAGES[i].name}">` +
+                `<span class="aim-node-d">${inner}</span><span class="aim-node-s">${boss ? '<b>BOSS</b>' : aimStars3(c.stars[i])}</span></button>`;
+        }).join('');
+        return `<div class="aim-map"><svg class="aim-map-p" viewBox="0 0 100 100" preserveAspectRatio="none"><path class="is-done" d="${path(P.slice(0, cur + 1))}"/><path d="${path(P.slice(cur))}"/></svg>${nodes}` +
+            `<div class="aim-skill"><span>SKILL</span><b>${c.skill.toFixed(2)}</b><i>adaptive</i></div>` +
+            `<button type="button" class="aim-btn is-primary aim-map-go" data-act="stage:${cur}">${aimSvg(AIM_ICON.play)}${c.stage ? 'Continue' : 'Start'} · Stage ${cur + 1} · ${AIM_STAGES[cur].name}</button></div>`;
+    }
+    // The stage card (M8): goal, the three star bars, your best and the skill rating.
+    function aimOvIntro() {
+        const S = aimS, c = aimCamp(S.st, aimMode()), i = S.stageSel, G = AIM_STAGES[i], crit = aimStageCrit(G), replay = i < c.stage;
+        return `<div class="aim-scrimv is-blur"></div><div class="aim-ovc"><div class="aim-card aim-intro"><div><div class="aim-kick">STAGE ${i + 1} OF ${AIM_STAGES.length}${replay ? ' · REPLAY' : ''}</div><div class="aim-intro-t">Stage ${i + 1} · ${G.name}</div></div>` +
+            `<div class="aim-goal">${aimSvg(AIM_ICON[G.goal === 'boss' ? 'shield' : G.base])}<span><span class="aim-kick">GOAL</span><b>${aimStageGoal(G)}</b></span></div>` +
+            `<div class="aim-crit">${crit.map((t, j) => `<div><span>${aimStars3(j + 1)}</span><b>${t}</b><i>${j ? '' : 'Clear'}</i></div>`).join('')}</div>` +
+            `<div class="aim-intro-f"><span>Your best<span class="aim-stars">${aimStars3(c.stars[i])}</span></span><span>Skill <b>×${c.skill.toFixed(2)}</b></span></div>` +
+            aimBtns(aimBtnP('play', 'Start', AIM_ICON.play), aimBtnG('map', 'Map')) + `</div></div>`;
+    }
+    // Total-score results (M3 Sprint, M6 Endless, M10 stage clear): the lines land one by one (aimBrkStep),
+    // the total counts up through a counter, the medal shows after the last line.
+    function aimOvBrk(r) {
+        const st = r.id === 'levels', mt = r.medal || 0;
+        r.shownN = -1;
+        const stars = st ? `<div class="aim-brk-stars">${[0, 1, 2].map(j => aimStar(j < r.stars, j === r.stars - 1 && r.stars > r.had ? 'is-new' : '')).join('')}<span><b>${r.stars} star${r.stars > 1 ? 's' : ''}</b><i>${aimStageCrit(r.G)[r.stars - 1]}</i></span></div>` : '';
+        const medal = st ? '' : `<div class="aim-brk-medal">${aimMedalHtml(mt, 40)}<span><span><b>${mt ? AIM_TIER[mt] : 'No medal'}</b><i>${r.next}</i></span><i class="aim-meter"><i style="transform:scaleX(${Math.max(0, Math.min(1, r.nextP)).toFixed(3)})"></i></i></span></div>`;
+        const stats = r.stats ? `<div class="aim-stats is-3">${r.stats.map(s => `<div class="aim-stat"><span>${s[0]}</span><b${s[3] ? ' class="is-acc"' : ''}>${s[1]}<u>${s[2]}</u></b></div>`).join('')}</div>` : '';
+        const btns = st ? aimBtns(aimBtnP('again', 'Next stage', AIM_ICON.play), aimBtnG('replay', 'Replay')) : aimBtns(aimBtnP('again', 'Play again', AIM_ICON.restart), aimBtnG('sheet:scenarios', 'Change scenario'));
+        return `<div class="aim-scrimv is-blur"></div>${r.isBest ? '<div class="aim-bestglow"></div>' : ''}<div class="aim-ovc"><div class="aim-res aim-brk${r.shown ? ' is-done' : ''}">` +
+            `<div class="aim-res-h"><span class="aim-kick">${r.kicker}</span>${r.isBest ? `<span class="aim-newbest">${aimSvg(AIM_ICON.trophy)}NEW BEST</span>` : ''}<span class="aim-tag aim-brk-tag">${r.shown ? r.tag || 'Local best' : 'Counting…'}</span></div>${stars}` +
+            `<div class="aim-res-m"><div class="aim-brk-l"><span class="aim-kick">${r.label || 'TOTAL SCORE'}</span><div class="aim-res-big${r.isBest ? ' is-best' : ''}${st ? ' is-sm' : ''}"><b class="aim-brk-total">${r.shown ? aimFmt(r.total) : '0'}</b><span>pts</span></div></div><div class="aim-res-c"><span>${r.side[0]}</span><b class="is-text">${r.side[1]}</b></div></div>` +
+            `<div class="aim-lines">${r.lines.map(l => `<div><span>${l[0]}</span><b>${l[1] ? (l[0] === 'Base' || l[0] === 'Hits' ? '' : l[1] > 0 ? '+' : '−') + aimFmt(Math.abs(l[1])) : '—'}</b><i>···</i></div>`).join('')}</div>` +
+            `${medal}${stats}${btns}</div></div>`;
+    }
+    function aimBrkStep() {
+        const S = aimS, r = S.res, box = S.hud.querySelector('.aim-brk');
+        if (!box) return;
+        const n = r.lines.length, step = 360, el = performance.now() - r.t0, i = Math.min(n, Math.floor(el / step));
+        let sum = 0; for (let k = 0; k < i; k++) sum += r.lines[k][1];
+        const live = i < n ? r.lines[i][1] * Math.min(1, (el - i * step) / step) : 0;
+        aimSet(box.querySelector('.aim-brk-total'), aimFmt(i >= n ? r.total : Math.max(0, sum + live)));
+        if (r.shownN !== i) {
+            r.shownN = i;
+            box.querySelectorAll('.aim-lines > div').forEach((d, k) => { d.classList.toggle('is-in', k < i); d.classList.toggle('is-live', k === i); });
+            if (i < n) aimBeep(520 + i * 90, 50, 'sine', 0.03);
+        }
+        if (i >= n) { r.shown = true; box.classList.add('is-done'); aimSet(box.querySelector('.aim-brk-tag'), r.tag || 'Local best'); aimBeep(r.isBest ? 1320 : 990, 160, 'triangle', 0.06); }
+    }
+    // A stage lost (M11), or the campaign over when the last life goes.
+    function aimOvFail(r) {
+        const G = r.G, over = r.kind === 'over', life = !r.replay;
+        const big = G.goal === 'track' ? r.acc + '% on target' : G.goal === 'boss' ? r.hp + ' / ' + G.n + ' left' : r.goalN + ' / ' + G.n + (G.goal === 'bonus' ? ' bonus' : ' hits');
+        const why = G.goal === 'track' ? `Needed ${G.n}%. On target for ${r.onS.toFixed(1)} of ${G.len} s.` : G.goal === 'boss' ? `The boss survived ${G.len} s.` : `Needed ${G.n} in ${G.len} s.`;
+        const hearts = [0, 1, 2].map(j => j < r.lives ? aimHeart(1) : aimHeart(0).replace('aim-heart', 'aim-heart' + (j === r.lives && life ? ' is-lost' : ''))).join('');
+        return `<div class="aim-scrimv is-blur"></div><div class="aim-ovc"><div class="aim-fail"><span class="aim-soonic">${aimSvg(AIM_ICON.close)}</span>` +
+            `<div class="aim-kick is-red">STAGE ${r.stage + 1} · ${over ? 'CAMPAIGN OVER' : 'FAILED'}</div><div class="aim-fail-t">${big}</div>` +
+            `<div class="aim-fail-s">${why}${over ? `<br>Reached stage ${r.reached + 1} · ${aimFmt(r.total)} pts. Your best stays on the board.` : ''}</div>` +
+            `<div class="aim-lives">${hearts}<b>${over ? 'No lives left' : life ? r.lives + (r.lives === 1 ? ' life' : ' lives') + ' left' : 'Replay · no life lost'}</b>${life ? '<i>−1</i>' : ''}</div>` +
+            (over ? aimBtns(aimBtnP('newcamp', 'New campaign', AIM_ICON.restart), aimBtnG('sheet:records', 'Records')) : aimBtns(aimBtnP('again', 'Retry', AIM_ICON.restart), aimBtnG('map', 'Quit to map'))) + `</div></div>`;
+    }
+    // Campaign complete (M13): stars, the campaign medal, the total against your best, the stage strip.
+    function aimOvCamp(r) {
+        const c = aimCamp(aimS.st, r.mode), d = r.total - (r.prev || 0);
+        return `<div class="aim-scrimv is-blur"></div><div class="aim-bestglow"></div><div class="aim-ovc"><div class="aim-res aim-camp">` +
+            `<div class="aim-res-h"><span class="aim-kick">CAMPAIGN COMPLETE · ${r.mode.toUpperCase()}</span><span class="aim-tag">Ranked · posted</span></div>` +
+            `<div class="aim-camp-m"><div class="aim-camp-s">${aimStar(1, 'is-big')}<b>${r.starsAll}</b><span>/30 stars</span></div><div class="aim-camp-md">${aimMedalHtml(r.medal, 48)}<span><b>${r.medal ? AIM_TIER[r.medal] : 'No medal'}</b><i>Campaign medal</i></span></div></div>` +
+            `<div class="aim-camp-t"><span><span class="aim-kick">CAMPAIGN TOTAL</span><b>${aimFmt(r.total)} <u>pts</u></b></span><span><i>vs personal best</i><b class="${d >= 0 ? 'is-good' : ''}">${r.prev ? (d >= 0 ? '+' : '−') + aimFmt(Math.abs(d)) : 'First clear'}</b></span></div>` +
+            `<div class="aim-strip">${c.stars.map((n, i) => `<div class="${i === 9 ? 'is-boss' : ''}"><span>${i === 9 ? 'BOSS' : 'S' + (i + 1)}</span><span class="aim-stars">${aimStars3(n)}</span></div>`).join('')}</div>` +
+            aimBtns(aimBtnP('newcamp', 'Play again', AIM_ICON.restart), aimBtnG('sheet:records', 'Records')) + `</div></div>`;
     }
     function aimOvAimRes(r) {
         const sc = AIM_SCEN[r.id], mode = r.mode.toUpperCase(), track = r.id === 'tracking', I = AIM_ICON;
@@ -778,25 +1111,29 @@
     function aimSheet() {
         const S = aimS, w = S.hud && S.hud.querySelector('.aim-sheet');
         if (!w) return;
-        const st = S.st, I = AIM_ICON, name = S.sheet, T = { scenarios: ['CHOOSE', 'Scenario'], crosshair: ['CROSSHAIR', 'Crosshair editor'], settings: ['AIMLAB', 'Settings'], bests: ['RECORDS', 'Personal bests'] }[name];
+        const st = S.st, I = AIM_ICON, name = S.sheet, T = { scenarios: ['CHOOSE', 'Scenario'], crosshair: ['CROSSHAIR', 'Crosshair editor'], settings: ['AIMLAB', 'Settings'], records: ['MEDALS · ACHIEVEMENTS', 'Records'] }[name];
         if (!T) { w.innerHTML = ''; return; }
         const seg = (opts, cur, act) => `<div class="aim-segs">${opts.map(o => `<button type="button" class="${o[0] === cur ? 'is-on' : ''}" data-act="${act}:${o[0]}">${o[1]}</button>`).join('')}</div>`;
         const tog = (k, on) => `<input type="checkbox" class="aim-tog" data-set="${k}"${on ? ' checked' : ''}>`;
         const slider = (k, label, v, min, max, step, t) => `<label class="aim-sl"><span class="aim-sl-h"><span>${t || ''}${label}</span><b data-out="${k}">${aimOutVal(k, v)}</b></span><input type="range" data-set="${k}" min="${min}" max="${max}" step="${step || 1}" value="${v}"></label>`;
         let b = '';
         if (name === 'scenarios') {
-            const card = id => {
-                const s = AIM_SCEN[id], on = id === st.scen, react = s.group === 'react', bb = (m) => aimBestOf(st, id, m, st.diff);
-                const b1 = react ? (s.noCam ? (bb('2d') ? aimFmt(bb('2d')) + ' ms' : '—') : '2D ' + (bb('2d') ? aimFmt(bb('2d')) + ' ms' : '—')) : '2D ' + (bb('2d') ? aimFmt(bb('2d')) : '—');
-                const av = st.bests[aimBestKey(id, '2d', st.diff) + '|avg'];
-                const b2 = react ? (s.noCam ? (av ? 'avg ' + aimFmt(av) : '') : '3D ' + (bb('3d') ? aimFmt(bb('3d')) + ' ms' : '—')) : '3D ' + (bb('3d') ? aimFmt(bb('3d')) : '—');
-                const len = react ? s.rounds + ' rounds' : s.len + ' s';
-                return `<button type="button" class="aim-card aim-scard${on ? ' is-on' : ''}" data-act="scen:${id}"><span class="aim-scard-i">${aimSvg(I[id])}</span><span class="aim-scard-t"><span><b>${s.name}</b><i>${len}</i></span><span>${s.desc}</span></span><span class="aim-scard-b"><b>${b1}</b><span>${b2}</span></span></button>`;
+            // M1: RANKED (medal, best 2D · 3D), PRACTICE (best 2D), REACTION (lower is better).
+            const bb = (id, m) => id === 'levels' ? aimStarSum(aimCamp(st, m)) : aimBestOf(st, id, m, id === 'levels' ? 'normal' : st.diff);
+            const fmtB = (id, v) => !v ? '—' : id === 'levels' ? v + '/30' : aimFmt(v);
+            const ranked = id => {
+                const s = AIM_SCEN[id], on = id === st.scen, b2 = bb(id, '2d'), b3 = bb(id, '3d'), m = Math.max(aimMedal(id, '2d', aimBestOf(st, id, '2d', 'normal')), aimMedal(id, '3d', aimBestOf(st, id, '3d', 'normal')));
+                const md = id === 'levels' ? Math.max(st.rec.boss ? aimMedal('levels', '2d', b2) : 0, st.rec.boss ? aimMedal('levels', '3d', b3) : 0) : m;
+                return `<button type="button" class="aim-card aim-scard${on ? ' is-on' : ''}" data-act="scen:${id}"><span class="aim-scard-i">${aimSvg(I[id])}</span><span class="aim-scard-t"><span><b>${s.name}</b><i>${s.tag || s.len + ' s'}</i></span><span>${id === 'chaos' ? '3 live targets, endless respawns' : s.desc}</span></span>` +
+                    `${aimMedalHtml(md, 28)}<span class="aim-scard-b"><b>2D ${fmtB(id, b2)}</b><span>3D ${fmtB(id, b3)}</span></span></button>`;
             };
+            const pract = id => { const s = AIM_SCEN[id], v = aimBestOf(st, id, '2d', st.diff); return `<button type="button" class="aim-card aim-pcard${id === st.scen ? ' is-on' : ''}" data-act="scen:${id}"><span>${aimSvg(I[id])}<b>${s.name}</b></span><i>2D ${v ? aimFmt(v) : '—'}</i></button>`; };
+            const react = id => { const s = AIM_SCEN[id], v = aimBestOf(st, id, '2d', st.diff); return `<button type="button" class="aim-card aim-rcard${id === st.scen ? ' is-on' : ''}" data-act="scen:${id}">${aimSvg(I[id])}<span><b>${s.name}</b><i>${s.rounds} rounds</i></span><em>${v ? aimFmt(v) + ' ms' : '—'}</em></button>`; };
             b = `<div class="aim-segs is-diff">${Object.keys(AIM_DIFF).map(d => `<button type="button" class="${d === st.diff ? 'is-on' : ''}" data-act="diff:${d}"><b>${AIM_DIFF[d].name}</b><span>${AIM_DIFF[d].sub}</span></button>`).join('')}</div>` +
-                `<div class="aim-note"><i></i>Normal runs post to the team leaderboard. Easy and Hard stay local.</div>` +
-                `<div class="aim-grp"><span>AIM</span><span>BEST 2D · 3D</span></div>${['chaos', 'flick', 'tracking', 'shrink'].map(card).join('')}` +
-                `<div class="aim-grp"><span>REACTION · LOWER IS BETTER</span><span>BEST</span></div>${['screen', 'target'].map(card).join('')}`;
+                `<div class="aim-note"><i></i>Normal runs post to the team board, 2D and 3D. Levels sets its own difficulty.</div>` +
+                `<div class="aim-grp"><span>RANKED · 2D AND 3D</span><span>MEDAL · BEST 2D · 3D</span></div>${AIM_RANKED.map(ranked).join('')}` +
+                `<div class="aim-grp"><span>PRACTICE</span><span>BEST 2D</span></div><div class="aim-grid3">${AIM_PRACTICE.map(pract).join('')}</div>` +
+                `<div class="aim-grp"><span>REACTION · LOWER IS BETTER</span><span>BEST</span></div><div class="aim-grid2">${['screen', 'target'].map(react).join('')}</div>`;
         } else if (name === 'crosshair') {
             const x = st.xh;
             b = `<div class="aim-xhp"><div class="aim-xhbox is-2d"><canvas class="aim-xhc" data-k="2d"></canvas><span>2D ARENA</span></div><div class="aim-xhbox is-3d"><canvas class="aim-xhc" data-k="3d"></canvas><span>3D ROOM</span></div></div>` +
@@ -815,17 +1152,20 @@
                 `<div class="aim-row is-line"><span><b>Hit sound</b></span><div class="aim-pills">${[['tick', 'Tick'], ['pop', 'Pop'], ['ding', 'Ding']].map(p => `<button type="button" class="${s.hitSnd === p[0] ? 'is-on' : ''}" data-act="snd:${p[0]}">${p[1]}</button>`).join('')}</div></div>` +
                 `<div class="aim-row is-line"><span><b>Target colour</b></span><div class="aim-tcs">${AIM_TCOLORS.map(c => `<button type="button" class="aim-sw${s.tcolor.toUpperCase() === c ? ' is-on' : ''}" data-act="tc:${c}" aria-label="Target ${c}" style="--sw:${c}"></button>`).join('')}</div></div>` +
                 `<div class="aim-row"><span><b>Background</b></span>${seg([['room', 'Room'], ['grid', 'Grid'], ['plain', 'Plain']], s.bg, 'bg')}</div>`;
-        } else if (name === 'bests') {
-            const rows = [];
-            AIM_ORDER.forEach(id => {
-                const s = AIM_SCEN[id];
-                (s.noCam ? ['-'] : ['2d', '3d']).forEach((m, i) => {
-                    const cells = Object.keys(AIM_DIFF).map(d => { const v = aimBestOf(st, id, m === '-' ? '2d' : m, d), rk = aimRanked(id, m === '-' ? '2d' : m, d); return `<span class="${rk ? 'is-rk' : ''}${v ? '' : ' is-none'}">${v ? aimFmt(v) : '—'}</span>`; }).join('');
-                    rows.push(`<div class="aim-brow${i ? ' is-sub' : ''}"><b>${i ? '' : s.name}</b><i>${m === '-' ? '—' : m.toUpperCase()}</i>${cells}</div>`);
-                });
-            });
-            b = `<div class="aim-legend"><span><i></i>Ranked · team board</span><span>Lower ms is better</span></div>` +
-                `<div class="aim-btable"><div class="aim-brow is-head"><b>SCENARIO</b><i></i><span>EASY</span><span>NORMAL</span><span>HARD</span></div>${rows.join('')}</div>` +
+        } else if (name === 'records') {
+            // M15: medals per mode × camera (Normal bests; Levels: campaign stars once the boss is beaten), achievements.
+            const ids = Object.keys(AIM_MEDALS), cells = [], tiers = [0, 0, 0, 0, 0];
+            const rows = ids.map(id => `<div class="aim-mrow"><b>${AIM_SCEN[id].name}</b>${['2d', '3d'].map(m => {
+                const v = id === 'levels' ? aimStarSum(aimCamp(st, m)) : aimBestOf(st, id, m, 'normal'), t = id === 'levels' && !st.rec.boss ? 0 : aimMedal(id, m, v);
+                cells.push(t); for (let k = 1; k <= t; k++) tiers[k]++;
+                return `<span class="aim-mcell">${aimMedalHtml(t, 22)}<span><span class="aim-pips4">${[1, 2, 3, 4].map(k => `<i class="${k <= t ? 't' + k : ''}"></i>`).join('')}</span><i>${!v ? '—' : id === 'levels' ? v + '/30' : aimFmt(v)}</i></span></span>`;
+            }).join('')}</div>`).join('');
+            const got = tiers.reduce((s, v) => s + v, 0), all = ids.length * 8, r = st.rec, stars = Math.max(aimStarSum(aimCamp(st, '2d')), aimStarSum(aimCamp(st, '3d')));
+            const ach = [['Sprinter', 'sprint', 'Gold in Sprint 50, five times', Math.min(r.golds, 5) + '/5', r.golds / 5], ['Survivor', 'endless', 'Survive 2:00 in Endless', aimClock(Math.min(r.survive, 120000)).replace(/\.\d$/, ''), r.survive / 120000],
+                ['Giant Slayer', 'shield', 'Beat the Stage 10 boss', (r.boss ? 1 : 0) + '/1', r.boss ? 1 : 0], ['Campaigner', 'levels', 'Collect all 30 stars', stars + '/30', stars / 30]];
+            b = `<div class="aim-mtot"><div><span><b>${got}</b><i>/ ${all} medals</i></span><span class="aim-mleg">${[1, 2, 3, 4].map(k => `<span>${aimMedalHtml(k, 16)}<b>${tiers[k]}</b></span>`).join('')}</span></div><i class="aim-meter"><i style="transform:scaleX(${(got / all).toFixed(3)})"></i></i></div>` +
+                `<div class="aim-btable aim-mtab"><div class="aim-mrow is-head"><b>MODE</b><span>2D</span><span>3D</span></div>${rows}</div>` +
+                `<div class="aim-grp"><span>ACHIEVEMENTS</span><span></span></div><div class="aim-grid2">${ach.map(a => `<div class="aim-ach${a[4] >= 1 ? ' is-done' : ''}"><span>${aimSvg(I[a[1]])}<b>${a[0]}</b><em>${a[3]}</em></span><i>${a[2]}</i><i class="aim-meter"><i style="transform:scaleX(${Math.max(0, Math.min(1, a[4])).toFixed(3)})"></i></i></div>`).join('')}</div>` +
                 `<div class="aim-row2 is-wide is-end"><button type="button" class="aim-btn is-primary" data-act="board">Open team board</button><button type="button" class="aim-btn is-red is-auto" data-act="reset">Reset</button></div>`;
         }
         w.className = 'aim-sheet is-' + name;

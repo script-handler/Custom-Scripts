@@ -968,7 +968,7 @@ ok('and refreshed when a match ends', /refreshGameScoreBtn\(gameType\)/.test(src
 ok('the overlay carries a tab per mode', has('function gameLbTabsHtml(game, active)') &&
    has('window.setGameLeaderboardMode'));
 ok('the tabs are rendered above the table',
-   /function renderGameLeaderboard\(game\)[\s\S]{0,900}?gameLbTabsHtml\(game, mode\)[\s\S]{0,120}?lbBoardRowsHtml\(game, mode\)/.test(src));
+   /function renderGameLeaderboard\(game\)[\s\S]{0,1600}?gameLbTabsHtml\(game, mode\)[\s\S]{0,120}?lbBoardRowsHtml\(game, key\)/.test(src));
 ok('only a real mode of the open game can be selected',
    /setGameLeaderboardMode = \(mode\)[\s\S]{0,320}?cfg\.modes\[mode\][\s\S]{0,80}?return;/.test(src));
 // A hand-picked board is for comparing, not a preference. Left set, it would
@@ -1351,7 +1351,7 @@ ok('switching the Reaction scenario refreshes the button and open board',
    /case 'scen':[\s\S]{0,120}?aimQuit\(\)/.test(src) && /function aimQuit\(\)[\s\S]{0,300}?aimSyncScoreBtn\(\)/.test(src));
 // One AimLab button: its Screen and Target tabs show the reaction best, in ms.
 ok('the Reaction score button feeds the shared overlay',
-   /function aimSyncScoreBtn\(\)[\s\S]{0,900}?updateGameScoreBtn\('aim', res && res\.id === m \? res\.best/.test(src));
+   /function aimSyncScoreBtn\(\)[\s\S]{0,900}?if \(m === 'screen' \|\| m === 'target'\) updateGameScoreBtn\('aim', res \? res\.best/.test(src));
 ok('updateGameScoreBtn re-renders an open board',
    /function updateGameScoreBtn\([\s\S]{0,1400}?refreshGameLeaderboard\(game\)/.test(src));
 // A finished run with no recorded reaction leaves both figures at 0, and RefleX

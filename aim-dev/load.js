@@ -34,7 +34,7 @@ module.exports = function load(opts) {
     opts = opts || {};
     stubEnvironment(opts.store);
     return new Function(HOST + source() + `
-        return { AIM_SCEN, AIM_ORDER, AIM_DIFF, AIM_GAP_PX, AIM_EDGE_PX, AIM_CLEAR_PX, AIM_GAP_DEG, AIM_CLEAR_DEG, AIM_FS_LIMIT, AIM_SOON_MS, AIM_NEXT_MS,
+        return { AIM_SCEN, AIM_ORDER, AIM_DIFF, AIM_STAGES, AIM_MEDALS, aimMedal, aimNextMedal, aimLegacy, aimStart, aimBreakdown, aimStars, aimSkillNext, aimCamp, aimStarSum, aimStageGoal, aimStageCrit, AIM_GAP_PX, AIM_EDGE_PX, AIM_CLEAR_PX, AIM_GAP_DEG, AIM_CLEAR_DEG, AIM_FS_LIMIT, AIM_SOON_MS, AIM_NEXT_MS,
             aimDist, aimAngle, aimMult, aimRanked, aimBestKey, aimSpace2d, aimSpace3d, aimRadius, aimSpawnAt,
             aimNewRun, aimAddTarget, aimFill, aimShoot, aimTick, aimSummary, aimHitAt, aimRescale, aimLiveAcc,
             aimReactNew, aimReactArm, aimReactNext, aimReactTick, aimReactPainted, aimReactClick, aimReactSummary,

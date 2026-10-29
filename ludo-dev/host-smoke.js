@@ -221,9 +221,9 @@ ok('each has an XP value',
    ['ludoChamp', 'ludoFlawless', 'ludoHunter'].every(k => H.ACHIEVEMENT_XP[k] > 0));
 // 30 before Snake v2, which added six (snakeEndless, snakeWalled,
 // snakeGourmand, snakeCampaign, snakeConqueror, snakeLong); Pool v2 added Called It, and
-// snooker (S6) Century and Maximum.
+// snooker (S6) Century and Maximum; AimLab's ranked modes Sprinter, Survivor, Giant Slayer, Campaigner.
 const total = Object.keys(H.ACHIEVEMENTS).length;
-ok('achievement grid total is 39', total === 39, 'got ' + total);
+ok('achievement grid total is 43', total === 43, 'got ' + total);
 
 head('Achievement icons (POOL_V2_PLAN.md, Achievement icons)');
 {
@@ -234,8 +234,8 @@ head('Achievement icons (POOL_V2_PLAN.md, Achievement icons)');
     ok('no two share a glyph', new Set(keys.map(k => A[k].d)).size === keys.length);
     const by = {};
     keys.forEach(k => { const t = H.achTier(k); by[t] = (by[t] || 0) + 1; });
-    ok('tiers follow ACHIEVEMENT_XP: 12 common, 18 rare, 7 epic, 2 legendary',
-       by.common === 12 && by.rare === 18 && by.epic === 7 && by.legendary === 2, JSON.stringify(by));
+    ok('tiers follow ACHIEVEMENT_XP: 12 common, 21 rare, 8 epic, 2 legendary',
+       by.common === 12 && by.rare === 21 && by.epic === 8 && by.legendary === 2, JSON.stringify(by));
     ok('Centurion and Legend are the legendary pair, Maximum is epic',
        H.achTier('centurion') === 'legendary' && H.achTier('level100') === 'legendary' && H.achTier('snookerMaximum') === 'epic');
     const leg = H.achMedal('level100', 40), lock = H.achMedal('level100', 40, true), small = H.achMedal('firstDay', 20);

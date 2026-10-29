@@ -11,6 +11,10 @@
 <sc-if value="{{ hasGhost }}" hint-placeholder-val="{{ false }}">
 <div style="position:absolute;left:50%;top:50%;width:{{ g }}px;height:{{ g }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px dashed {{ ghostC }};box-sizing:border-box"></div>
 </sc-if>
+<sc-if value="{{ isVuln }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:50%;width:{{ pr1 }}px;height:{{ pr1 }}px;transform:translate(-50%,-50%);border-radius:50%;border:2px solid {{ c }};opacity:.6;box-sizing:border-box"></div>
+<div style="position:absolute;left:50%;top:50%;width:{{ pr2 }}px;height:{{ pr2 }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ c }};opacity:.28;box-sizing:border-box"></div>
+</sc-if>
 <sc-if value="{{ isHit }}" hint-placeholder-val="{{ false }}">
 <div style="position:absolute;left:50%;top:50%;width:{{ ringD }}px;height:{{ ringD }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ c }};opacity:{{ ringOp }};box-sizing:border-box"></div>
 <div style="position:absolute;left:50%;top:50%;width:{{ flashD }}px;height:{{ flashD }}px;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(closest-side, {{ flashC }}, transparent);opacity:{{ flashOp }}"></div>
@@ -23,6 +27,15 @@
 <div style="position:absolute;left:50%;top:50%;width:{{ innerD }}px;height:{{ innerD }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ innerC }};box-sizing:border-box"></div>
 <div style="position:absolute;left:50%;top:50%;width:{{ dotD }}px;height:{{ dotD }}px;transform:translate(-50%,-50%);border-radius:50%;background:{{ dotC }};box-shadow:{{ dotSh }}"></div>
 </sc-if>
+<sc-if value="{{ isBoss }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:5%;border-radius:50%;background:repeating-conic-gradient(from 15deg, {{ seamC }} 0 2deg, transparent 2deg 30deg);opacity:{{ seamOp }}"></div>
+<div style="position:absolute;left:50%;top:50%;width:{{ bRing }}px;height:{{ bRing }}px;transform:translate(-50%,-50%);border-radius:50%;border:1.5px solid {{ seamC }};box-sizing:border-box;opacity:{{ seamOp }}"></div>
+<div style="position:absolute;left:50%;top:50%;width:{{ coreD }}px;height:{{ coreD }}px;transform:translate(-50%,-50%);border-radius:50%;background:{{ coreBg }};box-shadow:{{ coreSh }};display:flex;align-items:center;justify-content:center">
+<sc-if value="{{ armor }}" hint-placeholder-val="{{ false }}">
+<svg width="20" height="20" style="transform:scale({{ shK }});fill:none;stroke:{{ shieldC }};stroke-width:1.5;stroke-linejoin:round"><path d="M10 2.8 16 5v4.6c0 3.7-2.6 6.4-6 7.6-3.4-1.2-6-3.9-6-7.6V5Z"></path></svg>
+</sc-if>
+</div>
+</sc-if>
 </div>
 <sc-if value="{{ hasRing }}" hint-placeholder-val="{{ false }}">
 <svg width="{{ rs }}" height="{{ rs }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);overflow:visible">
@@ -30,22 +43,42 @@
 <circle cx="{{ rh }}" cy="{{ rh }}" r="{{ rr }}" style="fill:none;stroke:{{ ringC }};stroke-width:3;stroke-linecap:round;stroke-dasharray:{{ dash }}"></circle>
 </svg>
 </sc-if>
+<sc-if value="{{ hasHp }}" hint-placeholder-val="{{ false }}">
+<sc-for list="{{ segs }}" as="sg" hint-placeholder-count="3">
+<svg width="{{ hs }}" height="{{ hs }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);overflow:visible"><circle cx="{{ hh }}" cy="{{ hh }}" r="{{ hr }}" style="fill:none;stroke:{{ sg.c }};stroke-width:4;stroke-dasharray:{{ sg.da }};stroke-dashoffset:{{ sg.off }}"></circle></svg>
+</sc-for>
+</sc-if>
+<sc-if value="{{ hasWin }}" hint-placeholder-val="{{ false }}">
+<svg width="{{ hs }}" height="{{ hs }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-90deg);overflow:visible"><circle cx="{{ hh }}" cy="{{ hh }}" r="{{ wr }}" style="fill:none;stroke:{{ winC }};stroke-width:2;stroke-linecap:round;stroke-dasharray:{{ winDa }}"></circle></svg>
+</sc-if>
+<sc-if value="{{ esc }}" hint-placeholder-val="{{ false }}">
+<svg width="{{ hs }}" height="{{ hs }}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);overflow:visible"><circle cx="{{ hh }}" cy="{{ hh }}" r="{{ er }}" style="fill:none;stroke:{{ escC }};stroke-width:1.5;stroke-dasharray:4 5"></circle></svg>
+</sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:120,&quot;height&quot;:120},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;disc&quot;,&quot;sphere&quot;],&quot;default&quot;:&quot;disc&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:44,&quot;tsType&quot;:&quot;number&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;phase&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hit&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ring&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;},&quot;ghost&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;bp&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.35,&quot;tsType&quot;:&quot;number&quot;},&quot;sc&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;op&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;color&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#FF5D73&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:160,&quot;height&quot;:160},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;disc&quot;,&quot;sphere&quot;,&quot;bonus&quot;,&quot;boss&quot;],&quot;default&quot;:&quot;disc&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:44,&quot;tsType&quot;:&quot;number&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;,&quot;cyber&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;phase&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;hit&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ring&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;},&quot;ghost&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;},&quot;bp&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.35,&quot;tsType&quot;:&quot;number&quot;},&quot;sc&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;op&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;},&quot;color&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#FF5D73&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;hp&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;tsType&quot;:&quot;number&quot;},&quot;hpn&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;tsType&quot;:&quot;number&quot;},&quot;win&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;},&quot;esc&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;armor&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
 const hx = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const rgba = (h, a) => { const [r, g, b] = hx(h); return `rgba(${r},${g},${b},${a})`; };
 const mix = (a, b, t) => { const x = hx(a), y = hx(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
 class Component extends DCLogic {
   renderVals() {
-    const p = this.props, s = +p.size || 44, th = p.theme || 'dark', cy = th === 'cyber';
-    const c = p.color || (cy ? '#FF2E63' : '#FF5D73');
+    const p = this.props, s = +p.size || 44, th = p.theme || 'dark', cy = th === 'cyber', lt = th === 'light';
+    const bonus = p.kind === 'bonus', boss = p.kind === 'boss', armor = boss && !!p.armor && p.armor !== 'false';
+    const gold = lt ? '#F0A500' : cy ? '#FFE600' : '#FFC24B';
+    const c = p.color || (bonus ? gold : cy ? '#FF2E63' : '#FF5D73');
     const sphere = p.kind === 'sphere', phase = p.phase || 'live', hit = phase === 'hit';
     const bp = p.bp != null ? +p.bp : 0.35;
     let sc = p.sc != null ? +p.sc : 1, op = p.op != null ? +p.op : 1;
     if (hit) { sc = 0.7 + bp * 0.3; op = sphere ? 0 : 0.28 * (1 - bp); }
+    const esc = bonus && !hit && !!p.esc && p.esc !== 'false';
+    if (esc) op = .72;
     let fill, shadow, border = 'none';
-    if (sphere) {
+    const steel = lt ? ['#C3CADB', '#8A93AA', '#5A6278'] : cy ? ['#1A4B56', '#0B262E', '#041216'] : ['#8A85A8', '#4A4562', '#2A2738'];
+    if (boss) {
+      fill = `radial-gradient(circle at 38% 32%, ${steel[0]} 0%, ${steel[1]} 48%, ${steel[2]} 100%)`;
+      border = `2px solid ${cy ? '#00F0FF' : lt ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.3)'}`;
+      shadow = armor ? `0 ${s * .1}px ${s * .35}px rgba(0,0,0,${lt ? .25 : .45})` : `0 ${s * .1}px ${s * .35}px rgba(0,0,0,.35), 0 0 ${s * .45}px ${rgba(c, .6)}`;
+    } else if (sphere) {
       fill = `radial-gradient(circle at 34% 30%, #FFFFFF 0%, ${mix(c, '#ffffff', .55)} 9%, ${c} 38%, ${mix(c, '#000000', .45)} 76%, ${mix(c, '#000000', .72)} 100%)`;
       shadow = cy ? `0 0 ${s * .4}px ${rgba(c, .55)}` : `inset ${-s * .05}px ${-s * .07}px ${s * .14}px rgba(255,255,255,.10), 0 ${s * .08}px ${s * .3}px rgba(0,0,0,.35)`;
     } else if (cy) {
@@ -54,29 +87,43 @@ class Component extends DCLogic {
       shadow = `0 0 ${s * .32}px ${rgba(c, .6)}, inset 0 0 ${s * .22}px ${rgba(c, .35)}`;
     } else {
       fill = `radial-gradient(circle at 50% 38%, ${mix(c, '#ffffff', .2)} 0%, ${c} 58%, ${mix(c, '#000000', .16)} 100%)`;
-      shadow = `inset 0 0 0 2px rgba(255,255,255,.55), 0 0 0 3px ${rgba(c, .22)}, 0 ${s * .12}px ${s * .38}px ${rgba(c, .38)}`;
+      shadow = bonus ? `inset 0 0 0 2px rgba(255,255,255,.6), 0 0 0 4px ${rgba(c, .28)}, 0 0 ${s * .55}px ${rgba(c, .55)}` : `inset 0 0 0 2px rgba(255,255,255,.55), 0 0 0 3px ${rgba(c, .22)}, 0 ${s * .12}px ${s * .38}px ${rgba(c, .38)}`;
     }
     const ring = p.ring != null ? +p.ring : -1, rs = Math.round(s * 1.6), rr = rs / 2 - 2, len = 2 * Math.PI * rr;
-    const ringC = th === 'light' ? '#0B84E8' : th === 'cyber' ? '#00F0FF' : '#4FACFE';
+    const ringC = lt ? '#0B84E8' : cy ? '#00F0FF' : '#4FACFE';
     const parts = [];
     if (hit) for (let i = 0; i < 8; i++) {
       const a = i * 45 + 22.5, rad = s * (0.72 + bp * 0.6);
-      parts.push({ x: +(Math.cos(a * Math.PI / 180) * rad).toFixed(1), y: +(Math.sin(a * Math.PI / 180) * rad).toFixed(1), a, w: +(s * (0.16 - bp * 0.07)).toFixed(1), c: i % 2 ? c : (th === 'light' ? mix(c, '#000000', .1) : '#FFFFFF'), op: +(1 - bp * 0.7).toFixed(2) });
+      parts.push({ x: +(Math.cos(a * Math.PI / 180) * rad).toFixed(1), y: +(Math.sin(a * Math.PI / 180) * rad).toFixed(1), a, w: +(s * (0.16 - bp * 0.07)).toFixed(1), c: i % 2 ? c : (lt ? mix(c, '#000000', .1) : '#FFFFFF'), op: +(1 - bp * 0.7).toFixed(2) });
     }
     const g = +p.ghost || 0;
+    const hpn = +p.hpn || 3, hpv = p.hp != null && p.hp !== '' ? +p.hp : hpn, hasHp = bonus && !hit;
+    const hs = Math.round(s * 2.4), hh = hs / 2, hr = s * .8, hl = 2 * Math.PI * hr, gapL = hl * .04, segL = hl / hpn - gapL;
+    const trackHp = lt ? 'rgba(15,23,42,.16)' : cy ? 'rgba(0,240,255,.2)' : 'rgba(255,255,255,.2)';
+    const segs = Array.from({ length: hpn }, (_, i) => ({ c: i < hpv ? c : trackHp, da: `${segL.toFixed(1)} ${(hl - segL).toFixed(1)}`, off: (-(i * hl / hpn + gapL / 2)).toFixed(1) }));
+    const win = p.win != null && p.win !== '' ? +p.win : -1, wr = s * .98, wl = 2 * Math.PI * wr;
     return {
       s, sc, op, fill, shadow, border, c,
-      isDisc: !sphere && !hit, isHit: hit, parts,
+      isDisc: !sphere && !hit && !boss, isHit: hit, parts, isBoss: boss, armor, isVuln: boss && !armor,
+      pr1: Math.round(s * 1.18), pr2: Math.round(s * 1.42),
+      seamC: cy ? 'rgba(0,240,255,.55)' : lt ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.22)', seamOp: armor ? 1 : .4, bRing: Math.round(s * .7),
+      coreD: Math.round(s * (armor ? .36 : .56)),
+      coreBg: armor ? `radial-gradient(circle at 40% 35%, ${steel[1]}, ${steel[2]})` : `radial-gradient(circle, #FFFFFF 0%, ${mix(c, '#ffffff', .3)} 18%, ${c} 55%, ${mix(c, '#000000', .35)} 100%)`,
+      coreSh: armor ? `inset 0 0 0 1.5px ${cy ? 'rgba(0,240,255,.55)' : 'rgba(255,255,255,.25)'}` : `0 0 ${s * .3}px ${rgba(c, .8)}`,
+      shK: +(s / 70).toFixed(2), shieldC: cy ? '#00F0FF' : lt ? '#F1F5F9' : '#D5D0E8',
       innerD: Math.round(s * .56), innerC: cy ? rgba(c, .8) : 'rgba(255,255,255,.38)',
       dotD: Math.max(3, Math.round(s * .15)), dotC: cy ? c : '#FFFFFF', dotSh: cy ? `0 0 6px ${c}` : '0 0 0 1px rgba(0,0,0,.08)',
       hasGhost: g > 0, g, ghostC: rgba(c, .5),
       ringD: Math.round(s * (1.1 + bp * 0.9)), ringOp: +(0.8 * (1 - bp) + .05).toFixed(2),
-      flashD: Math.round(s * 1.5), flashC: th === 'light' ? rgba(c, .45) : 'rgba(255,255,255,.65)', flashOp: +(1 - bp).toFixed(2),
-      hasRing: ring >= 0, rs, rh: rs / 2, rr, trackC: th === 'light' ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.16)', ringC,
-      dash: `${(len * Math.max(0, ring)).toFixed(1)} ${len.toFixed(1)}`
+      flashD: Math.round(s * 1.5), flashC: lt ? rgba(c, .45) : 'rgba(255,255,255,.65)', flashOp: +(1 - bp).toFixed(2),
+      hasRing: ring >= 0, rs, rh: rs / 2, rr, trackC: lt ? 'rgba(15,23,42,.14)' : 'rgba(255,255,255,.16)', ringC,
+      dash: `${(len * Math.max(0, ring)).toFixed(1)} ${len.toFixed(1)}`,
+      hasHp, segs, hs, hh, hr: R(hr), hasWin: hasHp && win >= 0, wr: R(wr), winDa: `${(wl * Math.max(0, win)).toFixed(1)} ${wl.toFixed(1)}`, winC: lt ? '#0F172A' : cy ? '#00F0FF' : '#FFFFFF',
+      esc, er: R(s * 1.14), escC: lt ? '#BE123C' : cy ? '#FF2E63' : '#FF5D73'
     };
   }
 }
+function R(n) { return Math.round(n * 10) / 10; }
 </script>
 </body>
 </html>
