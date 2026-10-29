@@ -20,7 +20,7 @@ function page() {
     let script = fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8');
     const end = script.lastIndexOf('})();');
     const probe = `
-    window.__aim = { S: aimS, AIM_SCEN, aimDist, aimAddTarget, aimCamp, aimOv, collectGameModeBests, setBoard(a) { leaderboardData = a; }, get xp() { return userXP; }, get currentGame() { return currentGame; }, get prefs() { return userPreferences; }, applyPreferences };
+    window.__aim = { S: aimS, AIM_SCEN, aimDist, aimAddTarget, aimCamp, aimOv, aimTrackPos, aimCam, aimToCam, aimProj, aimDir, AIM_D, collectGameModeBests, setBoard(a) { leaderboardData = a; }, get xp() { return userXP; }, get currentGame() { return currentGame; }, get prefs() { return userPreferences; }, applyPreferences };
 `;
     script = script.slice(0, end) + probe + script.slice(end);
     return `<!doctype html><html><head><meta charset="utf-8"><title>Attendance</title></head>
@@ -348,6 +348,56 @@ async function main() {
     for (let i = 0; i < 3; i++) { const t = await ev("(() => { const t = window.__aim.S.run.tg.find(q => !q.kind); return t ? [t.x, t.y] : null; })()"); const p = await vpPt(t[0], t[1]); await clickAt(p[0], p[1]); await sleep(40); }
     await sleep(80); await shot('M4-max-endless', '.aim-max-frame');
     await act('quit'); await ev("document.querySelector('.aim-maxb').click()"); await sleep(400);
+
+    head('play area: Max and 3D');
+    // Every visible HUD element over the viewport, in viewport px. In Max the dock and rank pill fade out in a run.
+    const hudRects = "(() => { const S = window.__aim.S, vp = S.vp.getBoundingClientRect(), k = vp.width / S.W; return Array.from(document.querySelectorAll('.aim-hud :is(.aim-top > *, .aim-tile, .aim-foot, .aim-status, .aim-rank, .aim-vchip, .aim-vbtns, .aim-esc)')).filter(e => e.getClientRects().length && getComputedStyle(e).display !== 'none' && +getComputedStyle(e).opacity > 0.05).map(e => { const b = e.getBoundingClientRect(); return [(b.left - vp.left) / k, (b.top - vp.top) / k, b.width / k, b.height / k, e.className]; }).filter(h => h[0] < S.W && h[1] < S.H && h[0] + h[2] > 0 && h[1] + h[3] > 0); })()";
+    const under = (hud, pts) => { const hit = new Set(); for (const t of pts) for (const h of hud) { const dx = Math.max(h[0] - t[0], 0, t[0] - h[0] - h[2]), dy = Math.max(h[1] - t[1], 0, t[1] - h[1] - h[3]); if (dx * dx + dy * dy < t[2] * t[2]) hit.add(h[4]); } return Array.from(hit); };
+    await scen('tracking');
+    await act('max'); await sleep(500);
+    await act('play');
+    ok('Max Tracking runs', await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.tg.length === 1", 9000));
+    await sleep(350);
+    ok('in a Max run the dock and the rank pill step out of the play area', await ev("+getComputedStyle(document.querySelector('.is-max .aim-foot')).opacity < 0.05 && +getComputedStyle(document.querySelector('.is-max .aim-rank')).opacity < 0.05 && /Esc to pause/.test(document.querySelector('.aim-status').textContent)"));
+    {
+        const hud = await ev(hudRects);
+        // The whole 45 s path, sampled every 100 ms.
+        const path = await ev("(() => { const S = window.__aim.S, r = S.run, t = r.tg[0], el0 = r.el, out = []; for (let el = 0; el <= r.len; el += 100) { r.el = el; window.__aim.aimTrackPos(r, t); out.push([t.x, t.y, t.r]); } r.el = el0; window.__aim.aimTrackPos(r, t); return out; })()");
+        const H = await ev("window.__aim.S.H"), ys = path.map(p => p[1]);
+        ok('Max Tracking never passes under a visible HUD element', !under(hud, path).length, under(hud, path));
+        ok('…and sweeps the middle of the view', Math.min(...ys) < H * 0.4 && Math.max(...ys) > H * 0.6, [Math.min(...ys), Math.max(...ys), H]);
+    }
+    await sleep(200); await shot('F5-max-tracking', '.aim-max-frame');
+    await ev("(() => { const b = document.createElement('button'); b.setAttribute('data-act', 'pause'); document.querySelector('.aim-hud').appendChild(b); b.click(); b.remove(); })()");
+    ok('pausing brings the dock back (a 0.2 s fade)', await waitFor("window.__aim.S.phase === 'paused' && +getComputedStyle(document.querySelector('.is-max .aim-foot')).opacity > 0.95", 2000));
+    // 2D Chaos in Max: 300 spawns, none under the HUD.
+    await scen('chaos'); await act('play');
+    await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.tg.length === 3", 9000); await sleep(350);
+    {
+        const hud = await ev(hudRects);
+        const pts = await ev("(() => { const r = window.__aim.S.run, out = []; for (let i = 0; i < 300; i++) { r.tg.splice(0, 1); const t = window.__aim.aimAddTarget(r, null); if (t) out.push([t.x, t.y, t.r]); } return out; })()");
+        ok('Max Chaos: 300 spawns, none under a visible HUD element', pts.length > 250 && !under(hud, pts).length, under(hud, pts));
+    }
+    // 3D: the spawn window spreads over the view, on screen, in Max and compact.
+    const spread3d = () => ev("(() => { const S = window.__aim.S, r = S.run, C = window.__aim.aimCam(), xs = [], ys = []; S.yaw = 0; S.pitch = 0; const C0 = window.__aim.aimCam(); for (let i = 0; i < 300; i++) { r.tg.splice(0, 1); const t = window.__aim.aimAddTarget(r, null); if (!t) continue; const d = window.__aim.aimDir(t.x, t.y), q = window.__aim.aimToCam(C0, [d[0] * 5, d[1] * 5, d[2] * 5]), p = window.__aim.aimProj(C0, q), pr = C0.f * Math.tan(t.r * Math.PI / 180); xs.push((p[0] - pr) / S.W, (p[0] + pr) / S.W); ys.push((p[1] - pr) / S.H, (p[1] + pr) / S.H); } return { x: [Math.min(...xs), Math.max(...xs)], y: [Math.min(...ys), Math.max(...ys)] }; })()");
+    await act('quit'); await ev("(() => { const S = window.__aim.S; S.st.mode = '3d'; S.hudKey = ''; S.ovKey = ''; })()"); await act('play');
+    await sleep(100); await ev("(() => { window.__aim.S.locked = true; window.__aim.S.ovKey = ''; })()");
+    await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.tg.length === 3", 9000);
+    { const sp = await spread3d(); ok('Max 3D: targets cover 78%+ of the width and 60%+ of the height, under the top bar', sp.x[1] - sp.x[0] > 0.78 && sp.y[1] - sp.y[0] > 0.6 && sp.y[0] >= 96 / 800 - 0.002, sp); }
+    await ev("(() => { const S = window.__aim.S; S.yaw = 0; S.pitch = 0; })()");
+    await sleep(150); await shot('F6-max-3d-spread', '.aim-max-frame');
+    await ev("(() => { const S = window.__aim.S; S.locked = false; })()");
+    await act('quit'); await ev("document.querySelector('.aim-maxb').click()"); await sleep(400);
+    await act('play'); await sleep(100); await ev("(() => { window.__aim.S.locked = true; window.__aim.S.ovKey = ''; })()");
+    await waitFor("window.__aim.S.phase === 'run' && window.__aim.S.run.tg.length === 3", 9000);
+    { const sp = await spread3d(); ok('compact 3D: targets cover 78%+ of the width and 60%+ of the height', sp.x[1] - sp.x[0] > 0.78 && sp.y[1] - sp.y[0] > 0.6, sp); }
+    // 3D drift on screen matches 2D (Hard Chaos): degrees a second × px a degree at the centre.
+    {
+        const v = await ev("(() => { const S = window.__aim.S, C = window.__aim.aimCam(); S.run.diff = 'hard'; S.run.dv = 90; S.run.tg.splice(0, 3); const t = window.__aim.aimAddTarget(S.run, null); return Math.hypot(t.vx, t.vy) * C.f * Math.PI / 180 / S.W / (90 / S.W); })()");
+        ok('compact 3D drift crosses the view at 75–135% of 2D Hard Chaos’s speed', v > 0.75 && v < 1.35, v);
+    }
+    await sleep(150); await shot('A4b-compact-3d-spread', '.snake-game-container');
+    await ev("(() => { const S = window.__aim.S; S.locked = false; S.st.mode = '2d'; })()"); await act('quit');
 
     head('themes');
     await ev("(() => { const b = document.createElement('button'); b.setAttribute('data-act', 'quit'); document.querySelector('.aim-hud').appendChild(b); b.click(); b.remove(); window.__aim.S.st.mode = '2d'; })()");

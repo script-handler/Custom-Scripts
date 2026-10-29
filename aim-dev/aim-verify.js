@@ -17,8 +17,8 @@ sec('spawner');
 const spaces = [
     ['316 idle', () => L.aimSpace2d(316, 366, [], 1)],
     ['368 run', () => L.aimSpace2d(368, 492, [{ x: 252, y: 0, w: 116, h: 64 }], 1)],
-    ['Max 2D', () => L.aimSpace2d(1280, 800, [{ x: 0, y: 0, w: 1280, h: 96 }, { x: 0, y: 704, w: 1280, h: 96 }], 1.7)],
-    ['3D', () => L.aimSpace3d()]
+    ['Max 2D', () => L.aimSpace2d(1280, 800, [{ x: 0, y: 0, w: 1280, h: 96 }, { x: 0, y: 96, w: 340, h: 56 }, { x: 0, y: 728, w: 1280, h: 72 }], 1.7)],
+    ['3D', () => L.aimSpace3d()], ['Max 3D', () => L.aimSpace3d(1280, 800, 96, 72)]
 ];
 let spawns = 0, relaxed = 0, nulls = 0, clearMiss = 0;
 for (const [label, mk] of spaces) for (const id of ['chaos', 'flick', 'shrink']) for (const diff of Object.keys(L.AIM_DIFF)) {
@@ -39,7 +39,11 @@ for (const [label, mk] of spaces) for (const id of ['chaos', 'flick', 'shrink'])
         if (!sp.ang) {
             ok(t.x - t.r >= sp.edge - 1e-9 && t.x + t.r <= sp.w - sp.edge + 1e-9 && t.y - t.r >= sp.edge - 1e-9 && t.y + t.r <= sp.h - sp.edge + 1e-9, `${label} ${id}: off the edge`);
             for (const h of sp.holes) { const dx = Math.max(h.x - t.x, 0, t.x - h.x - h.w), dy = Math.max(h.y - t.y, 0, t.y - h.y - h.h); ok(dx * dx + dy * dy >= t.r * t.r - 1e-9, `${label} ${id}: under the HUD`); }
-        } else ok(t.x - t.r >= sp.y0 - 1e-9 && t.x + t.r <= sp.y1 + 1e-9 && t.y - t.r >= sp.p0 - 1e-9 && t.y + t.r <= sp.p1 + 1e-9, `3D ${id}: outside the window`);
+        } else {
+            const c = Math.cos(t.x * Math.PI / 180), tn = a => Math.tan(a * Math.PI / 180) / c;
+            ok(t.x - t.r >= sp.y0 - 1e-9 && t.x + t.r <= sp.y1 + 1e-9 && t.y - t.r >= sp.p0 - 1e-9 && t.y + t.r <= sp.p1 + 1e-9, `3D ${id}: outside the window`);
+            ok(tn(t.y + t.r) <= sp.tTop + 1e-6 && -tn(t.y - t.r) <= sp.tBot + 1e-6, `3D ${id}: off the view at yaw ${t.x.toFixed(1)}`);
+        }
     }
 }
 ok(spawns >= 20000, `20,000+ spawns (got ${spawns})`);
@@ -89,6 +93,47 @@ ok(L.aimLegacy('chaos', '2d', 'normal') && !L.aimLegacy('chaos', '3d', 'normal')
 ok(['chaos', 'sprint', 'endless'].every(id => L.aimRanked(id, '2d', 'normal') && L.aimRanked(id, '3d', 'normal') && !L.aimRanked(id, '2d', 'hard')) && L.aimRanked('levels', '3d', 'easy') && L.aimRanked('target', '3d', 'normal') && !L.aimRanked('flick', '2d', 'normal'), 'ranked: every ranked mode in 2D and 3D at Normal; Levels always; practice never');
 
 // ── 2b. The ranked modes: Sprint, Endless, the bonus target, Levels ──
+// ── 2a. The play area: Tracking's path between the HUD bars, 3D's spread and speed ──
+sec('play area');
+{
+    // Max 2D: the top bar (96), the chip's corner under it (to 152), the bottom strip (72). Tracking used to
+    // centre on the bottom bar.
+    const sp = L.aimSpace2d(1280, 800, [{ x: 0, y: 0, w: 1280, h: 96 }, { x: 0, y: 96, w: 340, h: 56 }, { x: 0, y: 728, w: 1280, h: 72 }], 1.7);
+    for (const seed of [1, 2, 3]) {
+        const run = L.aimNewRun('tracking', '2d', 'normal', sp); L.aimFill(run, null, seeded(seed));
+        let lo = 1e9, hi = -1e9, sum = 0, n = 0, out = 0;
+        for (let i = 0; i < 2800; i++) { L.aimTick(run, 16, null); const t = run.tg[0]; lo = Math.min(lo, t.y); hi = Math.max(hi, t.y); sum += t.y; n++; if (t.y - t.r < 152 - 1e-6 || t.y + t.r > 728 + 1e-6 || t.x - t.r < 0 || t.x + t.r > 1280) out++; }
+        ok(out === 0, `Max Tracking (seed ${seed}) never passes under a bar (${out} frames did)`);
+        ok(Math.abs(sum / n - 440) < 60 && lo < 300 && hi > 520, `Max Tracking (seed ${seed}) sweeps the middle: y ${lo.toFixed(0)}–${hi.toFixed(0)}, mean ${(sum / n).toFixed(0)}`);
+    }
+    // Compact: the corner buttons push the band down; the band still reaches the bottom.
+    const cs = L.aimSpace2d(368, 492, [{ x: 252, y: 0, w: 116, h: 64 }], 1), cr = L.aimNewRun('tracking', '2d', 'normal', cs); L.aimFill(cr, null, seeded(4));
+    let clo = 1e9, chi = -1e9; for (let i = 0; i < 2800; i++) { L.aimTick(cr, 16, null); clo = Math.min(clo, cr.tg[0].y - cr.tg[0].r); chi = Math.max(chi, cr.tg[0].y + cr.tg[0].r); }
+    ok(clo >= 64 - 1e-6 && chi > 400, `compact Tracking stays under the corner buttons and reaches the bottom (${clo.toFixed(0)}–${chi.toFixed(0)})`);
+    // 3D: spawns spread over the window, which fills most of the view and stays inside the room.
+    const s3 = L.aimSpace3d(), run3 = L.aimNewRun('chaos', '3d', 'normal', s3), rnd = seeded(8);
+    let y0 = 1e9, y1 = -1e9, p0 = 1e9, p1 = -1e9, inRoom = true;
+    for (let i = 0; i < 2000; i++) {
+        if (run3.tg.length) run3.tg.splice(0, 1);
+        const t = L.aimAddTarget(run3, null, rnd); if (!t) continue;
+        y0 = Math.min(y0, t.x); y1 = Math.max(y1, t.x); p0 = Math.min(p0, t.y); p1 = Math.max(p1, t.y);
+        for (const e of [t.y - t.r, t.y + t.r]) { const h = 4 * Math.sin(e * Math.PI / 180); if (h <= -3.2 || h >= 4.6) inRoom = false; }
+    }
+    const mx = L.aimSpace3d(1280, 800, 96, 72), top = 400 - Math.tan(mx.p1 * Math.PI / 180) * 640 / Math.tan(47.5 * Math.PI / 180);
+    ok(s3.y1 - s3.y0 >= 88 && s3.p1 - s3.p0 >= 70, `the compact 3D window is ±44° by ${s3.p0.toFixed(0)}…${s3.p1.toFixed(0)}°`);
+    ok(mx.p1 - mx.p0 >= 50 && top >= 96 - 0.5, `Max's 3D window (${mx.p0.toFixed(0)}…${mx.p1.toFixed(0)}°) stays under its top bar (${top.toFixed(0)} px)`);
+    ok(y1 - y0 > 0.9 * (88 - 13) && p1 - p0 > 0.9 * (s3.p1 - s3.p0 - 13), `3D spawns cover the window: yaw ${y0.toFixed(0)}…${y1.toFixed(0)}, pitch ${p0.toFixed(0)}…${p1.toFixed(0)}`);
+    ok(inRoom, '3D targets stay between the floor and the ceiling');
+    // 3D drift: °/s × 2.95 px a degree (the 368 px design view) matches the 2D px/s.
+    const d2 = L.aimNewRun('chaos', '2d', 'hard', L.aimSpace2d(368, 492, [], 1)), d3 = L.aimNewRun('chaos', '3d', 'hard', L.aimSpace3d());
+    const sp2 = (L.aimAddTarget(d2, null, seeded(2)), Math.hypot(d2.tg[0].vx, d2.tg[0].vy)), sp3 = (L.aimAddTarget(d3, null, seeded(2)), Math.hypot(d3.tg[0].vx, d3.tg[0].vy) * 2.95);
+    ok(Math.abs(sp3 / sp2 - 1) < 0.01, `3D drift moves as fast on screen as 2D (${sp3.toFixed(0)} vs ${sp2.toFixed(0)} px/s)`);
+    const t3 = L.aimNewRun('tracking', '3d', 'normal', L.aimSpace3d()); L.aimFill(t3, null, seeded(6));
+    let ty0 = 1e9, ty1 = -1e9, tp0 = 1e9, tp1 = -1e9;
+    for (let i = 0; i < 2800; i++) { L.aimTick(t3, 16, null); const q = t3.tg[0]; ty0 = Math.min(ty0, q.x); ty1 = Math.max(ty1, q.x); tp0 = Math.min(tp0, q.y); tp1 = Math.max(tp1, q.y); }
+    ok(ty1 - ty0 > 45 && tp1 - tp0 > 40, `3D Tracking sweeps the room: yaw ${ty0.toFixed(0)}…${ty1.toFixed(0)}, pitch ${tp0.toFixed(0)}…${tp1.toFixed(0)}`);
+}
+
 sec('modes');
 {
     const sp2 = () => L.aimSpace2d(368, 492, [{ x: 252, y: 0, w: 116, h: 64 }], 1);

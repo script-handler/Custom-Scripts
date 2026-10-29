@@ -626,6 +626,9 @@
             .is-max .aim-maxb .is-out, .is-max .aim-maxb span { display: inline; }
             .is-max .aim-status, .is-max .aim-rank { display: flex; position: absolute; bottom: 30px; height: 34px; box-sizing: border-box; padding: 0 12px; align-items: center; gap: 8px; border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 12px; color: var(--aim-muted); z-index: 6; }
             .is-max .aim-status { left: 24px; }
+            /* A run in Max: the dock and the rank pill step out of the play area; Esc pauses and brings them back. */
+            .is-max .aim-foot, .is-max .aim-rank { transition: opacity 0.2s; }
+            .is-max.is-live .aim-foot, .is-max.is-live .aim-rank { opacity: 0; pointer-events: none; }
             .is-max .aim-rank { right: 24px; }
             .aim-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--aim-muted); }
             .aim-status.is-on i { background: var(--aim-good); }

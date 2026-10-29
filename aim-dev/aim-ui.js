@@ -156,6 +156,7 @@
         const S = aimS, h = S.hud; if (!h) return;
         const live = aimLive() || S.phase === 'paused';
         h.classList.toggle('is-run', live);
+        h.classList.toggle('is-live', aimLive());
         h.classList.toggle('is-3d', aimIs3d());
         h.classList.toggle('is-react', aimScen().group === 'react');
         h.classList.toggle('is-max', S.max);
@@ -169,9 +170,9 @@
     }
     function aimSpace() {
         const S = aimS;
-        if (aimIs3d()) return aimSpace3d();
+        if (aimIs3d()) return S.max ? aimSpace3d(S.W, S.H, 96, 72) : aimSpace3d(S.W, S.H);
         // No spawns under the in-run HUD: Pause/Max in the corner, or Max's bars.
-        const holes = S.max ? [{ x: 0, y: 0, w: S.W, h: 96 }, { x: 0, y: S.H - 96, w: S.W, h: 96 }] : (aimLive() || S.phase === 'paused') ? [{ x: S.W - 116, y: 0, w: 116, h: 64 }] : [];
+        const holes = S.max ? [{ x: 0, y: 0, w: S.W, h: 96 }, { x: 0, y: 96, w: 340, h: 56 }, { x: 0, y: S.H - 72, w: S.W, h: 72 }] : (aimLive() || S.phase === 'paused') ? [{ x: S.W - 116, y: 0, w: 116, h: 64 }] : [];
         return aimSpace2d(S.W, S.H, holes, S.max ? 1.7 : 1);
     }
     function aimResize() {
@@ -899,7 +900,7 @@
             aimSet(S.hud.querySelector('.aim-rank'), dn + ' · ' + (ranked ? 'ranked' : st.diff === 'normal' ? 'local best (' + mode + ')' : 'not ranked'));
         }
         const done = S.phase === 'ares' || S.phase === 'rres';
-        aimSet(S.hud.querySelector('.aim-status span'), done ? (aimIsCamp() && S.res && S.res.kind === 'camp' ? 'Campaign complete' : 'Run complete') : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor');
+        aimSet(S.hud.querySelector('.aim-status span'), done ? (aimIsCamp() && S.res && S.res.kind === 'camp' ? 'Campaign complete' : 'Run complete') : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : (aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor') + (S.max && aimLive() ? ' · Esc to pause' : ''));
         S.hud.querySelector('.aim-status').classList.toggle('is-on', !done && (aimLive() || S.locked));
         const chip = aimChip(), vc = S.hud.querySelector('.aim-vchip');
         vc.classList.toggle('is-on', !!chip);

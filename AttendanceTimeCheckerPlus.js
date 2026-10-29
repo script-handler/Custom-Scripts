@@ -13600,8 +13600,13 @@
     };
     const AIM_GAP_PX = 24, AIM_EDGE_PX = 12, AIM_CLEAR_PX = 48, AIM_GAP_DEG = 6, AIM_CLEAR_DEG = 10, AIM_TRIES = 40;
     const AIM_DEBOUNCE_MS = 80, AIM_FS_LIMIT = 3, AIM_SOON_MS = 1200, AIM_NEXT_MS = 300, AIM_COUNT_MS = 3000, AIM_FX_MS = 600;
-    // 3D: targets sit on a shell AIM_D from the camera, inside this window (degrees from the room's forward).
-    const AIM_D = 12, AIM_YAW = 34, AIM_P0 = -10, AIM_P1 = 18;
+    // 3D: targets sit on a shell AIM_D from the camera, inside a window of ±44° yaw (edges at 88% of the 95° view's
+    // half-width) and a pitch range set by the
+    // view (aimSpace3d). The shell is close enough (4) that −48…50° of pitch stays inside the room (floor −3.2,
+    // ceiling 4.6).
+    const AIM_D = 4, AIM_YAW = 44;
+    // 2D px/s → 3D °/s: the design's 368 px compact view at 95° FOV is 2.95 px a degree at its centre.
+    const AIM_PX_DEG = 2.95;
     const AIM_KEY = 'aimLab';
     const AIM_XH_DEFAULT = { xs: 'crossdot', color: '#4CF0B0', len: 6, thick: 2, gap: 4, outline: true, ow: 1, dot: true, ds: 2, op: 100, dyn: true };
     const AIM_SET_DEFAULT = { sens: 1, fov: 95, invY: false, sound: true, hitSnd: 'tick', timerBar: true, tcolor: '#FF5D73', bg: 'room' };
@@ -13620,7 +13625,20 @@
 
     // A spawn space. 2D: px, with holes (the in-run HUD) no target may sit under. k scales sizes (Max).
     function aimSpace2d(w, h, holes, k) { return { ang: false, w, h, k: k || 1, holes: holes || [], edge: AIM_EDGE_PX, gap: AIM_GAP_PX, clear: AIM_CLEAR_PX }; }
-    function aimSpace3d() { return { ang: true, k: 1, holes: [], edge: 0, gap: AIM_GAP_DEG, clear: AIM_CLEAR_DEG, y0: -AIM_YAW, y1: AIM_YAW, p0: AIM_P0, p1: AIM_P1 }; }
+    // Pitch: 85% of the view's half-height at the default 95° FOV (a FOV change doesn't move targets), clear of
+    // Max's top bar and bottom strip (top, bot px), within the room. Compact: about ±47°; Max: about ±28°.
+    function aimSpace3d(W, H, top, bot) {
+        const f = (W || 368) / 2 / Math.tan(47.5 * Math.PI / 180), deg = v => Math.atan(v / f) * 180 / Math.PI, h2 = (H || 438) / 2;
+        const p1 = Math.min(deg(h2 - (top || 0)), deg(h2) * 0.85, 50), p0 = -Math.min(deg(h2 - (bot || 0)), deg(h2) * 0.85, 48);
+        // Off-centre, a pitch projects further from the middle (÷ cos yaw): tTop/tBot bound the edge on screen.
+        return { ang: true, k: 1, holes: [], edge: 0, gap: AIM_GAP_DEG, clear: AIM_CLEAR_DEG, y0: -AIM_YAW, y1: AIM_YAW, p0, p1, tTop: Math.tan(p1 * Math.PI / 180), tBot: Math.tan(-p0 * Math.PI / 180) };
+    }
+    // A 3D target's top and bottom edges, as they land on screen with the camera forward, inside tTop/tBot.
+    function aimOnView(sp, p, r) {
+        if (!sp.tTop) return true;
+        const c = Math.cos(p.x * Math.PI / 180), t = a => Math.tan(a * Math.PI / 180) / c;
+        return t(p.y + r) <= sp.tTop + 1e-9 && -t(p.y - r) <= sp.tBot + 1e-9;
+    }
     function aimRadius(sp, id, diff) { const S = AIM_SCEN[id], d = AIM_DIFF[diff].size; return sp.ang ? S.ang * d : S.size / 2 * d * sp.k; }
 
     // Rejection sampling: dist(A,B) ≥ rA + rB + gap against every live target, the edge clear of the aim,
@@ -13629,6 +13647,7 @@
         rnd = rnd || Math.random;
         const fits = (p, gap, clear) => {
             for (const q of sp.holes) { const dx = Math.max(q.x - p.x, 0, p.x - q.x - q.w), dy = Math.max(q.y - p.y, 0, p.y - q.y - q.h); if (dx * dx + dy * dy < r * r) return false; }
+            if (sp.ang && !aimOnView(sp, p, r)) return false;
             if (aim && clear > 0 && aimDist(sp, p, aim) < r + clear) return false;
             for (const t of live) if (aimDist(sp, p, t) < r + t.r + gap) return false;
             return true;
@@ -13678,7 +13697,7 @@
         if (!p) return null;
         const t = { id: run.nid++, x: p.x, y: p.y, r, r0: r, born: run.el, vx: 0, vy: 0 };
         const dv = kind === 'boss' ? 45 : kind ? 0 : run.dv;
-        if (dv) { const a = rnd() * 6.283, v = sp.ang ? dv / 10 : dv * sp.k; t.vx = Math.cos(a) * v; t.vy = Math.sin(a) * v; }
+        if (dv) { const a = rnd() * 6.283, v = sp.ang ? dv / AIM_PX_DEG : dv * sp.k; t.vx = Math.cos(a) * v; t.vy = Math.sin(a) * v; }
         if (kind) { t.kind = kind; if (kind === 'bonus') t.hp = AIM_BONUS_HP; if (kind === 'boss') { t.hp = run.G.n; t.armor = true; } }
         run.tg.push(t);
         return t;
@@ -13693,10 +13712,13 @@
     function aimTrackPos(run, t) {
         const sp = run.sp, s = run.el / 1000 * run.spd, p = t.ph;
         const ux = 0.62 * Math.sin(0.9 * s + p[0]) + 0.38 * Math.sin(1.7 * s + p[1]), uy = 0.6 * Math.sin(1.1 * s + p[2]) + 0.4 * Math.sin(0.7 * s + p[3]);
-        if (sp.ang) { t.x = ux * (sp.y1 - t.r) * 0.85; t.y = (sp.p0 + sp.p1) / 2 + uy * ((sp.p1 - sp.p0) / 2 - t.r); return; }
-        const top = sp.holes.reduce((m, q) => Math.max(m, q.y + q.h), sp.edge);
+        if (sp.ang) { t.x = ux * (sp.y1 - t.r); t.y = (sp.p0 + sp.p1) / 2 + uy * ((sp.p1 - sp.p0) / 2 - t.r); return; }
+        // The band between the HUD holes: those in the top half push the top down, those in the bottom half
+        // pull the bottom up (Max has both; a corner hole a quarter wide or more counts).
+        const band = q => q.w >= sp.w / 4, top = sp.holes.reduce((m, q) => band(q) && q.y + q.h / 2 < sp.h / 2 ? Math.max(m, q.y + q.h) : m, sp.edge);
+        const bot = sp.holes.reduce((m, q) => band(q) && q.y + q.h / 2 >= sp.h / 2 ? Math.min(m, q.y) : m, sp.h - sp.edge);
         t.x = sp.w / 2 + ux * (sp.w / 2 - t.r - sp.edge);
-        t.y = (top + sp.h - sp.edge) / 2 + uy * ((sp.h - sp.edge - top) / 2 - t.r);
+        t.y = (top + bot) / 2 + uy * ((bot - top) / 2 - t.r);
     }
     // Rescale a live 2D run when the viewport changes size (footer hides, Max opens).
     function aimRescale(run, sp) {
@@ -13814,7 +13836,8 @@
                 const lo = sp.ang ? [sp.y0, sp.p0] : [sp.edge, sp.edge], hi = sp.ang ? [sp.y1, sp.p1] : [sp.w - sp.edge, sp.h - sp.edge];
                 if (t.x - t.r < lo[0] && t.vx < 0 || t.x + t.r > hi[0] && t.vx > 0) t.vx = -t.vx;
                 if (t.y - t.r < lo[1] && t.vy < 0 || t.y + t.r > hi[1] && t.vy > 0) t.vy = -t.vy;
-                for (const q of sp.holes) if (t.x + t.r > q.x && t.x - t.r < q.x + q.w && t.y + t.r > q.y && t.y - t.r < q.y + q.h && t.vy < 0) t.vy = -t.vy;
+                else if (sp.ang && !aimOnView(sp, t, t.r) && (t.y > 0 ? t.vy > 0 : t.vy < 0)) t.vy = -t.vy;
+                for (const q of sp.holes) if (t.x + t.r > q.x && t.x - t.r < q.x + q.w && t.y + t.r > q.y && t.y - t.r < q.y + q.h && (q.y + q.h / 2 < t.y ? t.vy < 0 : t.vy > 0)) t.vy = -t.vy;
             }
             // Drift never closes below the gap: approaching pairs swap their normal velocities and part.
             for (let i = 0; i < run.tg.length; i++) for (let j = i + 1; j < run.tg.length; j++) {
@@ -14127,6 +14150,7 @@
         const S = aimS, h = S.hud; if (!h) return;
         const live = aimLive() || S.phase === 'paused';
         h.classList.toggle('is-run', live);
+        h.classList.toggle('is-live', aimLive());
         h.classList.toggle('is-3d', aimIs3d());
         h.classList.toggle('is-react', aimScen().group === 'react');
         h.classList.toggle('is-max', S.max);
@@ -14140,9 +14164,9 @@
     }
     function aimSpace() {
         const S = aimS;
-        if (aimIs3d()) return aimSpace3d();
+        if (aimIs3d()) return S.max ? aimSpace3d(S.W, S.H, 96, 72) : aimSpace3d(S.W, S.H);
         // No spawns under the in-run HUD: Pause/Max in the corner, or Max's bars.
-        const holes = S.max ? [{ x: 0, y: 0, w: S.W, h: 96 }, { x: 0, y: S.H - 96, w: S.W, h: 96 }] : (aimLive() || S.phase === 'paused') ? [{ x: S.W - 116, y: 0, w: 116, h: 64 }] : [];
+        const holes = S.max ? [{ x: 0, y: 0, w: S.W, h: 96 }, { x: 0, y: 96, w: 340, h: 56 }, { x: 0, y: S.H - 72, w: S.W, h: 72 }] : (aimLive() || S.phase === 'paused') ? [{ x: S.W - 116, y: 0, w: 116, h: 64 }] : [];
         return aimSpace2d(S.W, S.H, holes, S.max ? 1.7 : 1);
     }
     function aimResize() {
@@ -14870,7 +14894,7 @@
             aimSet(S.hud.querySelector('.aim-rank'), dn + ' · ' + (ranked ? 'ranked' : st.diff === 'normal' ? 'local best (' + mode + ')' : 'not ranked'));
         }
         const done = S.phase === 'ares' || S.phase === 'rres';
-        aimSet(S.hud.querySelector('.aim-status span'), done ? (aimIsCamp() && S.res && S.res.kind === 'camp' ? 'Campaign complete' : 'Run complete') : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor');
+        aimSet(S.hud.querySelector('.aim-status span'), done ? (aimIsCamp() && S.res && S.res.kind === 'camp' ? 'Campaign complete' : 'Run complete') : sc.noCam && S.phase === 'run' ? 'Click anywhere on GO' : (aimIs3d() ? (S.locked ? 'Mouse locked' : 'Mouse free') : 'Free cursor') + (S.max && aimLive() ? ' · Esc to pause' : ''));
         S.hud.querySelector('.aim-status').classList.toggle('is-on', !done && (aimLive() || S.locked));
         const chip = aimChip(), vc = S.hud.querySelector('.aim-vchip');
         vc.classList.toggle('is-on', !!chip);
@@ -24324,6 +24348,9 @@
             .is-max .aim-maxb .is-out, .is-max .aim-maxb span { display: inline; }
             .is-max .aim-status, .is-max .aim-rank { display: flex; position: absolute; bottom: 30px; height: 34px; box-sizing: border-box; padding: 0 12px; align-items: center; gap: 8px; border: 1px solid var(--aim-border); border-radius: var(--aim-rc); clip-path: var(--aim-clip-c); font-size: 12px; color: var(--aim-muted); z-index: 6; }
             .is-max .aim-status { left: 24px; }
+            /* A run in Max: the dock and the rank pill step out of the play area; Esc pauses and brings them back. */
+            .is-max .aim-foot, .is-max .aim-rank { transition: opacity 0.2s; }
+            .is-max.is-live .aim-foot, .is-max.is-live .aim-rank { opacity: 0; pointer-events: none; }
             .is-max .aim-rank { right: 24px; }
             .aim-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--aim-muted); }
             .aim-status.is-on i { background: var(--aim-good); }
