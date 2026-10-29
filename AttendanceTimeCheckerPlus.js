@@ -25,12 +25,10 @@
         return l < r;
     }
 
-    const currentUrl = window.location.href;
-    const targetUrl = "https://globalportal.mtbc.com/#/time-absence/attendence-record";
-
-    if (currentUrl !== targetUrl) {
-        return;
-    }
+    // Portal-wide: the full widget runs on Attendance only; ATCShell.js (chip, skin, Material) on every route.
+    if (location.host !== 'globalportal.mtbc.com') return;
+    const onAtt = () => location.hash.split('?')[0] === '#/time-absence/attendence-record';
+    const ATC = {};
 
     // COLOUR ICONS (design: Attendance widget · icon spec): one 24-grid SVG body each, in fixed colours
     // that read on Glass dark, Glass light and Cyberpunk. Their gradient ids are local, so attIcon()
@@ -170,6 +168,7 @@
     }
 
     let lastTotalWorkedTime = -1; // Track if we need to re-render
+    let lastAttLive = false; // last session still open (ATCShell)
     let isFirstRender = true; // Track first render
     let animationFrameId = null; // For requestAnimationFrame
     let pipWindow = null; // Picture-in-Picture window reference
@@ -26460,8 +26459,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 ${sel('gameSound', 'Game Sounds', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['off', 'Off']], { def: 'medium', icon: 'g-pool' })}
             </div>
             <div class="settings-group" role="tabpanel" data-settings-group="theme" hidden>
-                ${sel('displayTheme', 'Display Theme', [['glassmorphic', 'Glassmorphic Aurora'], ['retro-futuristic', 'Cyberpunk HUD'], ['business', 'Just Business']], { id: 'theme-selector', icon: 'f-theme' })}
-                <div class="settings-option ${!isGlassmorphic ? 'disabled' : ''}" data-theme-dependent="glassmorphic">
+                ${sel('displayTheme', 'Display Theme', [['glassmorphic', 'Glassmorphic Aurora'], ['retro-futuristic', 'Cyberpunk HUD'], ['business', 'Just Business'], ['material', 'Material You']], { id: 'theme-selector', icon: 'f-theme' })}                <div class="settings-option ${!isGlassmorphic ? 'disabled' : ''}" data-theme-dependent="glassmorphic">
                     <span class="settings-option-label">${attIcon('f-skins')} Neumorphic Depth <small style="opacity: 0.6; font-size: 0.75rem;">(Glassmorphic only)</small></span>
                     <div class="toggle-switch ${userPreferences.neumorphicDepth ? 'active' : ''} ${!isGlassmorphic ? 'disabled' : ''}" data-pref="neumorphicDepth"></div>
                 </div>
@@ -27102,9 +27100,11 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     // ═══ END CYBERPUNK HUD ═══
 
     function applyPreferences() {
+        ATC.apply?.();
         const container = document.getElementById('total-time-summary');
         if (!container) return;
         container.classList.toggle('biz-theme', userPreferences.displayTheme === 'business');
+        container.classList.toggle('mat-theme', userPreferences.displayTheme === 'material');
         if (userPreferences.displayTheme === 'retro-futuristic') {
             // Captured before the class goes on: the boot-in reveal fires on switch-in, not on every
             // colour-slider move (applyPreferences() runs on each of those).
@@ -27251,6 +27251,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             totalTimeDiv.className = 'attendance-summary';
             if (userPreferences.displayTheme === 'retro-futuristic') totalTimeDiv.classList.add('retro-theme');
             if (userPreferences.displayTheme === 'business') totalTimeDiv.classList.add('biz-theme');
+            if (userPreferences.displayTheme === 'material') totalTimeDiv.classList.add('mat-theme');
             isFirstRender = true;
             isNewElement = true;
         }
@@ -27367,6 +27368,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             }
 
             lastTotalWorkedTime = totalWorkedTime;
+            lastAttLive = !!checkInOutList.length && checkInOutList[checkInOutList.length - 1].checkOut === 'Current';
         }
 
         if (!totalTimeDiv.parentNode) {
@@ -28255,10 +28257,9 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
 
         function updateLoop(currentTime) {
             if (currentTime - lastUpdateTime >= 1000) {
-                const currentUrl = window.location.href;
-                if (currentUrl === targetUrl) {
-                    insertAndCalculate();
-                }
+                const att = onAtt();
+                if (att) insertAndCalculate();
+                try { ATC.tick?.(att); } catch (e) { ATC.tick = null; console.warn('ATCShell:', e); }
                 lastUpdateTime = currentTime;
             }
 
@@ -28275,28 +28276,32 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         }
     }
 
-    window.addEventListener('load', () => {
+    // ATCShell.js bridge: read-only views of widget state; the shell adds tick/apply and follows displayTheme.
+    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt });
+    // A fresh browser off Attendance (no XP/leaderboard init there): take only the account's prefs from the gist, local wins as in applyPlayerRecordToLocal.
+    async function prefsFromGist() {
+        const prof = lsJSON('atc_lb_profile', null); if (!prof || !prof.registered || lsJSON('attendancePrefs', {}).displayTheme) return;
+        const rec = (((await fetchRegistry()) || {}).players || []).find(p => p.clientId === prof.clientId), cp = rec && rec.userPreferences;
+        if (cp && typeof cp === 'object') { const m = { ...cp, ...lsJSON('attendancePrefs', {}) }; localStorage.setItem('attendancePrefs', JSON.stringify(m)); userPreferences = { ...userPreferences, ...m }; applyPreferences(); }
+    }
+    function loadShell() {
+        const url = localStorage.getItem('atcShellUrl') || 'https://raw.githubusercontent.com/script-handler/Custom-Scripts/refs/heads/main/ATCShell.js?v=' + BUILD_LABEL;
+        fetch(url).then(r => r.ok ? r.text() : Promise.reject(r.status)).then(code => { new Function('ATC', code)(ATC); ATC.apply?.(); })
+            .catch(e => console.warn('ATCShell:', e));
+    }
+
+    function boot() {
         loadPreferences();
-
-        const checkUrlAndRun = () => {
-            const currentUrl = window.location.href;
-            if (currentUrl !== targetUrl) {
-                return;
-            }
-
-            insertAndCalculate();
-            const submitButton = document.querySelector('.gp-btn.gp-btn-primary');
-            if (submitButton) {
-                submitButton.addEventListener('click', (event) => {
-                    setTimeout(insertAndCalculate, 500);
-                });
-            }
-        };
-
-        checkUrlAndRun();
-
+        if (onAtt()) insertAndCalculate();
+        // Delegated: the Attendance search button comes and goes with the route.
+        document.addEventListener('click', e => { if (onAtt() && e.target.closest?.('.gp-btn.gp-btn-primary')) setTimeout(insertAndCalculate, 500); });
+        // Theme changed in another tab (or by the gist restore there): every open portal page follows.
+        window.addEventListener('storage', e => { if (e.key === 'attendancePrefs') { loadPreferences(); applyPreferences(); } });
+        loadShell();
+        if (!onAtt()) prefsFromGist();
         startUpdateLoop();
-    });
+    }
+    if (document.readyState === 'complete') boot(); else window.addEventListener('load', boot);
 
     window.addEventListener('beforeunload', () => {
         stopUpdateLoop();
