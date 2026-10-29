@@ -1,6 +1,8 @@
 # `shell-dev/`: ATCShell.js, the portal-wide companion
 
-`ATCShell.js` (repo root) is fetched and run by `AttendanceTimeCheckerPlus.js` (`loadShell()`) on every portal
+**Unbound (2026-10-29):** the published widget does not load the shell. Its bridge lives in `bridge.js`, a list of exact find/replace steps that `host-run.js` applies in memory. Run `node shell-dev/bridge.js --write` only when the shell ships, and fix the gap noted in that file first.
+
+Once bound, `ATCShell.js` (repo root) is fetched and run by `AttendanceTimeCheckerPlus.js` (`loadShell()`) on every portal
 route. It does four things:
 
 - adds the navbar time chip
@@ -11,6 +13,7 @@ route. It does four things:
 It has no settings of its own. It reads `attendancePrefs` through the bridge. A fresh browser off Attendance pulls the account's prefs from the gist (`prefsFromGist`).
 
 ```
+"C:/Program Files/nodejs/node.exe" shell-dev/bridge.js              # anchors still match the widget?
 "C:/Program Files/nodejs/node.exe" shell-dev/host-run.js [outDir]   # stand-in portal, ~25 checks + PNGs
 ```
 

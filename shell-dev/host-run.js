@@ -4,6 +4,7 @@
 //
 //   "C:/Program Files/nodejs/node.exe" shell-dev/host-run.js [outDir]
 const { spawn } = require('child_process');
+const { bridge } = require('./bridge');
 const fs = require('fs'), path = require('path'), os = require('os');
 
 const ROOT = path.join(__dirname, '..'), EGP = process.env.EGP_WEB || 'C:/Users/HASSANNASIR2/GIT/Global Portal/Global Employee Web/Content';
@@ -27,7 +28,8 @@ const ATTV = `<div class="row"><div class="col-2"><div class="side-nav-tab"><ul>
     + `<div class="emp-list-table"><div class="table-responsive table-theme main-attendance-table"><table class="table table-striped"><thead class="sticky-top"><tr><th>Sr #</th><th>Date</th><th>Day</th><th>Time</th><th>Check In/Out</th><th>Actual hour(s)</th></tr></thead><tbody id="rows"></tbody></table></div></div></div></div></section></div></div>`;
 
 function page() {
-    const script = fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8');
+    // The published widget has no bridge (unbound until the shell ships): add it in memory.
+    const script = bridge(fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8'));
     return `<!doctype html><html><head><meta charset="utf-8"><title>Global Portal</title><style>${css}</style></head><body>
 <div id="global-portal"><header><nav class="navbar navbar-expand-xl bg-grey gp-main-navbar px-3"><a class="navbar-brand fw-bold">MTBC Employee Portal</a><ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link">Benefits</a></li><li class="nav-item"><a class="nav-link">Self-Care</a></li></ul><div class="header-icons d-flex">${icons}</div></nav></header><div id="view" class="p-3"></div></div>
 <script>sessionStorage.setItem('authToken', 'tok'); sessionStorage.setItem('authUser', '16117');
@@ -46,7 +48,10 @@ addEventListener('hashchange', render); render();</script>
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
     const port = 9500 + Math.floor(Math.random() * 200);
-    const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'shell-host-')), '--no-first-run', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
+    // A throwaway profile, removed on exit (each run's is ~40-80 MB).
+    const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-host-'));
+    process.on('exit', () => { try { proc.kill(); } catch (_) {} try { fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 5 }); } catch (_) {} });
+    const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + PROFILE, '--no-first-run', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
     const bail = setTimeout(() => { console.log('✗ TIMEOUT'); try { proc.kill(); } catch (_) {} process.exit(2); }, 180000);
     let target;
     for (let i = 0; i < 80 && !target; i++) { await sleep(200); try { target = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).find(t => t.type === 'page'); } catch (_) {} }
@@ -129,6 +134,6 @@ async function main() {
     ok('no page exceptions', !errors.length, errors);
 
     console.log(`\n${fail ? '✗' : '✓'} ${pass} passed, ${fail} failed · PNGs in ${OUT}`);
-    clearTimeout(bail); await send('Browser.close').catch(() => {}); ws.close(); process.exit(fail ? 1 : 0);
+    clearTimeout(bail); await send('Browser.close').catch(() => {}); ws.close(); await sleep(800); process.exit(fail ? 1 : 0);
 }
 main().catch(e => { console.error(e); process.exit(2); });
