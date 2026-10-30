@@ -4,6 +4,13 @@ A modern, stylish browser console script for tracking attendance with GenZ vibes
 
 ## Features 🚀
 
+### 🌐 Portal Companion & Web Theme (v9.0, build v15)
+The widget now loads a companion, `ATCShell.js`, on every portal page:
+- **Navbar time chip**: your countdown on every page, with a mini widget (shift progress, streak, level and XP) in its popover
+- **Timeline time card**: a progress ring and the countdown in the profile card
+- **Material You**: a fourth Display Theme beside Glassmorphic Aurora, Cyberpunk HUD and Just Business
+- **Web Theme (Plus)**: Timeline and Attendance follow your Display Theme, with Material 3 cards, a bento summary, filter chips, a two-column Attendance layout and the M3 loading indicator. Turn it off in Settings › Theme › Web Theme to theme the widget only
+
 ### 🎨 Modern UI Design (2025 Standards)
 - **Glassmorphism Effects**: Translucent backgrounds with blur effects
 - **Smooth Animations**: CSS transitions and keyframe animations

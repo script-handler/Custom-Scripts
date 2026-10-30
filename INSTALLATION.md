@@ -24,6 +24,8 @@ This method loads `AttendanceTimeCheckerPlus.js` directly from GitHub, so it alw
    ```
 5. Save and enable the site entry
 6. Refresh the attendance page — the script fetches and runs the latest version automatically each time
+   (it also fetches its companion `ATCShell.js` for the navbar time chip on every page; with Plus, Timeline and Attendance follow your
+   Display Theme too, which Settings › Theme › Web Theme turns off; no loader change needed)
 
 ### Method 2: Using Tampermonkey
 1. Install [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) from Chrome Web Store
