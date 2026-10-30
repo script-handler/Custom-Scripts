@@ -209,6 +209,10 @@ function ringHTML(s, st, pO, pI) {
 }
 
 const ICON = { // Material icons, 24px
+    vis: 'M12 6c3.79 0 7.17 2.13 8.82 5.5C19.17 14.87 15.79 17 12 17s-7.17-2.13-8.82-5.5C4.83 8.13 8.21 6 12 6m0-2C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 5c1.38 0 2.5 1.12 2.5 2.5S13.38 14 12 14s-2.5-1.12-2.5-2.5S10.62 9 12 9m0-2c-2.48 0-4.5 2.02-4.5 4.5S9.52 16 12 16s4.5-2.02 4.5-4.5S14.48 7 12 7z',
+    visoff: 'M12 6c3.79 0 7.17 2.13 8.82 5.5-.59 1.22-1.42 2.27-2.41 3.12l1.41 1.41c1.39-1.23 2.49-2.77 3.18-4.53C21.27 7.11 17 4 12 4c-1.27 0-2.49.2-3.64.57l1.65 1.65C10.66 6.09 11.32 6 12 6zm-1.07 1.14L13 9.21c.57.25 1.03.71 1.28 1.28l2.07 2.07c.08-.34.14-.7.14-1.07C16.5 9.01 14.48 7 12 7c-.37 0-.72.05-1.07.14zM2.01 3.87l2.68 2.68C3.06 7.83 1.77 9.53 1 11.5 2.73 15.89 7 19 12 19c1.52 0 2.98-.29 4.32-.82l3.42 3.42 1.41-1.41L3.42 2.45 2.01 3.87zm7.5 7.5l2.61 2.61c-.04.01-.08.02-.12.02-1.38 0-2.5-1.12-2.5-2.5 0-.05.01-.08.01-.13zm-3.4-3.4l1.75 1.75c-.23.55-.36 1.15-.36 1.78 0 2.48 2.02 4.5 4.5 4.5.63 0 1.23-.13 1.77-.36l.98.98c-.88.24-1.8.38-2.75.38-3.79 0-7.17-2.13-8.82-5.5.7-1.43 1.72-2.61 2.93-3.53z',
+    info: 'M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
+    lock: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z',
     down: 'M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z',
     event: 'M16.53 11.06 15.47 10l-4.88 4.88-2.12-2.12-1.06 1.06L10.59 17l5.94-5.94zM19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z',
     verified: 'm23 12-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.54 6.71 4.73l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z',
@@ -361,7 +365,7 @@ html[data-x-fam=biz] ${MSG}{background:var(--x-card)!important;border:var(--x-ca
 // tokens (EnhancedStyle.css :root) are remapped first, then the surfaces those miss. No :has().
 const R = 'html[data-att-skin]', RD = 'html[data-att-skin=dark]', NW = ':not(#total-time-summary *)', NWW = `:where(${NW})`, OS = MSC('on-surface'), OSV = MSC('on-surface-variant'), OV = MSC('outline-variant');
 const LAYER = p => `color-mix(in srgb,${OS} ${p}%,transparent)`;
-const AT = `${R} #global-portal #attendence-record-tab`;
+const AT = `${R} #global-portal #attendence-record-tab`, EV = `${R} #global-portal app-evaluation-widget .emp-info`;
 const SKIN_CSS = `
 ${R}{--theme-color:var(--x-fill)!important;--primary-color:var(--x-ink);--bg-grey:${MSC('surface-container')};--secondary:var(--x-fill);--color-light_blue:var(--x-tile-2);--color-sky_blue:var(--x-tile);
  --text-primary:var(--x-ink);--text-grey:${OSV};--text-light:${OS};--light:${MSC('surface-container')};--dark:${OS};--bgWhiteSmoke:var(--x-tile);--bgCyanBlue:var(--x-tile);--bgBluishCyan:var(--x-tile);
@@ -597,6 +601,26 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-pgrid span{font-size:10px;line-height:13px;font-weight:500;letter-spacing:.3px;color:${OSV};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .atc-pgrid b{font-size:12px;line-height:16px;font-weight:600;color:var(--x-on-hero);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .atc-pgrid b[data-fwd]{color:var(--x-hero-ink)}
+/* BONUS ROW (app-evaluation-widget, XProfile footer): EGP's svgs stay the hover/click targets, so the popover still
+   anchors to them; each paints a Material icon through a mask on its own box, its paths hidden. Vault and More info
+   are text buttons. EGP pinned the popover at top:288px of the card, over this row: the pointer left the icon, the
+   popover closed, then opened again (the flashing). It hangs under the row now and never takes the pointer. */
+${EV}{display:flex!important;align-items:center;gap:4px;margin-top:8px!important;font-size:12px;line-height:16px}
+${EV}>small{display:inline-flex!important;align-items:center;gap:2px;font-size:12px!important;font-weight:600!important;color:inherit!important;white-space:nowrap}
+${EV}>small>span:first-child{margin-left:4px;color:var(--x-hero-ink)}${EV}>small>span{display:inline-flex}
+${EV} svg{box-sizing:border-box;flex:none;margin:0!important;padding:0;cursor:pointer;background:${OSV};transition:background-color .15s}${EV} svg>*{visibility:hidden}
+${EV}>small>svg,${EV}>small>span>svg{width:28px!important;height:28px!important;-webkit-mask:${MASK('vis')};mask:${MASK('vis')};-webkit-mask-size:18px;mask-size:18px}
+${EV}>small>svg[width="16"]{-webkit-mask-image:${MASK('visoff').split(' center')[0]};mask-image:${MASK('visoff').split(' center')[0]}}
+${EV}>small>span>svg{-webkit-mask-image:${MASK('info').split(' center')[0]};mask-image:${MASK('info').split(' center')[0]}}
+${EV}>small>svg:hover,${EV}>small>span>svg:hover{background:var(--x-hero-ink)}
+${EV}>span{display:inline-flex!important;align-items:center;gap:2px!important;margin-left:auto}
+${EV}>span>span,${EV}>span>small{position:relative;display:inline-flex!important;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);font-size:12px;font-weight:600;color:var(--x-hero-ink);transition:background-color .15s}
+${EV}>span>span:hover,${EV}>span>small:hover{background:color-mix(in srgb,var(--x-hero-ink) 10%,transparent)}
+${EV}>span>span>svg{width:16px!important;height:16px!important;background:var(--x-hero-ink);-webkit-mask:${MASK('lock')};mask:${MASK('lock')}}
+${EV}>span>span>small{position:static;display:inline;padding:0;height:auto}
+${EV}>span a{color:var(--x-hero-ink)!important;font-size:12px;font-weight:600;text-decoration:none!important;white-space:nowrap}${EV}>span a::after{content:"";position:absolute;inset:0}
+${R} #global-portal app-evaluation-widget{display:block;position:relative}
+${R} #global-portal .performance-metrics-popover .popover{top:calc(100% + 8px)!important;left:0!important;pointer-events:none!important}
 /* PROFILE HERO (XProfile): the card is tagged atc-c-profile by tagCards(). */
 ${R} .box-widget.atc-c-profile{position:relative;background:var(--x-hero)!important;color:var(--x-on-hero);border-radius:var(--x-r-hero)!important;box-shadow:var(--x-hero-shadow)!important}
 ${R} .atc-c-profile::before{content:"";position:absolute;left:0;right:0;top:0;height:var(--x-hazard-h);background:var(--x-hazard);pointer-events:none}

@@ -28,6 +28,7 @@ A row reaches `verified-live` only after `compare.js` (design | ours on the real
 | Profile: hero background, 76px avatar with gradient ring, 24px display name | XProfile | css (compare ✓ my-light, aurora-dark, cyber) |
 | Profile: status chips (Good Performer, Since, JD) | XProfile | injected (status chip); host Joining/JD restyled as chips |
 | Profile: Missing I/O on a badge shape | XProfile | css (compare ✓) |
+| Profile footer: Bonus with visibility + info icons, Vault and More info text buttons | XProfile | css (compare ✓ my-light, aurora-dark, cyber, biz): EGP's svgs keep the events and paint Material icons by mask; the bonus popover hangs under the row (EGP pinned it at top:288px over the icon, so hover flashed) and takes no pointer |
 | Profile: 4-column details grid | XProfile | rendered (compare ✓), masked values only |
 | Time card | XTime | verified-live |
 | Co-workers: 52px shaped tonal avatars, one shape each | Timeline v2 | css (compare ✓): photos stay (host hover popovers), online dot outside the shape |
