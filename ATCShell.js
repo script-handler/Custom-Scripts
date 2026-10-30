@@ -604,7 +604,8 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 /* BONUS ROW (app-evaluation-widget, XProfile footer): EGP's svgs stay the hover/click targets, so the popover still
    anchors to them; each paints a Material icon through a mask on its own box, its paths hidden. Vault and More info
    are text buttons. EGP pinned the popover at top:288px of the card, over this row: the pointer left the icon, the
-   popover closed, then opened again (the flashing). It hangs under the row now and never takes the pointer. */
+   popover closed, then opened again (the flashing). It hangs under the row now and never takes the pointer.
+   ngx-popover hides only by parking it at top/left -10000px (its fade class stays in), so parked means hidden. */
 ${EV}{display:flex!important;align-items:center;gap:4px;margin-top:8px!important;font-size:12px;line-height:16px}
 ${EV}>small{display:inline-flex!important;align-items:center;gap:2px;font-size:12px!important;font-weight:600!important;color:inherit!important;white-space:nowrap}
 ${EV}>small>span:first-child{margin-left:4px;color:var(--x-hero-ink)}${EV}>small>span{display:inline-flex}
@@ -621,6 +622,7 @@ ${EV}>span>span>small{position:static;display:inline;padding:0;height:auto}
 ${EV}>span a{color:var(--x-hero-ink)!important;font-size:12px;font-weight:600;text-decoration:none!important;white-space:nowrap}${EV}>span a::after{content:"";position:absolute;inset:0}
 ${R} #global-portal app-evaluation-widget{display:block;position:relative}
 ${R} #global-portal .performance-metrics-popover .popover{top:calc(100% + 8px)!important;left:0!important;pointer-events:none!important}
+${R} #global-portal .performance-metrics-popover .popover[style*="-10000px"]{display:none!important}
 /* PROFILE HERO (XProfile): the card is tagged atc-c-profile by tagCards(). */
 ${R} .box-widget.atc-c-profile{position:relative;background:var(--x-hero)!important;color:var(--x-on-hero);border-radius:var(--x-r-hero)!important;box-shadow:var(--x-hero-shadow)!important}
 ${R} .atc-c-profile::before{content:"";position:absolute;left:0;right:0;top:0;height:var(--x-hazard-h);background:var(--x-hazard);pointer-events:none}
