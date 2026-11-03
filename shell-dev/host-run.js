@@ -33,7 +33,9 @@ const ATTV = `<div class="collapse-sidebar" style="display:block"><i class="fa">
 
 function page() {
     // The widget with the bridge (applied in memory while the file is not bound).
-    const script = bridge(fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8'));
+    // api.oldWidget: a published widget from before ATC.float, as under a shell-only test (atcShellUrl).
+    let script = bridge(fs.readFileSync(path.join(ROOT, 'AttendanceTimeCheckerPlus.js'), 'utf8'));
+    if (api.oldWidget) script = script.replace(', float: togglePictureInPicture', '');
     return `<!doctype html><html><head><meta charset="utf-8"><title>Global Portal</title><style>${css}</style></head><body>
 <div id="global-portal"><header><nav class="navbar navbar-expand-xl bg-grey gp-main-navbar px-3"><a class="navbar-brand fw-bold">MTBC Employee Portal</a><ul class="navbar-nav me-auto"><li class="nav-item"><a class="nav-link">Benefits</a></li><li class="nav-item"><a class="nav-link">Self-Care</a></li></ul><div class="header-icons d-flex">${icons}</div></nav></header><div id="view" class="p-3"></div></div>
 <script>sessionStorage.setItem('authToken', 'tok'); sessionStorage.setItem('authUser', '16117');
@@ -185,6 +187,53 @@ async function main() {
         && JSON.parse(await ev("localStorage.getItem('attendancePrefs')")).webTheme === false);
     await ev("document.querySelector('#total-time-summary .settings-button').click(); document.querySelector('.settings-modal .toggle-switch[data-pref=webTheme]').click(); document.querySelector('.settings-modal-overlay')?.click(); 1");
     ok('switched on again: the skin and row chips come back', await until(`document.documentElement.dataset.attSkin === 'light' && (${web}) && !!document.querySelector('#rows .atc-lchip')`, 4000));
+    console.log('\n── Icons, USA clocks, Float, laptop layout (EGP markup injected where the stand-in has none)');
+    await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(600);
+    await ev(`(() => { const row = document.querySelector('.box-widget').parentElement;
+        row.insertAdjacentHTML('beforeend', '<div class="box-widget h-100" id="usa-x"><span class="box-widget-title d-flex justify-content-lg-start">USA <span class="d-flex gap-4 mx-4">'
+            + [137, 80, 64, 173].map(n => '<small class="color-theme fw-bold"><iframe src="https://freesecure.timeanddate.com/clock/i6eupqji/n' + n + '/fs10/tct/pct/ts1/ta1" width="65" height="13"></iframe></small>').join('')
+            + '</span></span><a class="carousel-control-next" role="button"><span class="carousel-control-next-icon"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg></span></a></div>');
+        document.body.insertAdjacentHTML('afterbegin', '<div class="sidebar" id="sidebarNav"><div class="sidebar-icons"><ul class="list-unstyled"><li class="sd-icon"><a class="sidebar-icons-link" title="Early Coming / Late Sitting Approval"><svg width="21" height="6" viewBox="0 0 21 6"><path d="M0 0h21v6H0z" fill="white"/></svg></a></li></ul></div></div>');
+        document.querySelector('.header-icons').insertAdjacentHTML('beforeend', '<div class="bg-iconEmp cursor-pointer"><a class="icon-link" style="width:135px"><i class="fas fa-address-card me-1"></i> Assign Practice </a></div>');
+        const fig = (n, a, w) => '<div class="gp-user-vertical-fig position-relative w-45">' + (w ? '<div class="comments-icon"><img src="/Content/images/comment-dots-Regular.svg"></div>' : '') + '<div class="fig-pod"><a><img alt="..."></a></div><figcaption><strong>' + n + '</strong><small>' + a + '</small></figcaption></div>';
+        row.insertAdjacentHTML('beforeend', '<div class="box-widget h-50" id="aw-x"><app-company-awards-widget><div class="gp-performers"><div class="d-flex mb-2"><div class="d-flex gap-3"><div class="box-widget-title-new active"> Company Awards <span><i id="add-eom-tom-request-btn" class="fa fa-plus"></i></span></div><div class="box-widget-title-new"> Idea Nomination </div></div><div><small><a>More Info</a></small></div></div>'
+            + '<div id="myTabContent" class="tab-content d-block"><div class="tab-pane active"><div class="carousel slide"><div class="carousel-inner"><div class="carousel-item active"><div class="d-flex">' + fig('Muhammad Aasim', 'Stand OUT Performer', 0) + fig('Muzamil Manzoor', 'Star Performer', 1) + '</div></div></div></div>'
+            + '<a class="carousel-control-next" role="button"><span class="carousel-control-next-icon"></span></a></div></div></div><div class="modal fade" id="add-eom-tom-modal"></div></app-company-awards-widget></div>'); return 1; })()`);
+    await sleep(1600);
+    ok('USA: the timeanddate iframes give way to themed zone clocks (Pacific first, as EGP orders them)', await ev(String.raw`(() => { const c = [...document.querySelectorAll('#usa-x .atc-clk')], f = document.querySelector('#usa-x iframe');
+        const pac = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).format(new Date());
+        return c.length === 4 && c.every(e => /^\d{1,2}:\d{2} [AP]M [A-Z]{2,5}$/.test(e.textContent)) && c[0].textContent === pac && getComputedStyle(f).display === 'none' && getComputedStyle(c[0].parentElement).backgroundColor !== 'rgba(0, 0, 0, 0)'; })()`));
+    ok('Company Awards is laid out as Promotion (tabs, add, More, pager, person tiles); its add-award modal stays out of the hidden content', await ev("(() => { const c = document.getElementById('aw-x'), v = c.querySelector(':scope > .atc-view'); return !!v && v.querySelectorAll('.atc-v-seg > span').length === 2 && v.querySelectorAll('.atc-v-pr.is-award').length === 2 && !!v.querySelector('.atc-v-pg [aria-label=Next]') && !!v.querySelector('[aria-label=\"Add an award\"]') && v.querySelectorAll('.atc-v-pr [aria-label=\"Send wishes\"]').length === 1 && getComputedStyle(c.querySelector('.gp-performers')).display === 'none' && getComputedStyle(c.querySelector('app-company-awards-widget')).display === 'contents' && c.querySelector('#add-eom-tom-modal').parentElement.tagName === 'APP-COMPANY-AWARDS-WIDGET'; })()"));
+    ok('carousel arrows left in a restyled card are the 28px pager button with a symbol', await ev("(() => { const a = document.querySelector('#usa-x .carousel-control-next'), s = a.querySelector('svg'), b = a.getBoundingClientRect(); return Math.round(b.width) === 28 && getComputedStyle(a).backgroundColor !== 'rgba(0, 0, 0, 0)' && getComputedStyle(s).webkitMaskImage.includes('data:image/svg'); })()"));
+    ok('rail: EC/LS (a 21 × 6 wordmark svg) draws a whole 24px symbol', await ev("(() => { const s = document.querySelector('#sidebarNav .sidebar-icons-link svg'), b = s.getBoundingClientRect(); return Math.round(b.width) === 24 && Math.round(b.height) === 24 && getComputedStyle(s).webkitMaskImage.includes('data:image/svg'); })()"));
+    ok('1400 px: Assign Practice is icon-only (EGP pins it at 135px); the time card drops its values under the countdown', await ev("(() => { const a = document.querySelector('.header-icons .bg-iconEmp .icon-link'), big = document.querySelector('.atc-time .atc-big'), tg = document.querySelector('.atc-time .atc-tg'); return a.getBoundingClientRect().width < 60 && tg.getBoundingClientRect().top >= big.getBoundingClientRect().bottom; })()"));
+    ok('chip Float: its label survives paint() and it sits beside Open attendance', await ev("(() => { document.querySelector('.atc-chip-b').click(); return 1; })()") && await sleep(1500) === undefined
+        && await ev("(() => { const b = document.querySelector('.atc-pop [data-act=float]'); return !!b && /Float/.test(b.textContent) && !!b.querySelector('svg') && b.getBoundingClientRect().width > 50; })()"));
+    // A trusted click (CDP input, so it carries user activation): the real Document Picture-in-Picture path, unstubbed.
+    const fb = await ev("(() => { const r = document.querySelector('.atc-pop [data-act=float]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
+    for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: fb.x, y: fb.y, button: 'left', clickCount: 1 });
+    await sleep(1800);
+    const real = await ev("(() => { const w = documentPictureInPicture.window; return w ? { time: (w.document.querySelector('.time') || {}).textContent, face: !!w.document.querySelector('button.mood'), w: w.innerWidth, h: w.innerHeight } : null; })()");
+    ok('chip Float, real click: Chrome opens the floating window with the countdown', !!real && /^\d\d:\d\d:\d\d$/.test(real.time) && real.face, real);
+    await ev("(() => { const w = documentPictureInPicture.window; if (w) w.close(); document.querySelector('.atc-chip-b').click(); return 1; })()"); await sleep(600);
+    ok('chip Float opens the widget float off Attendance with the shell time; its face closes it', await ev(String.raw`(async () => {
+        const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;left:0;top:0;width:240px;height:80px;border:0'; document.body.append(f); let closed = 0; f.contentWindow.close = () => { closed++; };
+        documentPictureInPicture.requestWindow = async () => f.contentWindow; document.querySelector('.atc-pop [data-act=float]').click(); await new Promise(r => setTimeout(r, 1400));
+        const d = f.contentDocument, t = d.querySelector('.time'); const r = !!t && /^\d\d:\d\d:\d\d$/.test(t.textContent) && !!d.body.style.getPropertyValue('--att-accent'); d.querySelector('.mood').click(); f.remove(); return r && closed === 1; })()`));
+    api.oldWidget = true; await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(800);
+    await ev("document.querySelector('.atc-chip-b').click(); 1"); await sleep(500);
+    const fo = await ev("(() => { const b = document.querySelector('.atc-pop [data-act=float]'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
+    if (fo) for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: fo.x, y: fo.y, button: 'left', clickCount: 1 });
+    await sleep(1800);
+    const sf = await ev("(() => { const w = documentPictureInPicture.window; if (!w) return null; const r = { time: w.document.querySelector('.time').textContent, label: w.document.querySelector('.label').textContent, face: w.document.querySelector('button.mood').textContent, bg: w.document.body.style.getPropertyValue('--sc') }; w.close(); return r; })()");
+    ok('under a widget without ATC.float the chip still floats, in the shell\'s own window (real click)', !!fo && !!sf && /^\d+:\d\d:\d\d$/.test(sf.time) && sf.label === 'Until freedom' && !!sf.face && !!sf.bg, { fo, sf });
+    api.oldWidget = false; await go(TL); await until("!!document.querySelector('.atc-chip')");
+    await ev("location.hash = '#/time-absence/attendence-record'; 1"); await until("!!document.getElementById('total-time-summary')"); await sleep(1000);
+    const cols = () => ev("getComputedStyle(document.getElementById('total-time-summary')).gridTemplateColumns.split(' ').length");
+    ok('widget workspace at 1400 px: still three columns (320 px sides)', await cols() === 3 && /^320px/.test(await ev("getComputedStyle(document.getElementById('total-time-summary')).gridTemplateColumns")));
+    await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 1000, deviceScaleFactor: 1, mobile: false }); await sleep(400);
+    ok('widget workspace at 1366 px: the right column drops under the other two', await cols() === 2);
+    await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
     console.log('\n── Checked out');
     api.checkout = '5:00 PM'; await scheme('light'); await go(TL);
     await until("!!document.querySelector('.atc-time')"); await sleep(1300); s = await state();

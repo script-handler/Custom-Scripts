@@ -45,8 +45,11 @@ const CARDS = { tl: { profile: ['section[aria-label="Profile"]', '.atc-c-profile
     documents: ['h3=Documents', '.atc-c-documents'], approval: ['h3=Approval', '.atc-c-approval'], leaders: ['span=Supervisor', '.atc-c-leaders'], birthday: ['span=Birthdays', '.atc-c-birthday'],
     coworkers: ['h3=Co-workers', '.atc-c-co-workers'], awards: ['span=Company awards', '.atc-c-company-awards'], spotlight: ['h3=Spotlight', '.atc-c-spotlight'], happening: ['h3=Happening', '.atc-c-happening-around-me'],
     health: ['h3=Health', '.atc-c-health'], knowledge: ['h3=eGP Knowledge', '.atc-c-egp-knowledge'], promotion: ['span=Promotion', '.atc-c-promotion'], recognition: ['h3=Recognition', '.atc-c-recognition'],
-    offers: ['h3=Special offers', '.atc-c-special-offers'], market: ['span=Market place', '.atc-c-market-place'], events: ['h3=Events', '.atc-c-events'] },
-    att: { bento: ['div[style*="1.15fr 1.15fr"]', '.atc-bento'], table: ['[role=table]', '.main-attendance-table'] } };
+    offers: ['h3=Special offers', '.atc-c-special-offers'], market: ['span=Market place', '.atc-c-market-place'], events: ['h3=Events', '.atc-c-events'],
+    // ours only (no design counterpart): the repainted EGP icons and the USA map
+    nav: ['-', '.gp-main-navbar .header-icons'], rail: ['-', '#sidebarNav'], usa: ['-', '.atc-c-usa'] },
+    att: { bento: ['div[style*="1.15fr 1.15fr"]', '.atc-bento'], table: ['[role=table]', '.main-attendance-table'], fields: ['-', '#attendence-record-tab .attendence-inner > .row.mb-2'] } };
+const VW = +flag('width') || 1920; // --width=1366: a laptop viewport (both sides)
 const themes = (flag('themes') || Object.keys(THEMES).join(',')).split(','), screens = (flag('only') || 'tl,att').split(',');
 
 const VENDOR = { 'react@18.3.1/umd/react.production.min.js': 'react.production.min.js', 'react-dom@18.3.1/umd/react-dom.production.min.js': 'react-dom.production.min.js' };
@@ -100,7 +103,7 @@ async function main() {
     const until = async (x, ms = 15000) => { for (let t = 0; t < ms; t += 200) { if (await ev(x)) return true; await sleep(200); } return false; };
     const crop = async (sel, file) => { const b = await ev("(() => { const q = " + JSON.stringify(sel) + ", m = /^(\\w+)=(.+)$/.exec(q), e = m ? [...document.querySelectorAll(m[1])].find(x => x.textContent.trim().startsWith(m[2]))?.closest('section') : document.querySelector(q); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left - 8, y: r.top - 8, width: r.width + 16, height: r.height + 16 }; })()");
         if (!b) return null; const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { ...b, scale: 1.5 } }); fs.writeFileSync(path.join(OUT, file), Buffer.from(r.result.data, 'base64')); return file; };
-    const shot = async (file, h) => { const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: 1920, height: h, scale: 1 } }); fs.writeFileSync(path.join(OUT, file), Buffer.from(r.result.data, 'base64')); };
+    const shot = async (file, h) => { const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: VW, height: h, scale: 1 } }); fs.writeFileSync(path.join(OUT, file), Buffer.from(r.result.data, 'base64')); };
     let nav = 0;
     const rows = [];
     for (const sc of screens) {
@@ -108,7 +111,7 @@ async function main() {
         if (!hasFx) console.log(`  (no ref/egp/${S.fx}: design side only)`);
         for (const th of themes) {
             const [prefs, scheme] = THEMES[th];
-            await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: S.h, deviceScaleFactor: 1, mobile: false });
+            await send('Emulation.setDeviceMetricsOverride', { width: VW, height: S.h, deviceScaleFactor: 1, mobile: false });
             await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }, { name: 'prefers-reduced-motion', value: 'reduce' }] });
             designTheme = th;
             await send('Page.navigate', { url: DESIGN + encodeURIComponent(S.file) + '?n=' + (++nav) });

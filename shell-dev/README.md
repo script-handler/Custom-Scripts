@@ -20,10 +20,11 @@ It has no settings of its own. It reads `attendancePrefs` and Plus (`ATC.plus`, 
 ```
 "C:/Program Files/nodejs/node.exe" shell-dev/bridge.js              # anchors still match the widget?
 "C:/Program Files/nodejs/node.exe" shell-dev/gen-tokens.js          # rebuild ATCShell.js's <gen:tokens> block from ref/design-v2
-"C:/Program Files/nodejs/node.exe" shell-dev/host-run.js [outDir]   # stand-in portal, ~65 checks + PNGs
+"C:/Program Files/nodejs/node.exe" shell-dev/host-run.js [outDir]   # stand-in portal, ~74 checks + PNGs
 "C:/Program Files/nodejs/node.exe" shell-dev/compare.js [outDir] [--only=tl|att] [--themes=my-light,...]   # design | ours report
     # --slugs=1   print each Timeline card's atc-c-<slug> and box (first theme)
     # --eval=f.js print the result of evaluating f.js on our side (first theme), for DOM questions
+    # --width=N   render both sides N px wide (laptops: 1366, 1440, 1536)
     # --loader=1  inject a blockUI page block + an inline loader gif, crop loader-<theme>-<ms>.png frames with motion on
 ```
 

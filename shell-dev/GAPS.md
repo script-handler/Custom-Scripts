@@ -19,6 +19,14 @@ A row reaches `verified-live` only after `compare.js` (design | ours on the real
 | Nav: brand badge shape, tonal icon tiles, Assign Practice pill, shaped avatar | Timeline v2 nav | css (compare ✓): badge, Assign Practice tile-3 pill |
 | Sub-header: glass toolbar pill with icons, "active on eGP" chip | Timeline v2 | css (compare ✓): menu button + links as one pill, users chip |
 | Sidebar rail: tonal, selected pill | XRail | css |
+| EGP icons → Material Symbols: navbar (by title), users chip, Assign Practice, rail (by title), menu toggle, comment / like images | M3 icons | css (compare ✓): REPAINT masks a symbol onto the host svg/img, which keeps its box and events; unlisted titles keep EGP's drawing |
+| USA map + zone clocks | Timeline v2 | css + injected (stand-in ✓): the raster takes the primary's hue (--x-map); EGP's clocks are timeanddate.com iframes (out of CSS reach), hidden for themed Intl clocks of the same zones; they wrap, never clip |
+| Attendance Date From / To (input-group fields) | XField | css (compare ✓, injected markup): filled field, label clear of the value, placeholder only on focus, calendar add-on as an icon button |
+| Navbar chip: Float | XChip | injected (stand-in ✓; its label was blanked by paint()'s data-k, now data-act): opens the widget's float off Attendance with the shell's time and colours (ATC.float / ATC.worked / ATC.vars) |
+| Float window: narrower, face closes it | widget | done (stand-in window ✓): 240 × 80; label hides under 230px, rail under 170px; the face is a close button; no inner ring |
+| Company awards laid out as Promotion (tabs, add, More, pager, person tiles) | Timeline v2 | rendered (compare ✓, stand-in ✓); Idea Nomination keeps the host card (its popovers live there); the add-award modal stays reachable (display:contents) |
+| Carousel arrows left in restyled cards | Timeline v2 | css (stand-in ✓): the views' 28px pager button with a chevron |
+| Laptop layout (1600 / 1440 down) | — | css (compare --width=1366/1536 ✓): time card values drop under the countdown (container query), leads, tabs, spotlight peeks, USA zoom, health, Assign Practice icon-only, Attendance header and legend wrap; widget workspace two columns at 1380 down |
 | Web Theme toggle (Plus): Settings › Theme, page skin on or off | widget setting | done (stand-in ✓): `webTheme` pref, row shown to Plus only; off removes every page mark live (`unskin`) |
 | Loader: EGP's blockUI `images/loading.gif` (and the request widgets' inline copies) → M3 loading indicator, every route | `xLoader` in `x-tokens.css`; m3 loading indicator | css (compare `--loader` ✓, stand-in ✓): contained 72px over a surface veil, uncontained 38px inline; Material/Aurora morph the M3 seven, Cyberpunk its angular set, Business without overshoot |
 

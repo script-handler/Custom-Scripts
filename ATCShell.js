@@ -86,6 +86,10 @@ const rgba = (h, a) => `rgba(${hex(h).join(',')},${a})`;
 const mix = (a, b, w) => { const B = hex(b); return '#' + hex(a).map((v, i) => Math.round(v * w + B[i] * (1 - w)).toString(16).padStart(2, '0')).join(''); };
 const lum = h => { const q = hex(h).map(x => (x /= 255) <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4); return .2126 * q[0] + .7152 * q[1] + .0722 * q[2]; };
 const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const hsl = h => { const [r, g, b] = hex(h).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+    const hu = !d ? 0 : mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return [hu * 60, d ? d / (1 - Math.abs(2 * l - 1)) : 0, l]; };
+// The USA map is a blue raster (about hsl 205° 65%): turned to the primary's hue and saturation.
+const mapFilter = p => { const [h, sat] = hsl(p); return `hue-rotate(${Math.round(h - 205)}deg) saturate(${Math.max(.15, sat / .65).toFixed(2)})`; };
 // Just Business never morphs, so its circle and square are exact.
 const sh = (n, flat) => flat && n === 'circle' ? 'circle(50%)' : flat && n === 'square' ? 'inset(0 round 22%)' : `polygon(${SHAPES[n].replace(/(\d+) (\d+)/g, '$1% $2%')})`;
 const SPR = { // M3 Expressive springs as CSS linear()
@@ -166,7 +170,7 @@ function cyber(p) {
 const FONT = { my: 'family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000', aurora: 'family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&family=Sora:wght@400;500;600;700',
     cyber: 'family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&family=Chakra+Petch:wght@500;600;700&family=Share+Tech+Mono' };
 // The active family's tokens on <html>; rebuilt only when the theme, the browser scheme or a cyber colour changes.
-let tokKey = '';
+let tokKey = '', isDark = false;
 function tokens() {
     const p = P(), fam = famOf(p.displayTheme), dark = fam === 'cyber' || (fam !== 'biz' && MQ.matches);
     const key = fam + dark + (fam === 'cyber' ? CY.map(k => p[k]).join() + p.cyberGlowIntensity : '');
@@ -177,9 +181,9 @@ function tokens() {
         const [ink, fill, onFill, track] = v.slice(ROLES.length + ST.length); x = { ink, fill, 'on-fill': onFill, track, 'state-ink': c['on-surface'], ...(fam === 'aurora' ? AURORA(dark) : fam === 'biz' ? BIZ : {}) }; }
     const t = { ...DEF, ...x };
     const vars = Object.entries(c).map(([k, v]) => `--md-sys-color-${k}:${v}`).concat(Object.entries(st).map(([k, v]) => `--x-${k}:${v}`),
-        Object.entries(t).filter(([k]) => k !== 'sh').map(([k, v]) => `--x-${k}:${v}`), t.sh.map((n, i) => `--x-sh-${SH_KEYS[i]}:${sh(n, fam === 'biz')}`), [`--x-wave:${WAVE}`]);
+        Object.entries(t).filter(([k]) => k !== 'sh').map(([k, v]) => `--x-${k}:${v}`), t.sh.map((n, i) => `--x-sh-${SH_KEYS[i]}:${sh(n, fam === 'biz')}`), [`--x-wave:${WAVE}`, `--x-map:${mapFilter(c.primary)}`]);
     style('atc-x-tokens', `html{${vars.join(';')}}`);
-    H.dataset.xFam = fam;
+    H.dataset.xFam = fam; isDark = dark;
     let f = D.getElementById('atc-x-fonts'); const href = FONT[fam] && 'https://fonts.googleapis.com/css2?' + FONT[fam] + '&display=swap';
     if (!href) { if (f) f.remove(); } else { if (!f) { f = D.createElement('link'); f.id = 'atc-x-fonts'; f.rel = 'stylesheet'; D.head.appendChild(f); } if (f.getAttribute('href') !== href) f.href = href; }
     return dark;
@@ -255,6 +259,40 @@ const ICON = { // Material icons, 24px
     off: 'M19.35 10.04C18.67 6.59 15.64 4 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46C10.21 6.23 11.08 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 18.16 24 16.68 24 15c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z'
 };
 const icon = n => `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${ICON[n]}"/></svg>`;
+// SYMBOLS (Material Symbols, outlined 400, Apache-2.0; 960 grid): EGP's own icons are repainted with these through a
+// mask on the host element, which keeps its box and events.
+const SYM = {
+    support_agent: 'M440-120v-60h340v-304q0-123.69-87.32-209.84Q605.36-780 480-780q-125.36 0-212.68 86.16Q180-607.69 180-484v244h-20q-33 0-56.5-23.5T80-320v-80q0-21 10.5-39.5T120-469l3-53q8-68 39.5-126t79-101q47.5-43 109-67T480-840q68 0 129 24t109 66.5Q766-707 797-649t40 126l3 52q19 9 29.5 27t10.5 38v92q0 20-10.5 38T840-249v69q0 24.75-17.62 42.37Q804.75-120 780-120H440ZM338.5-418.68q-8.5-8.67-8.5-21.5 0-12.82 8.68-21.32 8.67-8.5 21.5-8.5 12.82 0 21.32 8.68 8.5 8.67 8.5 21.5 0 12.82-8.68 21.32-8.67 8.5-21.5 8.5-12.82 0-21.32-8.68Zm240 0q-8.5-8.67-8.5-21.5 0-12.82 8.68-21.32 8.67-8.5 21.5-8.5 12.82 0 21.32 8.68 8.5 8.67 8.5 21.5 0 12.82-8.68 21.32-8.67 8.5-21.5 8.5-12.82 0-21.32-8.68ZM241-462q-7-106 64-182t177-76q87 0 151 57.5T711-519q-89-1-162.5-50T434.72-698Q419-618 367.5-555.5T241-462Z',
+    lightbulb: 'M422.5-103.5Q399-127 399-161h162q0 34-23.5 57.5T480-80q-34 0-57.5-23.5ZM318-223v-60h324v60H318Zm5-121q-66-43-104.5-107.5T180-597q0-122 89-211t211-89q122 0 211 89t89 211q0 81-38 145.5T637-344H323Zm22-60h271q48-32 76-83t28-110q0-99-70.5-169.5T480-837q-99 0-169.5 70.5T240-597q0 59 28 110t77 83Zm135 0Z',
+    campaign: 'M730-450v-60h150v60H730Zm50 290-121-90 36-48 121 90-36 48Zm-82-503-36-48 118-89 36 48-118 89ZM210-200v-160h-70q-24.75 0-42.37-17.63Q80-395.25 80-420v-120q0-24.75 17.63-42.38Q115.25-600 140-600h180l200-120v480L320-360h-50v160h-60Zm250-146v-268l-124 74H140v120h196l124 74Zm100 0v-268q27 24 43.5 58.5T620-480q0 41-16.5 75.5T560-346ZM300-480Z',
+    handshake: 'M475-140q5 0 11.5-2.5T497-149l337-338q13-13 19.5-29.67Q860-533.33 860-550q0-17-6.5-34T834-614L654-794q-13-13-30-19.5t-34-6.5q-16.67 0-33.33 6.5Q540-807 527-794l-18 18 81 82q13 14 23 32.5t10 40.5q0 38-29.5 67T526-525q-25 0-41.5-7.5t-30.19-21.34L381-627 200-446q-5 5-7 10.53-2 5.52-2 11.84 0 12.63 8.5 21.13 8.5 8.5 21.17 8.5 6.33 0 11.83-3t9.5-7l138-138 42 42-137 137q-5 5-7 11t-2 12q0 12 9 21t21 9q6 0 11.5-2.5t9.5-6.5l138-138 42 42-137 137q-4 4-6.5 10.33-2.5 6.34-2.5 12.67 0 12 9 21t21 9q6 0 11-2t10-7l138-138 42 42-138 138q-5 5-7 11t-2 11q0 14 8 22t22 8Zm.06 60Q442-80 416-104.5t-31-60.62Q351-170 328-193t-28-57q-34-5-56.5-28.5T216-335q-37-5-61-30t-24-60q0-17 6.72-34.05Q144.45-476.1 157-489l224-224 110 110q8 8 17.33 12.5 9.34 4.5 18.67 4.5 13 0 24.5-11.5t11.5-24.65q0-5.85-3.5-13.35T548-651L405-794q-13-13-30-19.5t-34-6.5q-16.67 0-33.33 6.5-16.67 6.5-29.61 19.36L126-642q-14 14-19.5 29.5t-6.5 35q-1 19.5 7.5 38T128-506l-43 43q-20-22-32.5-53T40-579q0-30 11.5-57.5T84-685l151-151q22-22 49.79-32.5 27.8-10.5 57-10.5 29.21 0 56.71 10.5T448-836l18 18 18-18q22-22 49.79-32.5 27.8-10.5 57-10.5 29.21 0 56.71 10.5T697-836l179 179q22 22 33 50.03 11 28.04 11 57 0 28.97-11 56.47T876-444L539-107q-13 13-29.53 20t-34.41 7ZM377-626Z',
+    lock_reset: 'M480-80q-88 0-164-35t-130.5-94q-54.5-59-83-138T81-513h61q-7 75 16 142.5t69.5 119Q274-200 339-169.5T480-139q142 0 241-99t99-241q0-142-99-241t-241-99q-100 0-180.5 51.5T177-633h129v60H80v-227h60v109q54-86 142.5-137.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-80-245q-14 0-24.5-10.5T365-360v-120q0-14 11.5-24.5T405-515v-45q0-31 22-53t53-22q31 0 53 22t22 53v45q17 0 28.5 10.5T595-480v120q0 14-10.5 24.5T560-325H400Zm35-190h90v-45q0-19-13-32t-32-13q-19 0-32 13t-13 32v45Z',
+    contacts: 'M144-40v-60h672v60H144Zm0-820v-60h672v60H144Zm336 416q50 0 84-34t34-84q0-50-34-84t-84-34q-50 0-84 34t-34 84q0 50 34 84t84 34ZM132-160q-24 0-42-18t-18-42v-520q0-26 18-43t42-17h696q24 0 42 18t18 42v520q0 24-18 42t-42 18H132Zm88-60q51-63 121-94.5T479.5-346q68.5 0 140 31.5T740-220h88v-520H132v520h88Zm94 0h334q-31-30-72.5-48T480-286q-54 0-94.5 18T314-220Zm125.5-301Q423-538 423-562t16.34-41q16.34-17 40.5-17t40.66 17q16.5 17 16.5 41t-16.34 41q-16.34 17-40.5 17t-40.66-17Zm40.5 41Z',
+    admin_panel_settings: 'M734.88-289Q753-308 753-333.88q0-25.88-18.12-44t-44-18.12Q665-396 646-377.88q-19 18.12-19 44T646-289q19 19 44.88 19 25.88 0 44-19ZM689.5-145q33.5 0 60.5-14t46-40q-26-14-51.96-21t-54-7q-28.04 0-54.54 7T584-199q19 26 45.5 40t60 14ZM480-80q-138-32-229-156.5T160-522v-239l320-120 320 120v270q-14-7-30-12.5t-30-7.5v-208l-260-96-260 96v197q0 76 24.5 140T307-269.5q38 48.5 84 80.5t89 46q6 12 18 27t20 23q-9 5-19 7.5T480-80Zm212.5 0Q615-80 560-135.5T505-267q0-78.43 54.99-133.72Q614.98-456 693-456q77 0 132.5 55.28Q881-345.43 881-267q0 76-55.5 131.5T692.5-80ZM480-479Z',
+    group: 'M38-160v-94q0-35 18-63.5t50-42.5q73-32 131.5-46T358-420q62 0 120 14t131 46q32 14 50.5 42.5T678-254v94H38Zm700 0v-94q0-63-32-103.5T622-423q69 8 130 23.5t99 35.5q33 19 52 47t19 63v94H738ZM250-523q-42-42-42-108t42-108q42-42 108-42t108 42q42 42 42 108t-42 108q-42 42-108 42t-108-42Zm426 0q-42 42-108 42-11 0-24.5-1.5T519-488q24-25 36.5-61.5T568-631q0-45-12.5-79.5T519-774q11-3 24.5-5t24.5-2q66 0 108 42t42 108q0 66-42 108ZM98-220h520v-34q0-16-9.5-31T585-306q-72-32-121-43t-106-11q-57 0-106.5 11T130-306q-14 6-23 21t-9 31v34Zm324.5-346.5Q448-592 448-631t-25.5-64.5Q397-721 358-721t-64.5 25.5Q268-670 268-631t25.5 64.5Q319-541 358-541t64.5-25.5ZM358-220Zm0-411Z',
+    badge: 'M140-80q-24 0-42-18t-18-42v-480q0-24 18-42t42-18h250v-140q0-24 18-42t42-18h60q24 0 42 18t18 42v140h250q24 0 42 18t18 42v480q0 24-18 42t-42 18H140Zm0-60h680v-480H570v30q0 28-18 44t-42 16h-60q-24 0-42-16t-18-44v-30H140v480Zm92-107h239v-14q0-18-9-32t-23-19q-32-11-50-14.5t-35-3.5q-19 0-40.5 4.5T265-312q-15 5-24 19t-9 32v14Zm336-67h170v-50H568v50Zm-175.5-65.5Q408-395 408-418t-15.5-38.5Q377-472 354-472t-38.5 15.5Q300-441 300-418t15.5 38.5Q331-364 354-364t38.5-15.5ZM568-427h170v-50H568v50ZM450-590h60v-230h-60v230Zm30 210Z',
+    home: 'M220-180h150v-250h220v250h150v-390L480-765 220-570v390Zm-60 60v-480l320-240 320 240v480H530v-250H430v250H160Zm320-353Z',
+    manage_accounts: 'M292-527q-42-42-42-108t42-108q42-42 108-42t108 42q42 42 42 108t-42 108q-42 42-108 42t-108-42ZM80-164v-94q0-35 17.5-63t50.5-43q72-32 133.5-46T400-424h23q-6 14-9 27.5t-5 32.5h-9q-58 0-113.5 12.5T172-310q-16 8-24 22.5t-8 29.5v34h269q5 18 12 32.5t17 27.5H80Zm587 44-10-66q-17-5-34.5-14.5T593-222l-55 12-25-42 47-44q-2-9-2-25t2-25l-47-44 25-42 55 12q12-12 29.5-21.5T657-456l10-66h54l10 66q17 5 34.5 14.5T795-420l55-12 25 42-47 44q2 9 2 25t-2 25l47 44-25 42-55-12q-12 12-29.5 21.5T731-186l-10 66h-54Zm85-143q22-22 22-58t-22-58q-22-22-58-22t-58 22q-22 22-22 58t22 58q22 22 58 22t58-22ZM464.5-570.5Q490-596 490-635t-25.5-64.5Q439-725 400-725t-64.5 25.5Q310-674 310-635t25.5 64.5Q361-545 400-545t64.5-25.5ZM400-635Zm9 411Z',
+    call: 'M795-120q-116 0-236.5-56T335-335Q232-438 176-558.5T120-795q0-19.29 12.86-32.14Q145.71-840 165-840h140q14 0 24 10t14 25l26.93 125.64Q372-665 369.5-653.5t-10.73 19.73L259-533q26 44 55 82t64 72q37 38 78 69.5t86 55.5l95-98q10-11 23.15-15 13.15-4 25.85-2l119 26q15 4 25 16.04 10 12.05 10 26.96v135q0 19.29-12.86 32.14Q814.29-120 795-120ZM229-588l81-82-23-110H180q2 42 13.5 88.5T229-588Zm369 363q41 19 89 31t93 14v-107l-103-21-79 83ZM229-588Zm369 363Z',
+    receipt_long: 'M222-80q-43.75 0-74.37-30.63Q117-141.25 117-185v-125h127v-570l59.8 60 59.8-60 59.8 60 59.8-60 59.8 60 60-60 60 60 60-60 60 60 60-60v695q0 43.75-30.62 74.37Q781.75-80 738-80H222Zm516-60q20 0 32.5-12.5T783-185v-595H304v470h389v125q0 20 12.5 32.5T738-140ZM357-622v-60h240v60H357Zm0 134v-60h240v60H357Zm333-134q-12 0-21-9t-9-21q0-12 9-21t21-9q12 0 21 9t9 21q0 12-9 21t-21 9Zm0 129q-12 0-21-9t-9-21q0-12 9-21t21-9q12 0 21 9t9 21q0 12-9 21t-21 9ZM221-140h412v-110H177v65q0 20 12.65 32.5T221-140Zm-44 0v-110 110Z',
+    report: 'M480-281q14 0 24.5-10.5T515-316q0-14-10.5-24.5T480-351q-14 0-24.5 10.5T445-316q0 14 10.5 24.5T480-281Zm-30-144h60v-263h-60v263ZM330-120 120-330v-300l210-210h300l210 210v300L630-120H330Zm25-60h250l175-175v-250L605-780H355L180-605v250l175 175Zm125-300Z',
+    event_busy: 'm381-218-43-43 100-99-100-99 43-43 99 100 99-100 43 43-100 99 100 99-43 43-99-100-99 100ZM180-80q-24 0-42-18t-18-42v-620q0-24 18-42t42-18h65v-60h65v60h340v-60h65v60h65q24 0 42 18t18 42v620q0 24-18 42t-42 18H180Zm0-60h600v-430H180v430Zm0-490h600v-130H180v130Zm0 0v-130 130Z',
+    savings: 'M668.5-531.5Q680-543 680-560t-11.5-28.5Q657-600 640-600t-28.5 11.5Q600-577 600-560t11.5 28.5Q623-520 640-520t28.5-11.5ZM320-620h200v-60H320v60ZM180-120q-34-114-67-227.5T80-580q0-92 64-156t156-64h200q29-38 70.5-59t89.5-21q25 0 42.5 17.5T720-820q0 6-1.5 12t-3.5 11q-4 11-7.5 22.5T702-751l91 91h87v279l-113 37-67 224H480v-80h-80v80H180Zm45-60h115v-80h200v80h115l63-210 102-35v-175h-52L640-728q1-25 6.5-48.5T658-824q-38 10-72 29.5T534-740H300q-66.29 0-113.14 46.86Q140-646.29 140-580q0 103.16 29 201.58Q198-280 225-180Zm255-322Z',
+    mail: 'M140-160q-24 0-42-18t-18-42v-520q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H140Zm340-302L140-685v465h680v-465L480-462Zm0-60 336-218H145l335 218ZM140-685v-55 520-465Z',
+    id_card: 'M580-450h180v-60H580v60Zm0-120h180v-60H580v60ZM200-320h320v-19q0-42-42.5-68.5T360-434q-75 0-117.5 26.5T200-339v19Zm211.5-195.42q21.5-21.42 21.5-51.5t-21.42-51.58q-21.42-21.5-51.5-21.5t-51.58 21.42q-21.5 21.42-21.5 51.5t21.42 51.58q21.42 21.5 51.5 21.5t51.58-21.42ZM140-160q-24 0-42-18t-18-42v-520q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H140Zm0-60h680v-520H140v520Zm0 0v-520 520Z',
+    logout: 'M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h299v60H180v600h299v60H180Zm486-185-43-43 102-102H360v-60h363L621-612l43-43 176 176-174 174Z',
+    more_time: 'M299.5-148.5q-65.5-28.5-114-77t-77-114Q80-405 80-480t28.5-140.5Q137-686 186-734.5t114.5-77Q366-840 441-840q26 0 52.5 4t54.5 12v64q-26-10-53-15t-54-5q-125 0-213 87.5T140-480q0 125 87.5 212.5T440-180q125 0 212.5-87.5T740-480q0-15-1.5-31.5T733-549h61q3 17 4.5 34.5T800-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T440-120q-75 0-140.5-28.5ZM556-313 404-465v-215h60v191l134 134-42 42Zm178-296v-125H608v-60h126v-126h60v126h126v60H794v125h-60Z',
+    arrow_back: 'm274-450 248 248-42 42-320-320 320-320 42 42-248 248h526v60H274Z',
+    thumb_up: 'M716-120H272v-512l278-288 39 31q6 5 9 14t3 22v10l-45 211h299q24 0 42 18t18 42v81.84q0 7.16 1.5 14.66T915-461L789-171q-8.88 21.25-29.59 36.12Q738.69-120 716-120Zm-384-60h397l126-299v-93H482l53-249-203 214v427Zm0-427v427-427Zm-60-25v60H139v392h133v60H79v-512h193Z',
+    chat: 'M240-399h313v-60H240v60Zm0-130h480v-60H240v60Zm0-130h480v-60H240v60ZM80-80v-740q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H240L80-80Zm134-220h606v-520H140v600l74-80Zm-74 0v-520 520Z',
+    calendar_month: 'M180-80q-24 0-42-18t-18-42v-620q0-24 18-42t42-18h65v-60h65v60h340v-60h65v60h65q24 0 42 18t18 42v620q0 24-18 42t-42 18H180Zm0-60h600v-430H180v430Zm0-490h600v-130H180v130Zm0 0v-130 130Zm300 230q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-188.5-11.5Q280-423 280-440t11.5-28.5Q303-480 320-480t28.5 11.5Q360-457 360-440t-11.5 28.5Q337-400 320-400t-28.5-11.5ZM640-400q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-188.5-11.5Q280-263 280-280t11.5-28.5Q303-320 320-320t28.5 11.5Q360-297 360-280t-11.5 28.5Q337-240 320-240t-28.5-11.5ZM640-240q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z',
+    picture_in_picture_alt: 'M140-160q-24 0-42-18t-18-42v-520q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18H140Zm0-60h680v-520H140v520Zm0 0v-520 520Zm306-45h335v-257H446v257Zm60-60v-137h215v137H506Z',
+};
+const SM = n => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'><path d='${SYM[n]}'/></svg>`)}")`;
+const sym = n => `<svg viewBox="0 -960 960 960" aria-hidden="true"><path fill="currentColor" d="${SYM[n]}"/></svg>`;
+// A host svg (or img) painted as symbol n at size s in currentColor; its own drawing is hidden.
+const REPAINT = (sel, n, s) => `${sel}{-webkit-mask:${SM(n)} center/${s} ${s} no-repeat;mask:${SM(n)} center/${s} ${s} no-repeat;background-color:currentColor!important;fill:none!important;stroke:none!important}${sel}>*{visibility:hidden}`;
+
 const MASK = n => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='${ICON[n]}'/></svg>`)}") center/contain no-repeat`;
 
 const BASE_CSS = `
@@ -318,6 +356,7 @@ html[data-att-skin=dark]{color-scheme:dark}
 .atc-btn{position:relative;height:40px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);background:var(--x-fill);color:var(--x-on-fill)!important;
  font:600 14px/20px var(--x-font-body);letter-spacing:.1px;text-decoration:none!important;box-shadow:var(--x-glow)}
 .atc-btn svg{position:relative;width:18px;height:18px}
+.atc-pop-b{display:flex;gap:8px}.atc-pop-b>a.atc-btn{flex:1}.atc-btn.is-tonal{padding:0 16px;border:0;background:var(--x-tile-2);color:var(--x-on-tile-2)!important;font:inherit;font-weight:600;cursor:pointer}
 .atc-hide{display:none!important}
 .atc-time{box-sizing:border-box;display:flex;align-items:center;gap:14px;margin-top:.5rem;padding:10px 14px 10px 10px;border-radius:var(--x-r-card-sm);background:var(--x-glass);border:var(--x-card-border);
  color:var(--md-sys-color-on-surface);font-family:var(--x-font-body);clip-path:var(--x-card-clip)}
@@ -366,6 +405,76 @@ html[data-x-fam=biz] ${MSG}{background:var(--x-card)!important;border:var(--x-ca
 const R = 'html[data-att-skin]', RD = 'html[data-att-skin=dark]', NW = ':not(#total-time-summary *)', NWW = `:where(${NW})`, OS = MSC('on-surface'), OSV = MSC('on-surface-variant'), OV = MSC('outline-variant');
 const LAYER = p => `color-mix(in srgb,${OS} ${p}%,transparent)`;
 const AT = `${R} #global-portal #attendence-record-tab`, EV = `${R} #global-portal app-evaluation-widget .emp-info`;
+// ICONS: EGP's navbar, rail, menu, comment and calendar icons repainted as Material Symbols in theme colours (REPAINT).
+// Keyed by the host's title, so an icon EGP adds later keeps its own drawing until it gets a symbol here.
+const NAV_SYM = [['HR Concern', 'support_agent'], ['Innovate Hub', 'lightbulb'], ['Whistle blower', 'campaign'], ['Join Hands', 'handshake'], ['Reset Password', 'lock_reset'],
+    ['Directory', 'contacts'], ['Access Request Form', 'admin_panel_settings']];
+const RAIL_SYM = [['Home', 'home'], ['Edit Profile', 'manage_accounts'], ['Make a Call', 'call'], ['Salary Details', 'receipt_long'], ['Report Payroll Issue', 'report'], ['Add Leave', 'event_busy'],
+    ['Provident Fund Details', 'savings'], ['Letter Request', 'mail'], ['Card Request', 'id_card'], ['Resignation', 'logout'], ['Early Coming / Late Sitting Approval', 'more_time']];
+const CLEAR = 'url("data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")';
+const ICONS_CSS = `
+${NAV_SYM.map(([t, n]) => REPAINT(`${R} .header-icons .icon-link[title="${t}"]>svg`, n, '20px')).join('\n')}
+${R} .header-icons .icon-link[title]>svg{width:20px!important;height:20px!important}
+${REPAINT(`${R} .header-icons .bg-iconWider.pointer-cr .icon-link>svg`, 'group', '20px')}${R} .header-icons .bg-iconWider.pointer-cr .icon-link>svg{width:20px!important;height:20px!important}
+${R} .header-icons .bg-iconEmp .icon-link>i.fa-address-card::before{content:"";display:inline-block;width:18px;height:18px;vertical-align:-3px;background:currentColor;-webkit-mask:${SM('badge')} center/18px no-repeat;mask:${SM('badge')} center/18px no-repeat}
+${RAIL_SYM.map(([t, n]) => REPAINT(`${R} #sidebarNav .sidebar-icons-link[title="${t}"]>svg`, n, '24px')).join('\n')}
+${R} #sidebarNav .sidebar-icons-link[title]>svg{width:24px!important;height:24px!important;flex:none}
+${R} #sidebarNav .sidebar-icons-link{color:${OSV}}${R} #sidebarNav .sidebar-icons-link:is(:hover,.selected){color:var(--x-on-tile-2)}
+${REPAINT(`${R} #global-portal #sidebar-toggle-btn>svg`, 'arrow_back', '22px')}
+${R} #global-portal .box-widget :is(.carousel-control-prev,.carousel-control-next){width:28px!important;height:28px;top:50%;bottom:auto;translate:0 -50%;opacity:1;border-radius:50%;background:${MSC('surface-container-highest')};color:${OSV};transition:background-color var(--x-effects)}
+${R} #global-portal .box-widget :is(.carousel-control-prev,.carousel-control-next):hover{background:var(--x-tile-2);color:var(--x-on-tile-2)}
+${R} #global-portal .box-widget :is(.carousel-control-prev-icon,.carousel-control-next-icon){width:28px;height:28px;display:grid;place-items:center;background-image:none!important}
+${R} #global-portal .box-widget :is(.carousel-control-prev-icon,.carousel-control-next-icon)>svg{width:18px!important;height:18px!important;-webkit-mask:${MASK('next')};mask:${MASK('next')};background-color:currentColor!important}
+${R} #global-portal .box-widget :is(.carousel-control-prev-icon,.carousel-control-next-icon)>svg>*{visibility:hidden}${R} #global-portal .box-widget .carousel-control-prev-icon>svg{transform:scaleX(-1)}
+${R} #global-portal :is(img[src$="comment-dots-Regular.svg"],img[src$="thumb-up-outline.svg"]){content:${CLEAR};box-sizing:border-box;width:18px!important;height:18px!important;padding:0;border:0;color:var(--x-ink)}
+${REPAINT(`${R} #global-portal img[src$="comment-dots-Regular.svg"]`, 'chat', '18px')}
+${REPAINT(`${R} #global-portal img[src$="thumb-up-outline.svg"]`, 'thumb_up', '16px')}
+/* USA: the map is a blue raster, so a filter turns it to the theme's primary (--x-map, from tokens()); the zone clocks are chips. */
+${R} #global-portal .atc-c-usa img[usemap]{filter:var(--x-map);transition:filter var(--x-effects)}
+${R} #global-portal .atc-c-usa .box-widget-title small{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--x-r-chip);background:var(--x-tile)!important;color:${OSV}!important;
+ font:600 11px/1 var(--x-font-num)!important;font-variation-settings:var(--x-num-fvs-sm);font-variant-numeric:tabular-nums;white-space:nowrap;box-shadow:none!important;border:0!important}
+${R} #global-portal .atc-c-usa .box-widget-title small:empty{display:none}.atc-clk{display:none}${R} .atc-clk{display:inline}
+${R} #global-portal .atc-c-usa .box-widget-title small>iframe{display:none!important}
+${R} #global-portal .atc-c-usa .box-widget-title{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0}
+${R} #global-portal .atc-c-usa .box-widget-title>span{display:flex!important;flex-wrap:wrap;gap:4px!important;margin:0!important;min-width:0}
+/* Attendance, Date From / To: the input sits in an input-group, so it gets the filled field here; the calendar add-on is an icon button. */
+${AT} .form-floating-label>.input-group{position:relative;flex-wrap:nowrap;width:200px}
+${AT} .form-floating-label>.input-group>input{padding-right:48px!important}
+${AT} .form-floating-label>.input-group>input::placeholder{color:transparent!important}${AT} .form-floating-label>.input-group>input:focus::placeholder{color:${OSV}!important}
+${AT} .form-floating-label>.input-group>.input-icon-right{position:absolute;right:6px;top:50%;translate:0 -50%;z-index:3;width:40px;height:40px;display:grid;place-items:center;margin:0!important;padding:0!important;
+ border:0!important;border-radius:50%!important;background:transparent!important;color:${OSV};cursor:pointer;transition:background-color var(--x-effects)}
+${AT} .form-floating-label>.input-group>.input-icon-right:hover{background:${LAYER(8)}!important}
+${AT} .form-floating-label>.input-group>.input-icon-right>i{width:20px;height:20px;font-size:0!important;background:currentColor;-webkit-mask:${SM('calendar_month')} center/20px no-repeat;mask:${SM('calendar_month')} center/20px no-repeat}
+${AT} .form-floating-label>.input-group>.input-icon-right>i::before{content:none!important}
+/* RESPONSIVE: the boards are drawn at 1920; on laptops (1600 and 1440 down) crowded rows give ground. The time card
+   reads its own width (a container: it holds no fixed overlays), so its values drop under the countdown when narrow. */
+.atc-time{flex-wrap:wrap;container-type:inline-size}
+@container (max-width: 440px){.atc-tg{flex:1 0 100%;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 8px}}
+@container (max-width: 300px){.atc-time .atc-big{font-size:28px;line-height:32px}}
+@media (max-width: 1600px){
+ .atc-v-head{flex-wrap:wrap;row-gap:4px}
+ .atc-v-lead{grid-template-columns:minmax(0,1fr) 124px;gap:8px}.atc-v-person{gap:8px;padding:6px}.atc-v-person img{width:36px;height:36px}.atc-v-sup img{width:48px;height:48px}.atc-v-sup b{font-size:13px}
+ .atc-v-sp{flex:1 1 auto}.atc-v-sp2{flex:0 0 40px}.atc-v-sp3{display:none}
+ .atc-v-seg>span{padding:0 7px;font-size:10.5px}
+ .atc-v-row .atc-v-stack b{overflow-wrap:anywhere}
+ ${R} #global-portal .atc-c-usa img[usemap]{zoom:.8}
+ ${R} #global-portal .atc-c-usa .col-md-4 small{font-size:10px!important;line-height:14px}
+ ${R} #global-portal app-health-widget .justify-content-end small,${R} #global-portal app-health-widget strong.text-end{font-size:10px!important}
+ ${R} #global-portal :is(.atc-c-company-awards .box-widget-title-new,.atc-c-performance .d-flex>span){white-space:nowrap;font-size:11px!important}
+ ${R} #global-portal .atc-c-performance .justify-content-between{flex-wrap:wrap;row-gap:4px}${R} #global-portal .atc-c-performance .gap-3{gap:8px!important}
+ ${R} #global-portal app-health-widget li>span.timline-font-color{font-size:12px!important;letter-spacing:-.01em}${R} #global-portal app-health-widget li>span.d-block{font-size:10px}${R} #global-portal app-health-widget li{min-width:0}
+ ${AT} .attendence-inner>.row.mb-2>:nth-child(1){width:260px}${AT} .attendence-inner>.row.mb-2>:nth-child(2){width:190px}
+ ${AT} .form-floating-label>.input-group{width:170px}
+ ${AT} .attendence-inner>.row:not(.mb-2)>.col-lg-2{width:280px}${AT} .atc-legend{flex-wrap:wrap;row-gap:6px}.atc-lg{height:30px;font-size:12px}
+}
+@media (max-width: 1440px){
+ ${R} .header-icons .bg-iconEmp .icon-link.icon-link{width:auto!important;font-size:0!important;gap:0;padding:0 10px}
+ .atc-c-egp-knowledge .atc-v-row>.atc-v-ico{display:none}
+ ${R} #global-portal .atc-view .atc-v-t{font-size:14px!important}
+ ${R} #global-portal .atc-c-usa img[usemap]{zoom:.66}
+ ${AT} .attendence-inner>.row:not(.mb-2)>.col-lg-2{width:240px}
+ ${AT} .attendence-inner>.row.mb-2>:nth-child(1){width:220px}${AT} .attendence-inner>.row.mb-2 .gp-btn-primary{padding:0 18px 0 14px!important}
+}`;
 const SKIN_CSS = `
 ${R}{--theme-color:var(--x-fill)!important;--primary-color:var(--x-ink);--bg-grey:${MSC('surface-container')};--secondary:var(--x-fill);--color-light_blue:var(--x-tile-2);--color-sky_blue:var(--x-tile);
  --text-primary:var(--x-ink);--text-grey:${OSV};--text-light:${OS};--light:${MSC('surface-container')};--dark:${OS};--bgWhiteSmoke:var(--x-tile);--bgCyanBlue:var(--x-tile);--bgBluishCyan:var(--x-tile);
@@ -578,6 +687,9 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-pr :is(b,span,i){display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.atc-v-pr b{font-size:13px;line-height:17px;font-weight:700}
 .atc-v-pr span{font-size:11px;line-height:14px;color:${OSV}}.atc-v-pr i{font-style:normal;font-size:11px;font-weight:700;color:var(--x-ink)}
 .atc-v-pr .atc-v-act{position:absolute;right:4px;bottom:4px;width:24px;height:24px}.atc-v-pr .atc-v-act svg{width:15px;height:15px}
+.atc-v-pr .atc-v-aw{flex:none;display:block;cursor:pointer}.atc-v-pr.is-award i{display:flex;align-items:center;gap:4px}.atc-v-pr.is-award i svg{width:13px;height:13px;flex:none}
+/* Company awards: only the card's content gives way to the view; its add-award modal stays reachable. */
+${R} .box-widget.atc-over.atc-c-company-awards>app-company-awards-widget{display:contents!important}${R} .box-widget.atc-over.atc-c-company-awards>app-company-awards-widget>:is(.gp-performers,toaster-container){display:none!important}
 /* Special offers: colour tiles with a blob; the narrow last one keeps its name for hover only. */
 .atc-v-offers{flex:1;display:flex;gap:6px;min-height:0}
 .atc-v-offer{position:relative;min-width:0;min-height:76px;display:flex;flex-direction:column;justify-content:flex-end;padding:30px 10px 8px;border-radius:var(--x-r-card-sm);clip-path:var(--x-card-clip);overflow:hidden;font-size:12px;line-height:15px}
@@ -708,9 +820,9 @@ ${AT} .attendence-inner>.row.mb-2{--bs-gutter-x:0;display:flex;flex-wrap:nowrap;
 ${AT} .attendence-inner>.row.mb-2>[class*=col-]{flex:none;width:auto;max-width:none;padding:0;margin:0!important}
 ${AT} .attendence-inner>.row.mb-2>:nth-child(1){width:340px}${AT} .attendence-inner>.row.mb-2>:nth-child(2){width:220px}
 ${AT} .form-floating-label{position:relative}
-${AT} .form-floating-label>:is(input,select){box-sizing:border-box;width:100%;height:52px!important;padding:20px 16px 4px!important;border:0!important;border-radius:var(--x-r-card-sm) var(--x-r-card-sm) 4px 4px!important;clip-path:var(--x-btn-clip);
+${AT} .form-floating-label>:is(input,select),${AT} .form-floating-label>.input-group>input{box-sizing:border-box;width:100%;height:52px!important;padding:20px 16px 4px!important;border:0!important;border-radius:var(--x-r-card-sm) var(--x-r-card-sm) 4px 4px!important;clip-path:var(--x-btn-clip);
  background-color:${MSC('surface-container-highest')}!important;box-shadow:inset 0 -1px 0 ${OSV}!important;font-size:14px!important;line-height:20px;color:${OS}!important;transition:box-shadow var(--x-effects)}
-${AT} .form-floating-label>select{padding-right:40px!important}${AT} .form-floating-label>:is(input,select):focus{box-shadow:inset 0 -2px 0 ${MSC('primary')}!important}
+${AT} .form-floating-label>select{padding-right:40px!important}${AT} .form-floating-label>:is(input,select):focus,${AT} .form-floating-label>.input-group>input:focus{box-shadow:inset 0 -2px 0 ${MSC('primary')}!important}
 ${AT} .form-floating-label>label{position:absolute;top:8px!important;left:16px!important;right:auto;margin:0;padding:0!important;transform:none!important;opacity:1;font-size:11px!important;line-height:14px;font-weight:600;color:${OSV}!important;background:transparent!important;pointer-events:none}
 ${AT} .form-floating-label:focus-within>label{color:${MSC('primary')}!important}
 ${AT} .attendence-inner>.row.mb-2 .gp-btn-primary{height:48px;display:inline-flex;align-items:center;gap:8px;padding:0 28px 0 22px!important;font-size:16px!important;font-weight:700!important;line-height:1}
@@ -798,7 +910,7 @@ ${AT} .pagination .page-item:first-child .page-link{border-radius:var(--x-r-btn)
 ${AT} .pagination input.page-link{width:44px!important;background:var(--x-fill)!important;color:var(--x-on-fill)!important;border-radius:var(--x-r-btn)!important;opacity:1}
 ${AT} .pagination button.page-link:disabled{opacity:.5}
 ${AT} .form-inline label{margin-right:10px;font-size:12px;font-weight:500;color:${OSV}}
-${AT} .form-inline select{width:auto;height:36px!important;padding:0 28px 0 12px!important;font-size:14px!important;border:1px solid ${MSC('outline')}!important;border-radius:var(--x-r-field)!important}`;
+${AT} .form-inline select{width:auto;height:36px!important;padding:0 28px 0 12px!important;font-size:14px!important;border:1px solid ${MSC('outline')}!important;border-radius:var(--x-r-field)!important}` + ICONS_CSS;
 
 // MATERIAL YOU: a fourth widget theme over the glass base, like Just Business. M3 tokens (Google blue baseline),
 // flat tonal surfaces, M3 shapes and type. Light/dark follows the browser, like the portal.
@@ -844,7 +956,8 @@ html.atc-mat .settings-modal .toggle-switch.active{background:var(--att-accent);
 html.atc-mat .settings-modal .toggle-switch.active::after{top:4px;left:4px;width:24px;height:24px;background:var(--att-on-accent);transform:translateX(20px)}
 html.atc-mat .xp-milestone-notification{background:var(--m-inv);color:var(--m-on-inv);border:0;border-radius:8px;box-shadow:0 4px 8px 3px rgba(0,0,0,.15),0 1px 3px rgba(0,0,0,.3)}`;
 
-// CHIP: a split button in the persistent header, its popover a mini widget. Angular may re-render the header,
+// CHIP: a split button in the persistent header, its popover a mini widget. Float opens the widget's float (ATC.float),
+// or the shell's own (floatWin) under a widget that has none. Angular may re-render the header,
 // so it is re-mounted when detached.
 let chip = null, pop = null, tcard = null, mring = null;
 function mountChip(on) {
@@ -859,11 +972,12 @@ function mountChip(on) {
             + `<div class="atc-wv" role="progressbar" aria-label="Shift progress"><div class="atc-wv-a"></div><div class="atc-wv-t"></div><div class="atc-wv-s"></div></div>`
             + `<div class="atc-err">${icon('off')}<span>Couldn't reach attendance. Times are hidden, not stale.</span></div>`
             + `<div class="atc-pop-x"><span class="atc-streak">🔥 <span data-k="streak"></span></span><span class="atc-lv" data-k="lv"></span><span data-k="lvl"></span><span class="atc-xp" data-k="xp"></span></div>`
-            + `<a class="atc-btn" href="#/time-absence/attendence-record">${icon('event')}<span>Open attendance</span></a></div>`;
+            + `<div class="atc-pop-b"><a class="atc-btn" href="#/time-absence/attendence-record">${icon('event')}<span>Open attendance</span></a>`
+            + ('documentPictureInPicture' in window ? `<button type="button" class="atc-btn is-tonal" data-act="float" title="Float the timer in an always-on-top window">${sym('picture_in_picture_alt')}<span>Float</span></button>` : '') + '</div></div>';
         pop = chip.querySelector('.atc-pop');
-        const btns = chip.querySelectorAll('button'), show = v => { pop.hidden = !v; btns.forEach(b => b.setAttribute('aria-expanded', v)); chip.dataset.open = v ? '1' : ''; paint(); };
+        const btns = chip.querySelectorAll(':scope > button'), show = v => { pop.hidden = !v; btns.forEach(b => b.setAttribute('aria-expanded', v)); chip.dataset.open = v ? '1' : ''; paint(); };
         btns.forEach(b => b.addEventListener('click', e => { e.stopPropagation(); show(pop.hidden); }));
-        pop.addEventListener('click', e => { if (e.target.closest('a')) show(false); });
+        pop.addEventListener('click', e => { if (e.target.closest('a')) show(false); if (e.target.closest('[data-act=float]')) { show(false); (ATC.float || floatWin)(); } });
         D.addEventListener('click', e => { if (chip && !pop.hidden && !chip.contains(e.target)) show(false); });
         D.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { show(false); btns[0].focus(); } });
     }
@@ -960,6 +1074,15 @@ const VIEWS = {
             return { t: txt(it.querySelector('.know-knowledge')), i: m ? m[1] : '', n: m ? m[2] : '', pg: ctl.map(Boolean), fwd: [it.querySelector('.play-button-overlay'), ...ctl] }; },
         html: d => `<div class="atc-v-head"><h3 class="atc-v-t">eGP Knowledge</h3>${pager(d.pg, 1)}</div>`
             + `<div class="atc-v-row" role="button" tabindex="0" data-fwd="0">${ico('book')}<div class="atc-v-stack"><b>${esc(d.t)}</b>${d.n ? `<span class="atc-v-mute">${esc(d.i)} of ${esc(d.n)}</span>` : ''}</div></div>` },
+    // Laid out as Promotion. Idea Nomination keeps the host card: its "Idea presented" popovers live in it.
+    'company-awards': { read: c => { const pane = c.querySelector('#myTabContent'), bs = [...c.querySelectorAll('.box-widget-title-new')]; if (!pane || !pane.classList.contains('d-block') || bs.length < 2) return null;
+            const it = pane.querySelector('.carousel-item.active'), fs = it ? [...it.querySelectorAll('.gp-user-vertical-fig')] : [], ctl = carCtl(pane);
+            return { tabs: tabsOf(bs, t => /idea/i.test(t) ? 'Ideas' : 'Awards'), pg: ctl.map(Boolean), add: !!c.querySelector('#add-eom-tom-request-btn'),
+                p: fs.map(f => [src(f.querySelector('.fig-pod img')), txt(f.querySelector('figcaption strong')), txt(f.querySelector('figcaption small')), !!f.querySelector('.comments-icon img')]),
+                fwd: [...bs, ...ctl, c.querySelector('.gp-performers small a'), c.querySelector('#add-eom-tom-request-btn'), ...fs.map(f => f.querySelector('.fig-pod a')), ...fs.map(f => f.querySelector('.comments-icon img'))] }; },
+        html: d => { const n = d.tabs.length, k = d.p.length, F = n + 4; return `<div class="atc-v-head">${seg(d.tabs, 0, 'is-fill is-lg')}${d.add ? btn(n + 3, 'Add an award', icon('add'), 'atc-v-act') : ''}<a class="atc-v-link" data-fwd="${n + 2}">More</a>${pager(d.pg, n)}</div><div class="atc-v-promo">`
+            + (k ? d.p.map(([s, nm, aw, wish], i) => `<div class="atc-v-pr is-award">${btn(F + i, 'Open ' + nm, `<img src="${esc(s)}" alt="">`, 'atc-v-aw')}<div style="min-width:0"><b>${esc(nm)}</b><i>${icon('star')}${esc(aw)}</i></div>${wish ? btn(F + k + i, 'Send wishes', icon('chat'), 'atc-v-act') : ''}</div>`).join('')
+                : '<span class="atc-v-mute">No awards yet</span>') + '</div>'; } },
     promotion: { read: c => { const bs = [...c.querySelectorAll('.footer-title button.nav-link')], pane = c.querySelector('.tab-pane.active'); if (!bs.length || !pane) return null;
             const it = pane.querySelector('.carousel-item.active') || pane, fs = [...it.querySelectorAll('.gp-user-horizontal-fig')], ctl = carCtl(pane);
             return { tabs: tabsOf(bs, t => t.replace(/^Work /, '').replace(/ Aboard$/, '')), pg: ctl.map(Boolean),
@@ -1035,7 +1158,15 @@ function mountProfileChip() {
 // DECOR (Timeline): small additions to cards restyled in place (their hover popovers stay): the co-worker count,
 // the empty-team tile, Health's icon tiles.
 const HICO = [['height', 'ruler'], ['weight', 'weight'], ['pressure', 'heart'], ['bmi', 'gauge']];
+// USA zone clocks: EGP's are timeanddate.com iframes (a white page of their own, out of CSS reach) keyed by city id;
+// ours show the same zones, written only when the minute changes.
+const USA_TZ = { 137: 'America/Los_Angeles', 80: 'America/Denver', 64: 'America/Chicago', 173: 'America/New_York' }, USA_ORDER = Object.values(USA_TZ), TZF = {};
+const zclock = tz => (TZF[tz] || (TZF[tz] = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz, timeZoneName: 'short' }))).format(new Date());
 function mountDecor() {
+    D.querySelectorAll('.atc-c-usa .box-widget-title small').forEach((sm, i) => { const f = sm.querySelector('iframe'); if (!f) return;
+        const tz = USA_TZ[(/\/n(\d+)\//.exec(f.getAttribute('src') || '') || [])[1]] || USA_ORDER[i]; if (!tz) return;
+        let c = sm.querySelector('.atc-clk'); if (!c) { c = D.createElement('span'); c.className = 'atc-clk'; sm.appendChild(c); }
+        put(c, zclock(tz)); });
     const cw = D.querySelector('.atc-c-co-workers');
     if (cw) {
         const t = cw.querySelector('.box-widget-title');
@@ -1149,6 +1280,35 @@ function markPrayer() {
     cols.forEach(c => { if (c.classList.contains('atc-now') !== (c === next)) c.classList.toggle('atc-now', c === next); });
 }
 const MOOD = { live: '😊', over: '🤩', out: '😌', none: '😴', wait: '😶', error: '😶' };
+// FLOAT (the chip's, under a widget without ATC.float): an always-on-top Document PiP row as the widget draws it: the
+// face (it closes the window), the countdown, a label and the shift rail; colours re-read from the tokens every second.
+const FLOAT_CSS = `html,body{margin:0;height:100%;overflow:hidden}body{background:var(--sc);color:var(--os);font:400 13px var(--fn),system-ui,sans-serif}
+main{height:100%;box-sizing:border-box;padding:0 max(6px,4vw);display:flex;align-items:center;justify-content:center;gap:max(6px,3vw)}
+.mood{width:clamp(24px,58vh,48px);aspect-ratio:1;flex:none;border:0;padding:0;border-radius:50%;display:grid;place-items:center;font-size:clamp(14px,34vh,28px);color:var(--os);background:color-mix(in srgb,var(--pr) 16%,transparent);cursor:pointer}
+.mood:hover{background:color-mix(in srgb,var(--pr) 28%,transparent)}.txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.time{font:700 clamp(18px,min(11.5vw,42vh),44px)/1 var(--fn),system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.label{font-size:clamp(8px,min(3.2vw,12vh),11px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--osv);white-space:nowrap}
+.rail{width:max(6px,1.6vw);height:clamp(24px,62vh,72px);flex:none;border-radius:99px;background:var(--tr);display:flex;align-items:flex-end;overflow:hidden}.rail i{width:100%;background:var(--pr);transition:height .6s ease}
+@media (max-width:230px){.label{display:none}}@media (max-width:170px){.rail{display:none}}`;
+let fw = null;
+async function floatWin() {
+    if (fw && !fw.closed) return fw.close();
+    try {
+        const w = fw = await documentPictureInPicture.requestWindow({ width: 240, height: 80 }), d = w.document, q = x => d.querySelector(x), fl = D.getElementById('atc-x-fonts');
+        d.title = 'Time until freedom';
+        d.head.innerHTML = `<meta name="color-scheme" content="light dark">${fl ? `<link rel="stylesheet" href="${esc(fl.href)}">` : ''}<style>${FLOAT_CSS}</style>`;
+        d.body.innerHTML = '<main><button type="button" class="mood" title="Close the floating window" aria-label="Close the floating window"></button><span class="txt"><span class="time"></span><span class="label"></span></span><span class="rail" role="progressbar" aria-label="Shift progress"><i></i></span></main>';
+        q('.mood').onclick = () => w.close();
+        const tick = () => { const { st, act, left, shift } = times(), cs = getComputedStyle(H), v = n => cs.getPropertyValue(n), b = d.body;
+            [['sc', '--md-sys-color-surface-container'], ['os', '--md-sys-color-on-surface'], ['osv', '--md-sys-color-on-surface-variant'], ['pr', '--md-sys-color-primary'], ['tr', '--x-track'], ['fn', '--x-font-num']]
+                .forEach(([k, n]) => b.style.setProperty('--' + k, v(n)));
+            put(q('.time'), { live: hms(left), over: '+' + hms(-left), out: hms(act) }[st] || hms(null));
+            put(q('.label'), { live: 'Until freedom', over: 'Overtime', out: 'Worked today', none: 'Not checked in' }[st] || 'Today');
+            put(q('.mood'), (P().emojiSet === 'none' ? '' : MOOD[st]) || '✕');
+            const pct = Math.round(act == null ? 0 : Math.min(1, act / shift) * 100) + '%'; if (q('.rail i').style.height !== pct) q('.rail i').style.height = pct; };
+        tick(); const t = w.setInterval(tick, 1000); w.addEventListener('pagehide', () => { w.clearInterval(t); fw = null; });
+    } catch (e) { console.warn('ATCShell: float', e); }
+}
 function paint() {
     const tm = times(), rs = D.querySelectorAll('.atc-r'); if (!rs.length) return;
     const { st, act, actv, left, shift } = tm, pO = act == null ? 0 : Math.min(1, act / shift), pI = act ? Math.min(1, (actv || 0) / act) : 0;
@@ -1183,7 +1343,7 @@ function paint() {
 // WEB THEME off, or Plus gone: the page skin's marks come off and EGP reads as before; the chip, the time card and
 // the widget's own theme stay.
 function unskin() {
-    D.querySelectorAll('.atc-view,.atc-deco,.atc-n,.atc-hico,.atc-pgrid,.atc-pchip,.atc-since,.atc-bento,.atc-legend,.atc-lchip').forEach(e => e.remove());
+    D.querySelectorAll('.atc-view,.atc-deco,.atc-clk,.atc-n,.atc-hico,.atc-pgrid,.atc-pchip,.atc-since,.atc-bento,.atc-legend,.atc-lchip').forEach(e => e.remove());
     const keep = tcard && tcard.previousElementSibling;
     D.querySelectorAll('.atc-hide').forEach(e => { if (e !== keep) e.classList.remove('atc-hide'); });
     D.querySelectorAll('.atc-over,.atc-2col,.atc-now').forEach(e => e.classList.remove('atc-over', 'atc-2col', 'atc-now'));
@@ -1205,6 +1365,11 @@ ATC.tick = att => {
     if (web && r === 'att') mountAtt();
     paint();
 };
+// FLOAT off Attendance: the widget's floating window takes the time and the colours from here.
+ATC.worked = () => times().act;
+ATC.vars = () => { const cs = getComputedStyle(H), v = n => cs.getPropertyValue(n).trim(), m = n => v('--md-sys-color-' + n);
+    return { panel: m('surface-container'), text: m('on-surface'), muted: m('on-surface-variant'), accent: m('primary'), track: v('--x-track'), display: v('--x-font-num'), scheme: isDark ? 'dark' : 'light',
+        low: v('--x-low'), tense: v('--x-tense'), void: v('--x-void'), up: v('--x-ok'), run: v('--x-tense'), home: v('--x-home') }; };
 ATC.apply = () => {
     const p = P(), mat = p.displayTheme === 'material';
     H.dataset.atcTheme = p.displayTheme; H.classList.toggle('atc-mat', mat);

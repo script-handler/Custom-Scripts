@@ -19548,6 +19548,8 @@
             /* GAME MODE OFF (design: Attendance summary · Game Mode off): the centre alone, as one 640px
                panel. The cards flatten into it and Today's attendance sits under a rule. */
             #total-time-summary.game-mode-off { width: 640px; max-width: 100%; box-sizing: border-box; grid-template-columns: minmax(0, 1fr); transform: none; }
+            /* Laptops: the right column drops under the other two (Game Mode off keeps its one column). */
+            @media (max-width: 1380px) { #total-time-summary { grid-template-columns: 320px minmax(0, 1fr); } #total-time-summary > .right-panel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
             #total-time-summary.game-mode-off > .ws-center { gap: 18px; padding: 20px 22px; border-radius: 24px; background: var(--att-card); border: 1px solid var(--att-border); box-shadow: var(--att-shadow); backdrop-filter: blur(18px); }
             #total-time-summary.game-mode-off .ws-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; }
             #total-time-summary.game-mode-off .ws-head { height: auto; padding: 0; gap: 14px; }
@@ -27463,18 +27465,20 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         return pipButton;
     }
 
-    // FLOAT (design: Attendance widget · revamped, B1 Floating window): a 320 × 96 always-on-top window
-    // with one row, the mood face, the countdown and a thin progress rail; the browser draws the title
-    // bar. Colours are the widget's --att-* tokens, re-read every tick, so a theme or colour-scheme
-    // change reaches it unwired. It ticks on its own window's timer (a hidden tab's frames and timers
-    // stall) and recalculates the widget itself while the tab is hidden.
+    // FLOAT (design: Attendance widget · revamped, B1 Floating window): an always-on-top window with one
+    // borderless row, the mood face, the countdown and a thin progress rail; the browser draws the title
+    // bar. The face closes it. As it narrows the label, then the rail, give way. Colours are the widget's
+    // --att-* tokens, re-read every tick; off Attendance (the navbar chip's Float) the time and colours
+    // come from ATCShell.js (ATC.worked, ATC.vars). It ticks on its own window's timer (a hidden tab's
+    // frames and timers stall) and recalculates the widget itself while the tab is hidden.
     const ATT_PIP_VARS = ['panel', 'text', 'muted', 'accent', 'track', 'display', 'scheme', 'low', 'tense', 'void', 'up', 'run', 'home'];
     const ATT_PIP_CSS = `
         html, body { margin: 0; height: 100%; overflow: hidden; }
         body { background: var(--att-panel); color: var(--att-text); color-scheme: var(--att-scheme); font: 400 13px 'Sora', system-ui, sans-serif; }
-        main { height: 100%; box-sizing: border-box; padding: 0 5vw; display: flex; align-items: center; justify-content: center; gap: max(8px, 4vw); }
-        .mood { width: clamp(28px, 58vh, 48px); aspect-ratio: 1; flex-shrink: 0; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            background: color-mix(in srgb, var(--tone) 12%, transparent); border: 1.5px solid color-mix(in srgb, var(--tone) 50%, transparent); }
+        main { height: 100%; box-sizing: border-box; padding: 0 max(6px, 4vw); display: flex; align-items: center; justify-content: center; gap: max(6px, 3vw); }
+        .mood { width: clamp(24px, 58vh, 48px); aspect-ratio: 1; flex-shrink: 0; box-sizing: border-box; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: color-mix(in srgb, var(--tone) 14%, transparent); cursor: pointer; transition: background-color .15s; }
+        .mood:hover { background: color-mix(in srgb, var(--tone) 26%, transparent); }
         .mood:empty { display: none; }
         .mood svg { animation: moodIn 260ms cubic-bezier(.2, .8, .2, 1) both; }
         @keyframes moodIn { from { opacity: 0; transform: scale(.85); } }
@@ -27483,29 +27487,33 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         .label { font-size: clamp(8px, min(3.2vw, 12vh), 11px); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--att-muted); white-space: nowrap; }
         .rail { width: max(6px, 1.6vw); height: clamp(24px, 62vh, 72px); flex-shrink: 0; border-radius: 99px; background: var(--att-track); display: flex; align-items: flex-end; overflow: hidden; }
         .rail i { width: 100%; background: var(--fill); transition: height .6s ease; }
+        @media (max-width: 230px) { .label { display: none; } }
+        @media (max-width: 170px) { .rail { display: none; } }
         @media (prefers-reduced-motion: reduce) { .mood svg { animation: none; } }
         .biz * { animation: none !important; transition: none !important; }`;
 
     async function togglePictureInPicture() {
         if (isPipActive && pipWindow && !pipWindow.closed) return pipWindow.close();
-        const host = document.getElementById('total-time-summary');
-        if (!host) return;
+        const panel = () => document.getElementById('total-time-summary');
+        if (!panel() && !(ATC.worked && ATC.vars)) return;
         try {
-            const w = pipWindow = await documentPictureInPicture.requestWindow({ width: 320, height: 96 });
+            const w = pipWindow = await documentPictureInPicture.requestWindow({ width: 240, height: 80 });
             const doc = w.document, b = doc.body, q = sel => doc.querySelector(sel);
             isPipActive = true;
             doc.title = 'Time until freedom';
             doc.head.innerHTML = `<meta name="color-scheme" content="light dark"><style>@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;700&family=Chakra+Petch:wght@700&display=swap');${ATT_PIP_CSS}</style>`;
-            b.innerHTML = '<main><span class="mood"></span><span class="txt"><span class="time"></span><span class="label"></span></span>' +
+            b.innerHTML = '<main><button type="button" class="mood" title="Close the floating window" aria-label="Close the floating window"></button><span class="txt"><span class="time"></span><span class="label"></span></span>' +
                 '<span class="rail" role="progressbar" aria-label="Shift progress" aria-valuemin="0" aria-valuemax="100"><i></i></span></main>';
+            q('.mood').onclick = () => w.close();
             let face = null;
             const tick = () => {
-                if (document.hidden) insertAndCalculate();
-                if (!host.querySelector('.pip-placeholder')) showPipPlaceholder(host); // a full re-render wiped it
-                const cs = getComputedStyle(host), shift = getShiftSeconds(), worked = Math.max(0, lastTotalWorkedTime), left = shift - worked;
+                const host = panel(), v = !host && ATC.vars && ATC.vars();
+                if (host && document.hidden) insertAndCalculate();
+                if (host && !host.querySelector('.pip-placeholder')) showPipPlaceholder(host); // a full re-render wiped it
+                const cs = host && getComputedStyle(host), shift = getShiftSeconds(), worked = Math.max(0, host ? lastTotalWorkedTime : Math.floor((ATC.worked && ATC.worked()) || 0)), left = shift - worked;
                 const m = attMood(worked, shift), pct = Math.round(Math.min(1, worked / shift) * 100), id = userPreferences.emojiSet === 'none' ? 'calendar' : m.id;
-                ATT_PIP_VARS.forEach(k => b.style.setProperty('--att-' + k, cs.getPropertyValue('--att-' + k)));
-                b.style.setProperty('--tone', `var(--att-${m.tone})`); b.classList.toggle('biz', host.classList.contains('biz-theme'));
+                ATT_PIP_VARS.forEach(k => b.style.setProperty('--att-' + k, cs ? cs.getPropertyValue('--att-' + k) : (v && v[k]) || ''));
+                b.style.setProperty('--tone', `var(--att-${m.tone})`); b.classList.toggle('biz', host ? host.classList.contains('biz-theme') : userPreferences.displayTheme === 'business');
                 b.style.setProperty('--fill', m.kind === 'shift' ? 'var(--att-accent)' : 'var(--tone)');
                 if (id !== face) q('.mood').innerHTML = (face = id) && attIcon(id, '68%');
                 q('.time').textContent = (left < 0 ? '+' : '') + secondsToHHMMSS(Math.abs(left));
@@ -27515,7 +27523,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             };
             tick();
             const timer = w.setInterval(tick, 1000);
-            w.addEventListener('pagehide', () => { w.clearInterval(timer); isPipActive = false; pipWindow = null; hidePipPlaceholder(host); });
+            w.addEventListener('pagehide', () => { w.clearInterval(timer); isPipActive = false; pipWindow = null; if (panel()) hidePipPlaceholder(panel()); });
         } catch (error) {
             console.error('Failed to open the floating window:', error);
             isPipActive = false;
@@ -28294,7 +28302,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     }
 
     // ATCShell.js bridge: read-only views of widget state; the shell adds tick/apply and follows displayTheme.
-    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen });
+    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen, float: togglePictureInPicture });
     // A fresh browser off Attendance (no XP/leaderboard init there): take only the account's prefs from the gist, local wins as in applyPlayerRecordToLocal.
     async function prefsFromGist() {
         const prof = lsJSON('atc_lb_profile', null); if (!prof || !prof.registered || lsJSON('attendancePrefs', {}).displayTheme) return;

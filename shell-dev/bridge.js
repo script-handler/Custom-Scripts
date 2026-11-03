@@ -107,7 +107,7 @@ const STEPS = [
 
         startUpdateLoop();
     });`, `    // ATCShell.js bridge: read-only views of widget state; the shell adds tick/apply and follows displayTheme.
-    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen });
+    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen, float: togglePictureInPicture });
     // A fresh browser off Attendance (no XP/leaderboard init there): take only the account's prefs from the gist, local wins as in applyPlayerRecordToLocal.
     async function prefsFromGist() {
         const prof = lsJSON('atc_lb_profile', null); if (!prof || !prof.registered || lsJSON('attendancePrefs', {}).displayTheme) return;
