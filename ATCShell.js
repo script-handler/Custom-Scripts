@@ -262,6 +262,7 @@ const icon = n => `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="curre
 // SYMBOLS (Material Symbols, outlined 400, Apache-2.0; 960 grid): EGP's own icons are repainted with these through a
 // mask on the host element, which keeps its box and events.
 const SYM = {
+    close: 'm249-207-42-42 231-231-231-231 42-42 231 231 231-231 42 42-231 231 231 231-42 42-231-231-231 231Z',
     support_agent: 'M440-120v-60h340v-304q0-123.69-87.32-209.84Q605.36-780 480-780q-125.36 0-212.68 86.16Q180-607.69 180-484v244h-20q-33 0-56.5-23.5T80-320v-80q0-21 10.5-39.5T120-469l3-53q8-68 39.5-126t79-101q47.5-43 109-67T480-840q68 0 129 24t109 66.5Q766-707 797-649t40 126l3 52q19 9 29.5 27t10.5 38v92q0 20-10.5 38T840-249v69q0 24.75-17.62 42.37Q804.75-120 780-120H440ZM338.5-418.68q-8.5-8.67-8.5-21.5 0-12.82 8.68-21.32 8.67-8.5 21.5-8.5 12.82 0 21.32 8.68 8.5 8.67 8.5 21.5 0 12.82-8.68 21.32-8.67 8.5-21.5 8.5-12.82 0-21.32-8.68Zm240 0q-8.5-8.67-8.5-21.5 0-12.82 8.68-21.32 8.67-8.5 21.5-8.5 12.82 0 21.32 8.68 8.5 8.67 8.5 21.5 0 12.82-8.68 21.32-8.67 8.5-21.5 8.5-12.82 0-21.32-8.68ZM241-462q-7-106 64-182t177-76q87 0 151 57.5T711-519q-89-1-162.5-50T434.72-698Q419-618 367.5-555.5T241-462Z',
     lightbulb: 'M422.5-103.5Q399-127 399-161h162q0 34-23.5 57.5T480-80q-34 0-57.5-23.5ZM318-223v-60h324v60H318Zm5-121q-66-43-104.5-107.5T180-597q0-122 89-211t211-89q122 0 211 89t89 211q0 81-38 145.5T637-344H323Zm22-60h271q48-32 76-83t28-110q0-99-70.5-169.5T480-837q-99 0-169.5 70.5T240-597q0 59 28 110t77 83Zm135 0Z',
     campaign: 'M730-450v-60h150v60H730Zm50 290-121-90 36-48 121 90-36 48Zm-82-503-36-48 118-89 36 48-118 89ZM210-200v-160h-70q-24.75 0-42.37-17.63Q80-395.25 80-420v-120q0-24.75 17.63-42.38Q115.25-600 140-600h180l200-120v480L320-360h-50v160h-60Zm250-146v-268l-124 74H140v120h196l124 74Zm100 0v-268q27 24 43.5 58.5T620-480q0 41-16.5 75.5T560-346ZM300-480Z',
@@ -421,6 +422,11 @@ ${RAIL_SYM.map(([t, n]) => REPAINT(`${R} #sidebarNav .sidebar-icons-link[title="
 ${R} #sidebarNav .sidebar-icons-link[title]>svg{width:24px!important;height:24px!important;flex:none}
 ${R} #sidebarNav .sidebar-icons-link{color:${OSV}}${R} #sidebarNav .sidebar-icons-link:is(:hover,.selected){color:var(--x-on-tile-2)}
 ${REPAINT(`${R} #global-portal #sidebar-toggle-btn>svg`, 'arrow_back', '22px')}
+/* Modal close: Bootstrap's is a black × image at half opacity, lost on dark surfaces; here a themed icon button. */
+${R} .btn-close{box-sizing:border-box;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:transparent none!important;opacity:1!important;filter:none!important;color:${OSV}!important;position:relative;transition:background-color var(--x-effects)}
+${R} .btn-close::before{content:"";position:absolute;inset:0;margin:auto;width:22px;height:22px;background:currentColor;-webkit-mask:${SM('close')} center/22px no-repeat;mask:${SM('close')} center/22px no-repeat}
+${R} .btn-close:hover{background-color:${LAYER(8)}!important;color:${OS}!important}${R} .btn-close:focus-visible{outline:2px solid ${MSC('primary')};outline-offset:2px;box-shadow:none}
+${R} #global-portal .textcolor{color:var(--x-ink)!important}${R} #global-portal .form-check-input:checked{background-color:${MSC('primary')}!important;border-color:${MSC('primary')}!important}
 ${R} #global-portal .box-widget :is(.carousel-control-prev,.carousel-control-next){width:28px!important;height:28px;top:50%;bottom:auto;translate:0 -50%;opacity:1;border-radius:50%;background:${MSC('surface-container-highest')};color:${OSV};transition:background-color var(--x-effects)}
 ${R} #global-portal .box-widget :is(.carousel-control-prev,.carousel-control-next):hover{background:var(--x-tile-2);color:var(--x-on-tile-2)}
 ${R} #global-portal .box-widget :is(.carousel-control-prev-icon,.carousel-control-next-icon){width:28px;height:28px;display:grid;place-items:center;background-image:none!important}
@@ -446,6 +452,25 @@ ${AT} .form-floating-label>.input-group>.input-icon-right{position:absolute;righ
 ${AT} .form-floating-label>.input-group>.input-icon-right:hover{background:${LAYER(8)}!important}
 ${AT} .form-floating-label>.input-group>.input-icon-right>i{width:20px;height:20px;font-size:0!important;background:currentColor;-webkit-mask:${SM('calendar_month')} center/20px no-repeat;mask:${SM('calendar_month')} center/20px no-repeat}
 ${AT} .form-floating-label>.input-group>.input-icon-right>i::before{content:none!important}
+/* MODALS: EGP's fixed greys (#444, #363A40, #666, #333) and light panels, measured on the themed surface (contrast
+   audit with every modal open). Text follows the theme everywhere; the white and cream panels give way in dark only. */
+${R} .modal-content{color:${OS}}
+${R} .modal-content :is(.modal-title,h1,h2,h3,h4,h5,h6,legend,sup):not(.text-danger):not(.text-success):not(.text-warning):not(.text-primary):not(.text-info):not(.badge){color:${OS}!important}
+${R} .modal-content :is(label,.control-label,.egp-step-label,.eiv-step-text,.egp-mood-btn .txt):not(.text-danger):not(.text-success):not(.text-warning):not(.text-primary):not(.text-info):not(.badge){color:${OSV}!important}
+${R} .modal-content :is(p,li,dd,dt,.eiv-thankyou p):not(.text-danger):not(.text-success):not(.text-warning):not(.text-primary):not(.text-info):not(.badge){color:${OS}!important}
+${R} .modal-content :is(.blue,.text-blue){color:var(--x-ink)!important}
+${R} .modal-content a:not(.btn):not(.gp-btn):not(.nav-link):not(.dropdown-item):not(.text-danger):not(.text-success):not(.text-warning):not(.text-primary):not(.text-info):not(.badge){color:var(--x-ink)!important}
+${R} .modal :is(.btn-info,.mcq-btn){background:${MSC('primary')}!important;border-color:${MSC('primary')}!important;color:${MSC('on-primary')}!important}
+${R} .modal :is(.ext-table,.table-striped)>thead>tr>th{background:var(--x-tile-2)!important;color:var(--x-on-tile-2)!important}
+${RD} .modal-content :is(.modal-body>div:not([class]),.modal-body,.main-content,.modal-sidebar,.tab-content,.kb-modal-body,.kb-modal-header,fieldset>legend,.modal-header-inner-wrap>h4){background:transparent!important}
+${RD} .modal-content :is(.box,.kb-card,.kb-cancel-notice,.kb-row.kb-header,.job-meta-strip,.job-meta-cell,.modal-sidebar-header,.egp-mood-btn,.eiv-step-icon,.main-heading,.row>h3,table>tbody>tr){background:var(--x-tile)!important}
+${RD} .modal-content :is(.input-group-addon,.add-on){background:${MSC('surface-container-highest')}!important;border-color:transparent!important;color:${OSV}!important}
+${RD} .modal-content .progress{background:var(--x-track)!important}
+${RD} .modal-content .alert-info{background:var(--x-tile-2)!important;border-color:transparent!important;color:var(--x-on-tile-2)!important}
+${RD} .modal-content .alert-warning{background:var(--x-tense-container)!important;border-color:transparent!important;color:var(--x-on-tense-container)!important}
+${RD} .modal-content .text-success{color:var(--x-ok)!important}${RD} .modal-content .text-danger{color:var(--x-danger)!important}${RD} .modal-content .text-warning{color:var(--x-tense)!important}${RD} .modal-content :is(.text-primary,.text-info){color:var(--x-ink)!important}
+${RD} .kb-modal-content{color:${OS}}${RD} .kb-modal-content [class*="kb-"]:not(button):not(.btn){color:inherit!important}
+${RD} .kb-modal-content :is(.header-titles,.kb-total-label,.kb-cancel-notice,.kb-logo-sub,.kb-pickup-icon,.kb-info-icon-wrap){color:${OSV}!important}
 /* RESPONSIVE: the boards are drawn at 1920; on laptops (1600 and 1440 down) crowded rows give ground. The time card
    reads its own width (a container: it holds no fixed overlays), so its values drop under the countdown when narrow. */
 .atc-time{flex-wrap:wrap;container-type:inline-size}
@@ -597,7 +622,7 @@ ${R} #global-portal .body_content .gp-users-detail.justify-content-end>span.fs-m
 /* Nav: the brand's badge shape; Assign Practice as a tile-3 pill. */
 ${R} .gp-main-navbar .navbar-brand{font-size:20px;font-weight:700}
 ${R} .gp-main-navbar .navbar-brand::before{content:"";display:inline-block;width:28px;height:28px;margin-right:10px;vertical-align:middle;background:var(--x-fill);clip-path:var(--x-sh-badge)}
-${R} .header-icons .bg-iconEmp .icon-link.icon-link{height:36px;display:flex;align-items:center;gap:8px;padding:0 16px 0 12px;background:var(--x-tile-3)!important;color:var(--x-on-tile-3)!important;border-radius:var(--x-r-btn)!important;clip-path:var(--x-btn-clip);font-size:14px;font-weight:600;white-space:nowrap}
+${R} .header-icons .bg-iconEmp .icon-link.icon-link{height:36px;display:flex;align-items:center;padding:0 16px 0 12px;background:var(--x-tile-3)!important;color:var(--x-on-tile-3)!important;border-radius:var(--x-r-btn)!important;clip-path:var(--x-btn-clip);font-size:14px;font-weight:600;white-space:nowrap}
 ${R} .box-widget.list-widget{display:flex;flex-direction:column}${R} #global-portal .box-widget.list-widget>ul.news-scroll{flex:1 1 0;min-height:0;max-height:none;padding-left:0!important}
 ${R} .list-widget>ul.news-scroll>li{list-style:none!important;position:relative;min-height:30px;padding:4px 0 4px 34px;color:${OSV}!important}
 ${R} .list-widget>ul.news-scroll>li::before{content:"";position:absolute;left:0;top:3px;width:26px;height:26px;background:var(--x-danger-container);clip-path:var(--x-sh-i5)}
