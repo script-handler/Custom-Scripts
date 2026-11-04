@@ -299,7 +299,7 @@ const MASK = n => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='htt
 const BASE_CSS = `
 html:root{--x-r-btn-c:min(var(--x-r-btn),16px)}
 html[data-att-skin=dark]{color-scheme:dark}
-@media (prefers-reduced-motion:reduce){html:root{--x-anim:paused;--x-wavy-d:none;--x-flat-d:inline;--x-drift:none;--x-spatial:0ms linear;--x-spatial-fast:0ms linear}}
+@media (prefers-reduced-motion:reduce){html:root{--x-anim:paused;--x-drift:none;--x-spatial:0ms linear;--x-spatial-fast:0ms linear}}
 @keyframes atcSpin{to{transform:rotate(1turn)}}@keyframes atcSlide{to{transform:translateX(-40px)}}
 @keyframes atcDrift{0%{transform:translate3d(-3%,-2%,0) scale(1.05)}100%{transform:translate3d(3%,2%,0) scale(1.12)}}
 @keyframes atcMood{0%,100%{clip-path:var(--x-sh-mood);transform:rotate(0)}50%{clip-path:var(--x-sh-mood-2);transform:rotate(20deg)}}
@@ -422,6 +422,7 @@ ${RAIL_SYM.map(([t, n]) => REPAINT(`${R} #sidebarNav .sidebar-icons-link[title="
 ${R} #sidebarNav .sidebar-icons-link[title]>svg{width:24px!important;height:24px!important;flex:none}
 ${R} #sidebarNav .sidebar-icons-link{color:${OSV}}${R} #sidebarNav .sidebar-icons-link:is(:hover,.selected){color:var(--x-on-tile-2)}
 ${REPAINT(`${R} #global-portal #sidebar-toggle-btn>svg`, 'arrow_back', '22px')}
+html[data-atc-ecd] #early-coming-modal{visibility:hidden!important}
 /* Modal close: Bootstrap's is a black × image at half opacity, lost on dark surfaces; here a themed icon button. */
 ${R} .btn-close{box-sizing:border-box;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:transparent none!important;opacity:1!important;filter:none!important;color:${OSV}!important;position:relative;transition:background-color var(--x-effects)}
 ${R} .btn-close::before{content:"";position:absolute;inset:0;margin:auto;width:22px;height:22px;background:currentColor;-webkit-mask:${SM('close')} center/22px no-repeat;mask:${SM('close')} center/22px no-repeat}
@@ -1320,7 +1321,7 @@ async function floatWin() {
     if (fw && !fw.closed) return fw.close();
     try {
         const w = fw = await documentPictureInPicture.requestWindow({ width: 240, height: 80 }), d = w.document, q = x => d.querySelector(x), fl = D.getElementById('atc-x-fonts');
-        d.title = 'Time until freedom';
+        d.title = 'Time left in shift';
         d.head.innerHTML = `<meta name="color-scheme" content="light dark">${fl ? `<link rel="stylesheet" href="${esc(fl.href)}">` : ''}<style>${FLOAT_CSS}</style>`;
         d.body.innerHTML = '<main><button type="button" class="mood" title="Close the floating window" aria-label="Close the floating window"></button><span class="txt"><span class="time"></span><span class="label"></span></span><span class="rail" role="progressbar" aria-label="Shift progress"><i></i></span></main>';
         q('.mood').onclick = () => w.close();
@@ -1328,7 +1329,7 @@ async function floatWin() {
             [['sc', '--md-sys-color-surface-container'], ['os', '--md-sys-color-on-surface'], ['osv', '--md-sys-color-on-surface-variant'], ['pr', '--md-sys-color-primary'], ['tr', '--x-track'], ['fn', '--x-font-num']]
                 .forEach(([k, n]) => b.style.setProperty('--' + k, v(n)));
             put(q('.time'), { live: hms(left), over: '+' + hms(-left), out: hms(act) }[st] || hms(null));
-            put(q('.label'), { live: 'Until freedom', over: 'Overtime', out: 'Worked today', none: 'Not checked in' }[st] || 'Today');
+            put(q('.label'), { live: 'Left in shift', over: 'Overtime', out: 'Worked today', none: 'Not checked in' }[st] || 'Today');
             put(q('.mood'), (P().emojiSet === 'none' ? '' : MOOD[st]) || '✕');
             const pct = Math.round(act == null ? 0 : Math.min(1, act / shift) * 100) + '%'; if (q('.rail i').style.height !== pct) q('.rail i').style.height = pct; };
         tick(); const t = w.setInterval(tick, 1000); w.addEventListener('pagehide', () => { w.clearInterval(t); fw = null; });
@@ -1343,7 +1344,7 @@ function paint() {
         if (r.dataset.rk !== k) { r.dataset.rk = k; r.innerHTML = ringHTML(s, st, pO, pI); r.setAttribute('aria-valuenow', Math.round(pO * 100));
             r.setAttribute('aria-label', st === 'error' ? 'Time data unavailable' : /none|wait/.test(st) ? 'Not checked in' : `${Math.round(pO * 100)}% of shift, ${foc} focus`); }
         cls(r, 'atc-r st-' + st + (wavy && RS(s).amp ? ' is-wavy' : '')); });
-    const hb = { live: ['Time until freedom', hms(left)], over: ['Overtime', '+' + hms(-left)], out: ['Checked out' + (outAt ? ' · ' + outAt : ''), hms(act)],
+    const hb = { live: ['Time left in shift', hms(left)], over: ['Overtime', '+' + hms(-left)], out: ['Checked out' + (outAt ? ' · ' + outAt : ''), hms(act)],
         none: ['Not checked in', hms(null)], wait: ['Today', hms(null)], error: ['Time unavailable', hms(null)] }[st];
     const txt = { chip: { live: hm(left) + ' left', over: '+' + hm(-left) + ' over', out: hm(act) + ' worked', none: 'Check in', wait: '—', error: 'Offline' }[st],
         head: hb[0], big: hb[1], act: hms(act), actv: hms(actv), foc,
@@ -1376,20 +1377,27 @@ function unskin() {
     D.querySelectorAll('[data-atc-ph]').forEach(e => { e.placeholder = e.dataset.atcPh; delete e.dataset.atcPh; });
 }
 // EARLY COMING (Timeline): EGP's modal has no close (static backdrop, no Escape) until a reason is saved. A close and
-// Escape hide it through Bootstrap, so nothing is left behind; nothing is submitted, and EGP shows it again on the next
-// Timeline load. Any page left locked (a backdrop or body.modal-open with no modal open, as after deleting the modal
+// Escape hide it through Bootstrap, so nothing is left behind; nothing is submitted. The close holds for the day: EGP
+// reopens it on each load until a reason is saved, and the shell closes it again (a watcher at once, the tick as a
+// retry, as Bootstrap ignores a hide mid-show); the next day it asks again. Any page left locked (a backdrop or body.modal-open with no modal open, as after deleting the modal
 // in DevTools) is unlocked once that has held for two ticks, so a backdrop mid-fade is never touched.
 // Open as Bootstrap 5 (.show) or 3 (.in, its jQuery plugin also loads on the portal) shows it, or simply displayed.
 const isOpen = m => m.classList.contains('show') || m.classList.contains('in') || getComputedStyle(m).display === 'block';
 const hideModal = m => { const $ = window.jQuery; try { if ($ && $.fn && $.fn.modal) $(m).modal('hide'); else if (window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(m).hide(); else throw 0; }
     catch (_) { m.classList.remove('show'); m.style.display = 'none'; m.setAttribute('aria-hidden', 'true'); } };
+const EC_KEY = 'atcEcClosed', ecToday = () => { try { return localStorage.getItem(EC_KEY) === new Date().toDateString(); } catch (_) { return false; } };
+const ecClose = m => { try { localStorage.setItem(EC_KEY, new Date().toDateString()); } catch (_) {} hideModal(m); };
 function mountECClose() {
-    const m = D.getElementById('early-coming-modal'), h = m && m.querySelector('.modal-header'); if (!h || h.querySelector('.atc-ec-x')) return;
+    const m = D.getElementById('early-coming-modal'); if (!m) return; const today = ecToday();
+    if (H.hasAttribute('data-atc-ecd') !== today) H.toggleAttribute('data-atc-ecd', today);
+    if (!m._atcObs) { m._atcObs = new MutationObserver(() => { if (ecToday() && isOpen(m)) hideModal(m); }); m._atcObs.observe(m, { attributes: true, attributeFilter: ['class', 'style'] }); }
+    if (today && isOpen(m)) hideModal(m);
+    const h = m.querySelector('.modal-header'); if (!h || h.querySelector('.atc-ec-x')) return;
     h.style.display = 'flex'; h.style.alignItems = 'center';
-    h.insertAdjacentHTML('beforeend', '<button type="button" class="btn-close atc-ec-x ms-auto" aria-label="Close for now" title="Remind me later: the reason is still required"></button>');
-    h.querySelector('.atc-ec-x').addEventListener('click', () => hideModal(m));
+    h.insertAdjacentHTML('beforeend', '<button type="button" class="btn-close atc-ec-x ms-auto" aria-label="Close for today" title="Close for today: the reason is still required, and it asks again tomorrow"></button>');
+    h.querySelector('.atc-ec-x').addEventListener('click', () => ecClose(m));
 }
-D.addEventListener('keydown', e => { const m = e.key === 'Escape' && D.getElementById('early-coming-modal'); if (m && isOpen(m)) hideModal(m); });
+D.addEventListener('keydown', e => { const m = e.key === 'Escape' && D.getElementById('early-coming-modal'); if (m && isOpen(m)) ecClose(m); });
 let stuck = 0;
 function unstick() {
     const b = D.body, locked = b.classList.contains('modal-open') || !!D.querySelector('.modal-backdrop');

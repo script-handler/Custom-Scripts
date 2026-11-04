@@ -227,7 +227,7 @@ async function main() {
     if (fo) for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: fo.x, y: fo.y, button: 'left', clickCount: 1 });
     await sleep(1800);
     const sf = await ev("(() => { const w = documentPictureInPicture.window; if (!w) return null; const r = { time: w.document.querySelector('.time').textContent, label: w.document.querySelector('.label').textContent, face: w.document.querySelector('button.mood').textContent, bg: w.document.body.style.getPropertyValue('--sc') }; w.close(); return r; })()");
-    ok('under a widget without ATC.float the chip still floats, in the shell\'s own window (real click)', !!fo && !!sf && /^\d+:\d\d:\d\d$/.test(sf.time) && sf.label === 'Until freedom' && !!sf.face && !!sf.bg, { fo, sf });
+    ok('under a widget without ATC.float the chip still floats, in the shell\'s own window (real click)', !!fo && !!sf && /^\d+:\d\d:\d\d$/.test(sf.time) && sf.label === 'Left in shift' && !!sf.face && !!sf.bg, { fo, sf });
     api.oldWidget = false; await go(TL); await until("!!document.querySelector('.atc-chip')");
     await ev("location.hash = '#/time-absence/attendence-record'; 1"); await until("!!document.getElementById('total-time-summary')"); await sleep(1000);
     const cols = () => ev("getComputedStyle(document.getElementById('total-time-summary')).gridTemplateColumns.split(' ').length");
@@ -255,6 +255,12 @@ async function main() {
         && await until("!document.querySelector('.modal-backdrop') && !document.body.classList.contains('modal-open')", 4000));
     await ev("(() => { const m = document.getElementById('early-coming-modal'); m.classList.add('show'); m.style.display = 'block'; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 1; })()"); await sleep(200);
     ok('early coming: Escape closes it too', await ev("getComputedStyle(document.getElementById('early-coming-modal')).display === 'none'"));
+    await ev("(() => { const m = document.getElementById('early-coming-modal'); m.classList.add('show'); m.style.display = 'block'; return 1; })()"); await sleep(300);
+    ok('early coming: closed for the day, EGP reopening it (as on a reload) is closed again at once and never painted', await ev("localStorage.getItem('atcEcClosed') === new Date().toDateString() && document.documentElement.hasAttribute('data-atc-ecd') && getComputedStyle(document.getElementById('early-coming-modal')).display === 'none'"));
+    await ev("localStorage.removeItem('atcEcClosed'); 1");
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'reduce' }] }); await sleep(300);
+    ok('reduced motion (Windows animation effects off): the waves stay drawn, only still', await ev("(() => { const w = document.querySelector('.atc-time .atc-r.is-wavy .atc-r-wv'); return !!w && getComputedStyle(w).display !== 'none' && getComputedStyle(w.querySelector('svg')).animationPlayState === 'paused'; })()"));
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade in" id="bs3-x" style="display:block"></div><div class="modal-backdrop fade in"></div>'); document.body.classList.add('modal-open'); return 1; })()`); await sleep(3200);
     ok('a backdrop is left alone while another modal is open (Bootstrap 3 .in)', await ev("!!document.querySelector('.modal-backdrop') && document.body.classList.contains('modal-open')"));
     await ev("document.getElementById('bs3-x').remove(); 1");
