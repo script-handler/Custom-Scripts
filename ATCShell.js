@@ -1375,6 +1375,29 @@ function unskin() {
     D.querySelectorAll('tr[data-atc-k]').forEach(tr => { delete tr.dataset.atcK; });
     D.querySelectorAll('[data-atc-ph]').forEach(e => { e.placeholder = e.dataset.atcPh; delete e.dataset.atcPh; });
 }
+// EARLY COMING (Timeline): EGP's modal has no close (static backdrop, no Escape) until a reason is saved. A close and
+// Escape hide it through Bootstrap, so nothing is left behind; nothing is submitted, and EGP shows it again on the next
+// Timeline load. Any page left locked (a backdrop or body.modal-open with no modal open, as after deleting the modal
+// in DevTools) is unlocked once that has held for two ticks, so a backdrop mid-fade is never touched.
+// Open as Bootstrap 5 (.show) or 3 (.in, its jQuery plugin also loads on the portal) shows it, or simply displayed.
+const isOpen = m => m.classList.contains('show') || m.classList.contains('in') || getComputedStyle(m).display === 'block';
+const hideModal = m => { const $ = window.jQuery; try { if ($ && $.fn && $.fn.modal) $(m).modal('hide'); else if (window.bootstrap && window.bootstrap.Modal) window.bootstrap.Modal.getOrCreateInstance(m).hide(); else throw 0; }
+    catch (_) { m.classList.remove('show'); m.style.display = 'none'; m.setAttribute('aria-hidden', 'true'); } };
+function mountECClose() {
+    const m = D.getElementById('early-coming-modal'), h = m && m.querySelector('.modal-header'); if (!h || h.querySelector('.atc-ec-x')) return;
+    h.style.display = 'flex'; h.style.alignItems = 'center';
+    h.insertAdjacentHTML('beforeend', '<button type="button" class="btn-close atc-ec-x ms-auto" aria-label="Close for now" title="Remind me later: the reason is still required"></button>');
+    h.querySelector('.atc-ec-x').addEventListener('click', () => hideModal(m));
+}
+D.addEventListener('keydown', e => { const m = e.key === 'Escape' && D.getElementById('early-coming-modal'); if (m && isOpen(m)) hideModal(m); });
+let stuck = 0;
+function unstick() {
+    const b = D.body, locked = b.classList.contains('modal-open') || !!D.querySelector('.modal-backdrop');
+    stuck = locked && ![...D.querySelectorAll('.modal')].some(isOpen) ? stuck + 1 : 0; if (stuck < 2) return;
+    D.querySelectorAll('.modal-backdrop').forEach(e => e.remove()); b.classList.remove('modal-open'); b.style.removeProperty('overflow'); b.style.removeProperty('padding-right'); stuck = 0;
+}
+// Each part runs on its own: one throwing on an unexpected page (the widget drops ATC.tick on any throw) leaves the rest.
+const warned = {}, safe = (k, f) => { try { f(); } catch (e) { if (!warned[k]) { warned[k] = 1; console.warn('ATCShell ' + k + ':', e); } } };
 let lastRoute = null, wasWeb = null;
 ATC.tick = att => {
     const r = route(), p = P(), dark = tokens(), web = p.webTheme !== false && !!(ATC.plus && ATC.plus());
@@ -1383,12 +1406,13 @@ ATC.tick = att => {
     const sk = r && web ? (dark ? 'dark' : 'light') : '';
     if ((H.dataset.attSkin || '') !== sk) { if (sk) H.dataset.attSkin = sk; else delete H.dataset.attSkin; }
     if (Date.now() >= due) { due = Date.now() + AGE; pull(); }
-    mountChip(r !== 'att');
-    mountTime(r === 'tl' && !!(snap && snap.act != null));
-    mountPanel(att && p.displayTheme === 'material');
-    if (web && r === 'tl') { tagCards(); renderOver(); mountDecor(); mountProfileChip(); mountProfileGrid(); markPrayer(); }
-    if (web && r === 'att') mountAtt();
-    paint();
+    safe('chip', () => mountChip(r !== 'att'));
+    safe('time', () => mountTime(r === 'tl' && !!(snap && snap.act != null)));
+    safe('panel', () => mountPanel(att && p.displayTheme === 'material'));
+    safe('modal', () => { mountECClose(); unstick(); });
+    if (web && r === 'tl') [tagCards, renderOver, mountDecor, mountProfileChip, mountProfileGrid, markPrayer].forEach(f => safe(f.name, f));
+    if (web && r === 'att') safe('att', mountAtt);
+    safe('paint', paint);
 };
 // FLOAT off Attendance: the widget's floating window takes the time and the colours from here.
 ATC.worked = () => times().act;

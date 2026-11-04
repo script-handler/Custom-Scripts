@@ -245,6 +245,20 @@ async function main() {
         const r = cr(c(q('.modal-title'), 'color'), surf) >= 4.5 && cr(c(q('.control-label'), 'color'), lbg) >= 3 && cr(c(q('.text-blue'), 'color'), surf) >= 3 && cr(c(btn, 'color'), c(btn, 'backgroundColor')) >= 3;
         document.getElementById('md-x').remove(); return r; })()`));
     await scheme('light');
+    console.log('\n── Early coming modal (EGP: static, no close) and a locked page');
+    await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(400);
+    await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade show" id="early-coming-modal" style="display:block" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><div class="section-heading"><h2 class="pull-left">EARLY COMING</h2><div class="clearfix"></div></div></div><div class="modal-body"><textarea></textarea></div><div class="modal-footer"><button class="btn btn-info" id="ec-save">Save</button></div></div></div></div><div class="modal-backdrop fade show"></div>');
+        document.body.classList.add('modal-open'); window.__saves = 0; document.getElementById('ec-save').addEventListener('click', () => window.__saves++); return 1; })()`);
+    ok('early coming: the shell adds a close to the modal header', await until("!!document.querySelector('#early-coming-modal .modal-header .atc-ec-x')", 3000));
+    await ev("document.querySelector('#early-coming-modal .atc-ec-x').click(); 1"); await sleep(300);
+    ok('…which hides it without saving, and the page unlocks (backdrop, modal-open) two ticks on', await ev("(() => { const m = document.getElementById('early-coming-modal'); return getComputedStyle(m).display === 'none' && window.__saves === 0; })()")
+        && await until("!document.querySelector('.modal-backdrop') && !document.body.classList.contains('modal-open')", 4000));
+    await ev("(() => { const m = document.getElementById('early-coming-modal'); m.classList.add('show'); m.style.display = 'block'; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 1; })()"); await sleep(200);
+    ok('early coming: Escape closes it too', await ev("getComputedStyle(document.getElementById('early-coming-modal')).display === 'none'"));
+    await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade in" id="bs3-x" style="display:block"></div><div class="modal-backdrop fade in"></div>'); document.body.classList.add('modal-open'); return 1; })()`); await sleep(3200);
+    ok('a backdrop is left alone while another modal is open (Bootstrap 3 .in)', await ev("!!document.querySelector('.modal-backdrop') && document.body.classList.contains('modal-open')"));
+    await ev("document.getElementById('bs3-x').remove(); 1");
+    ok('…and once that modal is gone by hand (as users delete it in DevTools), the page unlocks', await until("!document.querySelector('.modal-backdrop') && !document.body.classList.contains('modal-open')", 4000));
     console.log('\n── Checked out');
     api.checkout = '5:00 PM'; await scheme('light'); await go(TL);
     await until("!!document.querySelector('.atc-time')"); await sleep(1300); s = await state();
