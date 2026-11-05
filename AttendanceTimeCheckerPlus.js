@@ -18849,8 +18849,8 @@
         const mi = (act, d, label, danger) => `<button type="button" class="desk-mi${danger ? ' is-danger' : ''}" role="menuitem" data-desk="${act}">${achSvg(d, 16)}<span>${label}</span></button>`;
         menu.innerHTML = '<span class="desk-ml">Image</span>' + mi('browse', DESK_D.image, (img ? 'Replace' : 'Add') + ' image…') + mi('link', DESK_D.link, 'Use an image link…') +
             (img ? mi('fit', DESK_D.fit, currentImageFit === 'cover' ? 'Fit whole image' : 'Fill the card') : '') + (currentImageURL ? mi('remove-img', DESK_D.trash, 'Remove image', 1) : '') +
-            '<span class="desk-sep"></span><span class="desk-ml">Quote</span>' + mi('edit', DESK_D.edit, q ? 'Edit quote…' : 'Add quote…') +
-            (q ? mi('remove-quote', DESK_D.trash, 'Remove quote', 1) : '');
+            '<span class="desk-sep"></span><span class="desk-ml">Quote' + (quotesArray.length > 1 ? ` · ${Math.min(deskQuoteIdx, quotesArray.length - 1) + 1} of ${quotesArray.length}` : '') + '</span>' +
+            mi('edit', DESK_D.edit, q ? 'Edit quote…' : 'Add quote…') + (q ? mi('add', DESK_D.quote, 'Add another quote…') + mi('remove-quote', DESK_D.trash, 'Remove quote', 1) : '');
         menu.hidden = false;
         const W = el.clientWidth, H = el.clientHeight, w = menu.offsetWidth, h = menu.offsetHeight, top = Math.min(y === undefined ? 58 : y, H - h - 8);
         menu.style.left = Math.max(8, Math.min(x === undefined ? W - w - 10 : x, W - w - 8)) + 'px';
@@ -18978,6 +18978,7 @@
             link: changeImage, fit: toggleImageFit, 'remove-img': removeImage, 'remove-quote': deskRemoveQuote,
             undo: () => { const u = deskUndo; deskToast(null); if (u) u(); },
             edit: () => { deskEditing = deskQuote() ? 'edit' : 'add'; renderDesk(); },
+            add: () => { deskEditing = 'add'; renderDesk(); },
             cancel: () => { deskEditing = false; renderDesk(); }
         };
         document.addEventListener('click', (e) => {

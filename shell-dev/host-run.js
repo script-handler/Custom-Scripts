@@ -235,6 +235,13 @@ async function main() {
     await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 1000, deviceScaleFactor: 1, mobile: false }); await sleep(400);
     ok('widget workspace at 1366 px: the right column drops under the other two', await cols() === 2);
     await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
+    // desk: a quote already there, the menu still adds another
+    const addQ = async (t) => { await ev("document.querySelector('#total-time-summary .desk-kebab').click(); document.querySelector('#total-time-summary .desk-menu [data-desk=add]').click(); 1");
+        return ev(`(() => { const f = document.querySelector('#total-time-summary .desk-edit'); if (!f) return null; f.querySelector('textarea').value = ${JSON.stringify(t)}; f.querySelector('[type=submit]').click(); return JSON.parse(localStorage.getItem('customQuotes') || 'null'); })()`); };
+    await ev("(() => { const d = document.querySelector('#total-time-summary .desk'); if (!d.querySelector('.desk-kebab')) { d.querySelector('[data-desk=edit]').click(); const f = d.querySelector('.desk-edit'); f.querySelector('textarea').value = 'First'; f.querySelector('[type=submit]').click(); } return 1; })()");
+    const n0 = await ev("JSON.parse(localStorage.getItem('customQuotes') || '[]').length"), qs = await addQ('Second line');
+    const lbl = await ev("(() => { document.querySelector('#total-time-summary .desk-kebab').click(); const t = document.querySelector('#total-time-summary .desk-menu .desk-ml:last-of-type').textContent; document.querySelector('#total-time-summary .desk-kebab').click(); return t; })()");
+    ok('desk card: with a quote showing, "Add another quote…" adds one (not an edit) and the menu counts them', !!qs && qs.length === Math.max(n0, 1) + 1 && qs[qs.length - 1].text === 'Second line' && /of \d+/.test(lbl), { n0, qs, lbl });
     console.log('\n── Modals in dark (EGP greys and light panels)');
     await scheme('dark'); await go(TL, { displayTheme: 'material' }); await until("!!document.querySelector('.atc-chip')"); await sleep(600);
     ok('dark: EGP modal titles, labels and light panels read on the themed surface (contrast ≥ 4.5 / 3)', await ev(String.raw`(() => {
