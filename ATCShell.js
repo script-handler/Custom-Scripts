@@ -675,7 +675,7 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 /* Leadership + supervisor (app-gm-widget). */
 .atc-v-lead{display:grid;grid-template-columns:1fr 150px;gap:12px;height:100%}
 .atc-v-leads{display:flex;flex-direction:column;gap:6px;justify-content:center;min-width:0}
-.atc-v-person{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--x-r-card-sm);background:var(--x-tile);min-width:0}
+.atc-v-person{display:flex;align-items:center;gap:15px;padding:20px 15px;border-radius:var(--x-r-card-sm);background:var(--x-tile);min-width:0}
 .atc-v-person img,.atc-v-sup img{flex:none;object-fit:cover;background:${MSC('surface-container-highest')};clip-path:var(--x-sh-avatar)}
 .atc-v-person img{width:44px;height:44px}.atc-v-person:nth-child(2) img{clip-path:var(--x-sh-i3)}
 .atc-v-person b{display:block;font-size:14px;line-height:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
