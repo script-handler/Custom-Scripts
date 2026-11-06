@@ -27635,7 +27635,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         const attr = v => escapeHtml(String(v)).replace(/"/g, '&quot;');
         const html = !lbRegistered
             ? `<div class="ws-join"><span>Join to see where you rank with your team. Your level, XP and game scores are shared.</span>
-                <input id="lb-name-input" class="ws-join-in" type="text" placeholder="Display name (e.g. Hassan N.)" maxlength="20" aria-label="Display name">
+                <input id="lb-name-input" class="ws-join-in" type="text" placeholder="Display name" maxlength="20" aria-label="Display name">
                 <button type="button" class="lb-register-btn desk-primary" onclick="window.lbRegister()">Join the leaderboard</button>
                 <button type="button" class="ws-rcv-link" onclick="window.atcAccountDialog('login')">Already on the leaderboard? Log in</button></div>`
             : leaderboardData.map(p => ({ p, v: p.totalXP || 0 })).sort((a, b) => b.v - a.v).map((r, i) => {
