@@ -660,8 +660,9 @@ async function main() {
             m.querySelector('[data-settings-tab="ludo"]').click(); out.ludo = shown();
             m.querySelector('[data-settings-tab="cue"]').click(); out.back = shown();
             const cue = m.querySelector('[data-settings-group="cue"]').getBoundingClientRect(); out.h = Math.round(cue.height);
+            window.__probe.toggleSettingsModal(); window.__probe.toggleSettingsModal(); out.reopen = shown();
             return out; })()`);
-        ok('⚙️ opens on the Cue Games tab while pool is up, one group at a time; the tabs switch it', tabs.open === 'cue' && tabs.lit === 'cue' && tabs.ludo === 'ludo' && tabs.back === 'cue' && tabs.h > 200, tabs);
+        ok('⚙️ opens on General on a fresh page (not the game\'s tab), one group at a time; the tabs switch it; it reopens where it was left', tabs.open === 'general' && tabs.lit === 'general' && tabs.ludo === 'ludo' && tabs.back === 'cue' && tabs.h > 200 && tabs.reopen === 'cue', tabs);
         const cloth = await ev(`(() => { const m = document.getElementById('attendance-settings-modal'), p = window.__probe.prefs, pool = p.poolTableColor;
             const rows = [...m.querySelectorAll('[data-settings-group="cue"] .pool-color-swatches')].map(g => g.querySelectorAll('.pool-color-swatch').length).join();
             m.querySelector('.pool-color-swatch[data-felt-game="snooker"][data-felt="custom"]').click();

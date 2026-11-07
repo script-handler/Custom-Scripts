@@ -26100,9 +26100,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 const v = userPreferences[sel.getAttribute('data-pref')];
                 if (v !== undefined && v !== null && Array.prototype.some.call(sel.options, o => o.value === String(v))) sel.value = String(v);
             });
-            // It opens on the game being played, when that game has settings; else where it was left.
-            const gameTab = { pool: 'cue', ludo: 'ludo' }[typeof currentGame === 'string' ? currentGame : ''];
-            showSettingsTab(modal, gameTab || settingsTab);
+            // It opens where it was left (General on a fresh page).
+            showSettingsTab(modal, settingsTab);
         }
         modal.classList.toggle('active');
         overlay.classList.toggle('active');
