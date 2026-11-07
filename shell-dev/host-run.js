@@ -264,6 +264,13 @@ async function main() {
     await sleep(1200); await shot('tl-lg-engine'); await zoom('lg-engine-card', '.box-widget', 30);
     ok('…and idles: no WebGL draws in 2 s without input', await ev(`new Promise(r => { const P = WebGLRenderingContext.prototype, d = P.drawArrays; let n = 0; P.drawArrays = function () { n++; return d.apply(this, arguments); };
         setTimeout(() => { P.drawArrays = d; r(n === 0 || n); }, 2000); })`) === true);
+    const drawsWhileMoving = async () => { await ev("(() => { const P = WebGLRenderingContext.prototype, d = P.drawArrays; window.__n = 0; window.__d = d; P.drawArrays = function () { window.__n++; return d.apply(this, arguments); }; return 1; })()");
+        for (let i = 0; i < 12; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 200 + i * 60, y: 200 + i * 20 }); await sleep(60); }
+        await sleep(400); return ev("(() => { WebGLRenderingContext.prototype.drawArrays = window.__d; return window.__n; })()"); };
+    ok('the pointer wakes it for the cursor light', await drawsWhileMoving() > 0);
+    await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), lgHoverFx: false })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`); await sleep(1500);
+    const still = await drawsWhileMoving();
+    ok('Hover Effects off: the pointer no longer wakes it, and the CSS hover rules switch off (html.lg-nofx)', still === 0 && await ev("document.documentElement.classList.contains('lg-nofx')"), still);
     await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'glassmorphic' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
     ok('switching theme tears it down (no canvas, no lg-gl, no Liquid CSS)', await until("!document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl') && !document.getElementById('atc-lg-css')"));
     for (const pal of ['ocean', 'violet', 'graphite', 'green']) {
@@ -271,6 +278,11 @@ async function main() {
         ok(`${pal}: Background › Palette image (the default) loads its image into the engine`, await until("document.documentElement.classList.contains('lg-gl')", 8000));
         await sleep(800); await shot('tl-lg-' + pal); await send('Page.navigate', { url: BASE + '#/time-absence/attendence-record' }); await until("!!document.getElementById('total-time-summary')"); await sleep(1500); await shot('att-lg-' + pal);
     }
+    await ev("document.querySelector('#total-time-summary .settings-button').click(); document.querySelector('[data-settings-tab=theme]').click(); 1"); await sleep(500); await zoom('lg-settings', '.settings-modal', 8);
+    const acc = await ev("(() => { const d = document.querySelector('.lg-optics'), seen = s => document.querySelector(s).checkVisibility(); return [!!d, !!d && !d.open, !seen('[data-pref=lgRefract]'), seen('[data-pref=lgPalette]'), !seen('[data-pref=lgAccent]')]; })()");
+    ok('Theme tab: Clarity and the sliders sit closed under Glass Optics; Glass Colors only for Custom', acc.every(Boolean), acc);
+    ok('…picking Custom shows Glass Colors', await ev("(() => { const s = document.querySelector('[data-pref=lgPalette]'); s.value = 'custom'; return document.querySelector('[data-pref=lgAccent]').checkVisibility(); })()"));
+    await ev("document.querySelector('.lg-optics>summary').click(); 1"); await sleep(300); await zoom('lg-settings-open', '.settings-modal', 8);
     // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
     // the page scrolls, then 2 s with no input: Aurora, Liquid in CSS, Liquid with the engine bending an image.
     if (process.env.PERF) {

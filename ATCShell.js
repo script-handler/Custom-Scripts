@@ -1074,7 +1074,11 @@ ${TL} .ws-card{--lg:bead;--lg-tint:white .07;border:0;background:linear-gradient
 ${TL} .ws-head .pip-button{border:0;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);color:#FFFFFF;box-shadow:var(--lg-bead)}
 ${TL} .ws-head :is(.settings-button,.developer-info){border:0;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04));box-shadow:var(--lg-bead)}
 ${TL} .modern-table{border:0;border-radius:16px;background:rgba(255,255,255,.05);box-shadow:var(--lg-bead)}
-html.lg-gl ${TL}:is(*,:hover),html.lg-gl ${TL} .ws-card{background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}`;
+html.lg-gl ${TL}:is(*,:hover),html.lg-gl ${TL} .ws-card{background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.lg-optics>summary{cursor:pointer;gap:12px}.lg-optics>summary::-webkit-details-marker{display:none}.lg-optics>summary small{margin-left:auto;opacity:.6;font-size:.75rem}
+.lg-optics>summary::after{content:"";flex:none;width:7px;height:7px;margin:0 4px 3px;border:solid currentColor;border-width:0 2px 2px 0;rotate:45deg;transition:rotate .2s}
+.lg-optics[open]>summary::after{rotate:-135deg;margin-bottom:-3px}.lg-optics>.settings-option:not(summary){margin-left:16px}
+.settings-modal:not(:has([data-pref=lgPalette] option[value=custom]:checked)) .lg-colors{display:none!important}`;
 // Liquid Glass is dark glass under either OS scheme: the widget sheet's OS-light rules (panel, games, modal) get a zero-specificity
 // :where(html:not(.atc-liquid)) guard, once per sheet, so the cascade among them is unchanged.
 function lgDarkOnly() {
@@ -1088,7 +1092,7 @@ function lgDarkOnly() {
 // non-inherited (only the rim's ::before inherits them), so a write restyles the card, not its whole subtree.
 let lgEv = null;
 D.addEventListener('pointermove', e => {
-    if (H.dataset.xFam !== 'lg' || !H.dataset.attSkin || H.classList.contains('lg-nofx')) return;
+    if (H.dataset.xFam !== 'lg' || !H.dataset.attSkin || H.classList.contains('lg-nofx') || H.classList.contains('lg-gl')) return; // under the engine it draws the cursor light
     if (!lgEv) requestAnimationFrame(() => { const v = lgEv; lgEv = null; const el = v.target.closest && v.target.closest('.box-widget:not(.box-widget .box-widget),.gp-footer .footer-col,.atc-bg'); if (!el) return;
         const r = el.getBoundingClientRect(); el.style.setProperty('--mx', Math.round(v.clientX - r.left) + 'px'); el.style.setProperty('--my', Math.round(v.clientY - r.top) + 'px'); });
     lgEv = e;
@@ -1209,8 +1213,8 @@ function lgEngine(cv, o) {
         if (now < until || Math.abs(par.tx - par.x) + Math.abs(par.ty - par.y) > .002 || Math.abs(mouse.onT - mouse.on) > .01) kick(0);
     }
     function kick(ms) { until = Math.max(until, performance.now() + ms); if (!raf && !D.hidden && !lost && img.ready) raf = requestAnimationFrame(frame); }
-    // Over the widget panel (its games) the pointer never wakes the engine.
-    const onMove = e => { if (e.target.closest && e.target.closest('#total-time-summary')) return; mouse.x = e.clientX; mouse.y = e.clientY; mouse.onT = 1; par.tx = Math.max(-1, Math.min(1, (e.clientX / (W || 1) - .5) * 2)); par.ty = Math.max(-1, Math.min(1, (e.clientY / (Hh || 1) - .5) * 2)); kick(300); };
+    // Hover Effects off (o.fx false), or over the widget panel (its games), the pointer never wakes the engine.
+    const onMove = e => { if (!o.fx || (e.target.closest && e.target.closest('#total-time-summary'))) return; mouse.x = e.clientX; mouse.y = e.clientY; mouse.onT = 1; par.tx = Math.max(-1, Math.min(1, (e.clientX / (W || 1) - .5) * 2)); par.ty = Math.max(-1, Math.min(1, (e.clientY / (Hh || 1) - .5) * 2)); kick(300); };
     const onLeave = () => { mouse.onT = 0; par.tx = par.ty = 0; kick(300); }, onRun = e => { if (set.has(e.target)) kick(650); }, onTick = () => kick(150), onAct = () => { dirty = true; kick(400); };
     const onVis = () => { if (D.hidden) { cancelAnimationFrame(raf); raf = 0; } else kick(0); }, onLost = e => { e.preventDefault(); lost = true; H.classList.remove('lg-gl'); o.say('The graphics context was lost: showing plain glass'); };
     // Elements added, removed or reclassed can move surfaces; text ticking (the clocks) can't, so it never wakes the engine.
@@ -1220,7 +1224,7 @@ function lgEngine(cv, o) {
     EV.forEach(([t, n, f, c]) => t.addEventListener(n, f, c));
     gl.bindTexture(gl.TEXTURE_2D, imgTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     return {
-        set(n) { Object.assign(o, n); pal = { ink: hv(o.ink), accent: hv(o.accent), hi: hv(o.hi), white: [1, 1, 1] }; dirty = true; kick(0); },
+        set(n) { Object.assign(o, n); pal = { ink: hv(o.ink), accent: hv(o.accent), hi: hv(o.hi), white: [1, 1, 1] }; if (!o.fx) mouse.on = mouse.onT = par.x = par.y = par.tx = par.ty = 0; dirty = true; kick(0); },
         image(u) {
             if (u === url) return; url = u; img.ready = false; H.classList.remove('lg-gl'); o.say('Loading…'); const im = new Image();
             if (!/^(blob:|data:)/.test(u)) im.crossOrigin = 'anonymous';
@@ -1238,7 +1242,7 @@ function lgEngine(cv, o) {
 // CSS shows the image under plain glass at once (and stays the fallback); the engine takes over when WebGL can read the image.
 let lgE = null, lgSrc = '', lgObj = '', lgOpt = '', lgMsg = '';
 const lgOpts = p => { const [accent, ink, hi] = lgPal(p), n = (v, d) => isFinite(+v) && v !== '' ? +v : d;
-    return { accent, ink, hi, clear: p.lgClarity === 'clear', strength: n(p.lgRefract, 1), bevel: n(p.lgEdge, 1), chroma: n(p.lgChroma, 1), frost: n(p.lgFrost, 1.6), tint: n(p.lgTint, 1), spec: n(p.lgSpec, 1), adapt: n(p.lgLegible, 1), dim: n(p.lgBgDim, .15) }; };
+    return { accent, ink, hi, fx: p.lgHoverFx !== false, clear: p.lgClarity === 'clear', strength: n(p.lgRefract, 1), bevel: n(p.lgEdge, 1), chroma: n(p.lgChroma, 1), frost: n(p.lgFrost, 1.6), tint: n(p.lgTint, 1), spec: n(p.lgSpec, 1), adapt: n(p.lgLegible, 1), dim: n(p.lgBgDim, .15) }; };
 function lgLoad(src) {
     if (lgObj.startsWith('blob:')) URL.revokeObjectURL(lgObj); lgObj = ''; lgMsg = '';
     if (!src) { if (lgE) lgE.destroy(); lgE = null; return; }
