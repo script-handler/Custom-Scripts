@@ -59,8 +59,9 @@ async function main() {
     // A throwaway profile, removed on exit (each run's is ~40-80 MB).
     const PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-host-'));
     process.on('exit', () => { try { proc.kill(); } catch (_) {} try { fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 5 }); } catch (_) {} });
-    const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + PROFILE, '--no-first-run', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
-    const bail = setTimeout(() => { console.log('✗ TIMEOUT'); try { proc.kill(); } catch (_) {} process.exit(2); }, 180000);
+    // PERF=1 keeps the GPU: without it WebGL is software and headless is paint-bound, hiding what costs what.
+    const proc = spawn(CHROME, ['--headless=new', process.env.PERF ? '--enable-gpu-rasterization' : '--disable-gpu', '--remote-debugging-port=' + port, '--user-data-dir=' + PROFILE, '--no-first-run', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
+    const bail = setTimeout(() => { console.log('✗ TIMEOUT'); try { proc.kill(); } catch (_) {} process.exit(2); }, process.env.PERF ? 420000 : 180000);
     let target;
     for (let i = 0; i < 80 && !target; i++) { await sleep(200); try { target = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).find(t => t.type === 'page'); } catch (_) {} }
     if (!target) { console.log('✗ Chrome did not start'); process.exit(2); }
@@ -106,7 +107,7 @@ async function main() {
         const r = await send('Page.captureScreenshot', { format: 'png', clip: { ...b, scale: 3 } }); fs.writeFileSync(path.join(OUT, 'zoom-' + name + '.png'), Buffer.from(r.result.data, 'base64')); };
     // The open popover sits under the chip at the header's right end.
     const popShot = async name => { const r = await send('Page.captureScreenshot', { format: 'png', clip: { x: 900, y: 0, width: 500, height: 440, scale: 2 } }); fs.writeFileSync(path.join(OUT, 'pop-' + name + '.png'), Buffer.from(r.result.data, 'base64')); };
-    const PRIMARY = { glassmorphic: ['#6d5bd0', '#8b78f0'], material: ['#0b57d0', '#a8c7fa'], business: ['#1e88e5', '#1e88e5'], 'retro-futuristic': ['#fff200', '#fff200'] };
+    const PRIMARY = { glassmorphic: ['#6d5bd0', '#8b78f0'], material: ['#0b57d0', '#a8c7fa'], business: ['#1e88e5', '#1e88e5'], 'retro-futuristic': ['#fff200', '#fff200'], liquid: ['#9abaf3', '#9abaf3'] };
 
     console.log('\n── Timeline, Glassmorphic Aurora (default prefs)');
     for (const sc of ['dark', 'light']) {
@@ -140,10 +141,10 @@ async function main() {
     await shot('att-aurora-light');
     ok('settings modal has no separate portal rows', await ev("(() => { document.querySelector('#total-time-summary .settings-button')?.click(); const m = document.querySelector('.settings-modal'); const r = !!m && !m.innerHTML.includes('portalSkin') && !m.innerHTML.includes('portalChip') && m.innerHTML.includes('Material You'); document.querySelector('.settings-modal-overlay, .settings-overlay')?.click(); return r; })()"));
 
-    for (const [th, nm] of [['material', 'my'], ['business', 'biz'], ['retro-futuristic', 'cyber']]) {
+    for (const [th, nm] of [['material', 'my'], ['business', 'biz'], ['retro-futuristic', 'cyber'], ['liquid', 'lg']]) {
         console.log(`\n── ${th}`);
         for (const sc of ['light', 'dark']) {
-            const want = th === 'retro-futuristic' ? 'dark' : th === 'business' ? 'light' : sc;
+            const want = th === 'retro-futuristic' || th === 'liquid' ? 'dark' : th === 'business' ? 'light' : sc;
             await scheme(sc); await go(TL, { displayTheme: th });
             await until("!!document.querySelector('.atc-time')"); await sleep(400); s = await state();
             ok(`${sc} Timeline: ${th} → family ${nm}, skin ${want}, primary ${PRIMARY[th][+(want === 'dark')]}`, s.theme === th && s.fam === nm && s.skin === want && s.primary === PRIMARY[th][+(want === 'dark')], s);
@@ -251,6 +252,35 @@ async function main() {
         const surf = c(q('.modal-content'), 'backgroundColor'), inner = c(q('.modal-body > div'), 'backgroundColor'), lbg = P(inner)[3] === 0 ? surf : inner, btn = q('.btn-info');
         const r = cr(c(q('.modal-title'), 'color'), surf) >= 4.5 && cr(c(q('.control-label'), 'color'), lbg) >= 3 && cr(c(q('.text-blue'), 'color'), surf) >= 3 && cr(c(btn, 'color'), c(btn, 'backgroundColor')) >= 3;
         document.getElementById('md-x').remove(); return r; })()`));
+    console.log('\n── Liquid Glass engine (a stripes image in IndexedDB behind the glass)');
+    await go(TL, { displayTheme: 'liquid' }); await until("!!document.querySelector('.atc-time')");
+    await ev(`new Promise(res => { const c = document.createElement('canvas'); c.width = c.height = 480; const x = c.getContext('2d');
+        for (let i = 0; i < 20; i++) { x.fillStyle = i % 2 ? '#f2f2f2' : '#101010'; x.fillRect(i * 24, 0, 24, 480); } x.fillStyle = '#ff3c3c'; for (let y = 30; y < 480; y += 90) x.fillRect(0, y, 480, 3);
+        c.toBlob(b => { const o = indexedDB.open('attendanceImageBox', 1); o.onupgradeneeded = () => o.result.createObjectStore('images');
+            o.onsuccess = () => { const t = o.result.transaction('images', 'readwrite'); t.objectStore('images').put(b, 'liquid'); t.oncomplete = () => res(1); }; }); })`);
+    await go(TL, { displayTheme: 'liquid', lgBg: 'image', lgBgUrl: 'idb:1' }); await until("!!document.querySelector('.atc-time')");
+    ok('Liquid, image background: the WebGL engine takes the glass (html.lg-gl, one canvas)', await until("document.documentElement.classList.contains('lg-gl') && document.querySelectorAll('#atc-lg-canvas').length === 1", 8000));
+    await sleep(1200); await shot('tl-lg-engine'); await zoom('lg-engine-card', '.box-widget', 30);
+    ok('…and idles: no WebGL draws in 2 s without input', await ev(`new Promise(r => { const P = WebGLRenderingContext.prototype, d = P.drawArrays; let n = 0; P.drawArrays = function () { n++; return d.apply(this, arguments); };
+        setTimeout(() => { P.drawArrays = d; r(n === 0 || n); }, 2000); })`) === true);
+    await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'glassmorphic' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
+    ok('switching theme tears it down (no canvas, no lg-gl, no Liquid CSS)', await until("!document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl') && !document.getElementById('atc-lg-css')"));
+    // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
+    // the page scrolls, then 2 s with no input: Aurora, Liquid in CSS, Liquid with the engine bending an image.
+    if (process.env.PERF) {
+        await send('Performance.enable');
+        const metrics = async () => Object.fromEntries((await send('Performance.getMetrics')).result.metrics.map(m => [m.name, m.value]));
+        const cost = (a, b) => { const s = b.Timestamp - a.Timestamp, f = k => ((b[k] - a[k]) / s * 1000).toFixed(0).padStart(4); return `script ${f('ScriptDuration')} · style ${f('RecalcStyleDuration')} · layout ${f('LayoutDuration')} · all tasks ${f('TaskDuration')} ms/s`; };
+        const LQ = { displayTheme: 'liquid' };
+        for (const [label, prefs] of [['Aurora          ', {}], ['Liquid, CSS     ', LQ], ['Liquid, no hover', { ...LQ, lgHoverFx: false }], ['Liquid + engine ', { ...LQ, lgBg: 'image', lgBgUrl: 'idb:1' }]]) {
+            await go(TL, prefs); await until("!!document.querySelector('.atc-time')"); await sleep(1500); await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+            let a = await metrics();
+            for (let i = 0; i < 60; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 120 + (i * 53) % 1200, y: 120 + (i * 31) % 520 }); if (i % 15 === 14) await ev('scrollBy(0, 40); 1'); await sleep(40); }
+            let b = await metrics(); console.log(`  · ${label} moving: ${cost(a, b)}`);
+            await sleep(700); a = await metrics(); await sleep(2000); b = await metrics(); console.log(`  · ${label} idle:   ${cost(a, b)}`);
+            await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        }
+    }
     await scheme('light');
     console.log('\n── Early coming modal (EGP: static, no close) and a locked page');
     await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(400);

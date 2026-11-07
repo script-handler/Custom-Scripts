@@ -12,6 +12,9 @@
   | Material You | Material You | follows the browser |
   | Cyberpunk | Cyberpunk, built from the widget's 8 cyber colours | always dark |
   | Just Business | Business | always light |
+  | Liquid Glass | Liquid Glass (`lg`), from the widget's palette or its three custom colours | always dark glass |
+
+  Liquid Glass with Background › Image (a URL, or a picked file kept in IndexedDB `liquid`) runs `lgEngine`, a WebGL pass that refracts the image through every glass surface; without WebGL, or when a host blocks CORS, it stays CSS glass over the image. `PERF=1 host-run.js` prints the main-thread cost of Aurora vs Liquid (CSS, no hover, engine) at 4× CPU throttle.
 
 - provides the Material You theme for the widget panel
 

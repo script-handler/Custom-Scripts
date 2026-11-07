@@ -384,7 +384,7 @@
         neumorphicDepth: true,
         fluidGradients: true,
         emojiSet: 'fun', // 'fun', 'none'
-        displayTheme: 'glassmorphic', // 'glassmorphic' | 'retro-futuristic' | 'business' (Just Business) | 'material' (Material You)
+        displayTheme: 'glassmorphic', // 'glassmorphic' | 'retro-futuristic' | 'business' (Just Business) | 'material' (Material You) | 'liquid' (Liquid Glass)
         gameModeHidden: true, // true = Game Mode ON (panels visible); false = Game Mode OFF (panels hidden, widget shrinks)
         webTheme: true, // Plus: Timeline and Attendance follow the Display Theme (ATCShell.js); off themes the widget only
         shiftDuration: '8h', // '4h' = short leave, '8h' = standard, '9h' = overtime, up to '15h' (SHIFT_DURATIONS)
@@ -453,7 +453,10 @@
         // 'notched' | 'chamfered' | 'stepped' | 'rounded' — see CYBER_PANEL_SHAPES
         cyberPanelShape: 'notched',
         cyberBgImage: '',       // URL for custom background image
-        cyberBgOpacity: 0.15    // 0–1 opacity for background image overlay
+        cyberBgOpacity: 0.15,   // 0–1 opacity for background image overlay
+        // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
+        lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'mesh', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
+        lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1
     };
 
     // Convert "#rrggbb" → "r, g, b" (for use inside rgba(var(--x-rgb), a))
@@ -561,9 +564,9 @@
         });
     }
 
-    function loadImageBlob()      { return _imageBoxStore('readonly',  s => s.get('custom')); }
-    function saveImageBlob(blob)  { return _imageBoxStore('readwrite', s => s.put(blob, 'custom')); }
-    function clearImageBlob()     { return _imageBoxStore('readwrite', s => s.delete('custom')); }
+    function loadImageBlob(k = 'custom')       { return _imageBoxStore('readonly',  s => s.get(k)); }
+    function saveImageBlob(blob, k = 'custom') { return _imageBoxStore('readwrite', s => s.put(blob, k)); }
+    function clearImageBlob(k = 'custom')      { return _imageBoxStore('readwrite', s => s.delete(k)); }
 
     // RefleX storage. One-time wipe of scores invalidated by the 2026-05-25 anti-cheat
     // patch (re-run 05-26). While set, applyPlayerRecordToLocal() refuses gist reflex restores.
@@ -26398,6 +26401,13 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <select class="settings-select" data-pref="${pref}"${id ? ` id="${id}"` : ''}>${options.map(([val, text]) => `<option value="${val}"${val === cur ? ' selected' : ''}>${text}</option>`).join('')}</select>
                 </div>`;
     }
+    // Liquid Glass rows show only under that theme (updateThemeDependentOptions toggles them). A slider row: frost reads in px, the rest as a percentage of the design's value.
+    const lgRow = () => ' data-theme-dependent="liquid"' + (userPreferences.displayTheme === 'liquid' ? '' : ' style="display:none;"');
+    const rngOut = (pref, v) => pref === 'lgFrost' ? v + 'px' : Math.round(v * 100) + '%';
+    function rng(pref, label, min, max, step) {
+        const v = +userPreferences[pref];
+        return `<div class="settings-option"${lgRow()}><span class="settings-option-label">${label}</span><label class="cyber-bg-opacity-label"><input type="range" data-pref="${pref}" min="${min}" max="${max}" step="${step}" value="${v}"><span>${rngOut(pref, v)}</span></label></div>`;
+    }
 
     // ⚙️ Table Cloth, per game: the presets as the gradient they draw, then Custom, whose two
     // colours (centre and edge) open below it. Snooker shows pool's cloth until it has its own.
@@ -26464,7 +26474,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 ${sel('gameSound', 'Game Sounds', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['off', 'Off']], { def: 'medium', icon: 'g-pool' })}
             </div>
             <div class="settings-group" role="tabpanel" data-settings-group="theme" hidden>
-                ${sel('displayTheme', 'Display Theme', [['glassmorphic', 'Glassmorphic Aurora'], ['retro-futuristic', 'Cyberpunk HUD'], ['business', 'Just Business'], ['material', 'Material You']], { id: 'theme-selector', icon: 'f-theme' })}
+                ${sel('displayTheme', 'Display Theme', [['glassmorphic', 'Glassmorphic Aurora'], ['liquid', 'Liquid Glass'], ['retro-futuristic', 'Cyberpunk HUD'], ['business', 'Just Business'], ['material', 'Material You']], { id: 'theme-selector', icon: 'f-theme' })}
                 <div class="settings-option" data-plus-only style="${gamesUnlocked ? '' : 'display:none;'}">
                     <span class="settings-option-label">${attIcon('monitor')} Web Theme <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:6px;background:var(--att-accent, #8B78F0);color:var(--att-on-accent, #14111F);vertical-align:1px;">PLUS</span> <small style="opacity:0.6;font-size:0.75rem;">Timeline &amp; Attendance follow the theme; off themes the widget only</small></span>
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
@@ -26477,6 +26487,13 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('wave')} Fluid Gradients <small style="opacity: 0.6; font-size: 0.75rem;">(Glassmorphic only)</small></span>
                     <div class="toggle-switch ${userPreferences.fluidGradients ? 'active' : ''} ${!isGlassmorphic ? 'disabled' : ''}" data-pref="fluidGradients"></div>
                 </div>
+                ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
+                <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
+                ${sel('lgClarity', 'Clarity', [['regular', 'Regular — light frost'], ['clear', 'Clear']], { row: lgRow(), icon: 'sparkle' })}
+                ${sel('lgBg', 'Background', [['mesh', 'Mesh'], ['image', 'Image — the glass bends it']], { row: lgRow(), icon: 'image' })}
+                <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('image')} Background Image</span><div class="cyber-bg-controls"><button class="cyber-bg-btn" id="lg-bg-url">Image URL</button><button class="cyber-bg-btn" id="lg-bg-file">Choose file</button><input type="file" accept="image/*" id="lg-bg-input" hidden><span class="cyber-bg-opacity-label" id="lg-bg-status"></span></div></div>
+                ${[['lgBgDim', 'Image Dim', 0, .7, .05], ['lgRefract', 'Refraction', 0, 2, .05], ['lgEdge', 'Edge Thickness', .5, 1.6, .05], ['lgChroma', 'Dispersion', 0, 2, .05], ['lgFrost', 'Frost', 0, 4, .1], ['lgTint', 'Tint', 0, 1.5, .05], ['lgSpec', 'Highlights', 0, 2, .05], ['lgLegible', 'Legibility Boost', 0, 1.5, .05]].map(a => rng(...a)).join('')}
+                <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('wave')} Hover Effects</span><div class="toggle-switch ${userPreferences.lgHoverFx !== false ? 'active' : ''}" data-pref="lgHoverFx"></div></div>
                 <div class="settings-option cyber-color-row" data-theme-dependent="retro-futuristic" style="${userPreferences.displayTheme === 'retro-futuristic' ? '' : 'display:none;'}">
                     <span class="settings-option-label">${attIcon('f-skins')} Palette</span>
                     <div class="cyber-palette-swatches" id="cyber-palette-swatches">
@@ -26674,8 +26691,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 }
             });
 
-            modal.querySelectorAll('[data-theme-dependent="retro-futuristic"]').forEach(option => {
-                option.style.display = (theme === 'retro-futuristic') ? '' : 'none';
+            modal.querySelectorAll('[data-theme-dependent]:not([data-theme-dependent="glassmorphic"])').forEach(option => {
+                option.style.display = (theme === option.dataset.themeDependent) ? '' : 'none';
             });
         }
 
@@ -26706,6 +26723,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             picker.addEventListener('input', function() {
                 const pref = this.getAttribute('data-pref');
                 userPreferences[pref] = this.value;
+                if (pref.startsWith('lg')) modal.querySelector('[data-pref="lgPalette"]').value = userPreferences.lgPalette = 'custom';
                 applyPreferences(); // live preview while sliding
                 updateCyberContrastChip(modal);
             });
@@ -26717,6 +26735,14 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                 updateCyberContrastChip(modal);
             });
         });
+
+        // Liquid Glass: sliders preview on input and save on release; an image URL or a picked file (IndexedDB 'liquid', its pref a stamp) switches the background to it.
+        modal.querySelectorAll('input[type="range"][data-pref]').forEach(r => ['input', 'change'].forEach(ev => r.addEventListener(ev, () => {
+            userPreferences[r.dataset.pref] = parseFloat(r.value); r.nextElementSibling.textContent = rngOut(r.dataset.pref, +r.value); if (ev === 'change') savePreferences(); applyPreferences(); })));
+        const lgImage = url => { userPreferences.lgBgUrl = url; modal.querySelector('[data-pref="lgBg"]').value = userPreferences.lgBg = 'image'; savePreferences(); applyPreferences(); };
+        modal.querySelector('#lg-bg-url').addEventListener('click', () => { const u = prompt('Background image URL:', /^https?:/.test(userPreferences.lgBgUrl) ? userPreferences.lgBgUrl : ''); if (u && u.trim()) lgImage(u.trim()); });
+        modal.querySelector('#lg-bg-file').addEventListener('click', () => modal.querySelector('#lg-bg-input').click());
+        modal.querySelector('#lg-bg-input').addEventListener('change', e => { const f = e.target.files[0]; if (f) saveImageBlob(f, 'liquid').then(() => lgImage('idb:' + Date.now())).catch(() => deskToast('Couldn’t save that image')); });
 
         // Glow intensity has its own listener: the slider is 0-100, the stored value 0-1. Routed
         // through cyberGlowFromPct/ToPct so this panel and the dev harness share one conversion.
@@ -27115,6 +27141,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         if (!container) return;
         container.classList.toggle('biz-theme', userPreferences.displayTheme === 'business');
         container.classList.toggle('mat-theme', userPreferences.displayTheme === 'material');
+        container.classList.toggle('lg-theme', userPreferences.displayTheme === 'liquid');
         if (userPreferences.displayTheme === 'retro-futuristic') {
             // Captured before the class goes on: the boot-in reveal fires on switch-in, not on every
             // colour-slider move (applyPreferences() runs on each of those).
@@ -27264,6 +27291,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             if (userPreferences.displayTheme === 'retro-futuristic') totalTimeDiv.classList.add('retro-theme');
             if (userPreferences.displayTheme === 'business') totalTimeDiv.classList.add('biz-theme');
             if (userPreferences.displayTheme === 'material') totalTimeDiv.classList.add('mat-theme');
+            if (userPreferences.displayTheme === 'liquid') totalTimeDiv.classList.add('lg-theme');
             isFirstRender = true;
             isNewElement = true;
             keptPanel = totalTimeDiv;
@@ -28303,7 +28331,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     }
 
     // ATCShell.js bridge: read-only views of widget state; the shell adds tick/apply and follows displayTheme.
-    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen, float: togglePictureInPicture });
+    Object.assign(ATC, { prefs: () => userPreferences, shift: getShiftSeconds, fmt: secondsToHHMMSS, att: () => ({ worked: lastTotalWorkedTime, live: lastAttLive }), onAtt, plus: gamesOpen, float: togglePictureInPicture, img: loadImageBlob });
     // A fresh browser off Attendance (no XP/leaderboard init there): take only the account's prefs from the gist, local wins as in applyPlayerRecordToLocal.
     async function prefsFromGist() {
         const prof = lsJSON('atc_lb_profile', null); if (!prof || !prof.registered || lsJSON('attendancePrefs', {}).displayTheme) return;
