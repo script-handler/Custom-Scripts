@@ -266,7 +266,7 @@ async function main() {
         setTimeout(() => { P.drawArrays = d; r(n === 0 || n); }, 2000); })`) === true);
     await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'glassmorphic' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
     ok('switching theme tears it down (no canvas, no lg-gl, no Liquid CSS)', await until("!document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl') && !document.getElementById('atc-lg-css')"));
-    for (const pal of ['graphite', 'green']) {
+    for (const pal of ['ocean', 'violet', 'graphite', 'green']) {
         await go(TL, { displayTheme: 'liquid', lgPalette: pal }); await until("!!document.querySelector('.atc-time')");
         ok(`${pal}: Background › Palette image (the default) loads its image into the engine`, await until("document.documentElement.classList.contains('lg-gl')", 8000));
         await sleep(800); await shot('tl-lg-' + pal); await send('Page.navigate', { url: BASE + '#/time-absence/attendence-record' }); await until("!!document.getElementById('total-time-summary')"); await sleep(1500); await shot('att-lg-' + pal);
@@ -277,7 +277,7 @@ async function main() {
         await send('Performance.enable');
         const metrics = async () => Object.fromEntries((await send('Performance.getMetrics')).result.metrics.map(m => [m.name, m.value]));
         const cost = (a, b) => { const s = b.Timestamp - a.Timestamp, f = k => ((b[k] - a[k]) / s * 1000).toFixed(0).padStart(4); return `script ${f('ScriptDuration')} · style ${f('RecalcStyleDuration')} · layout ${f('LayoutDuration')} · all tasks ${f('TaskDuration')} ms/s`; };
-        const LQ = { displayTheme: 'liquid' };
+        const LQ = { displayTheme: 'liquid', lgBg: 'mesh' };
         for (const [label, prefs] of [['Aurora          ', {}], ['Liquid, CSS     ', LQ], ['Liquid, no hover', { ...LQ, lgHoverFx: false }], ['Liquid + engine ', { ...LQ, lgBg: 'image', lgBgUrl: 'idb:1' }]]) {
             await go(TL, prefs); await until("!!document.querySelector('.atc-time')"); await sleep(1500); await send('Emulation.setCPUThrottlingRate', { rate: 4 });
             let a = await metrics();

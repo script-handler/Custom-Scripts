@@ -174,7 +174,7 @@ function cyber(p) {
 // ink, highlight, then the mesh's deep, mid and light, and the palette's own background image (Background › Palette image);
 // Custom takes the widget's three colours and derives the rest. Graphite is neutral grey, so it sits on light or dark images.
 const LG_GH = 'https://raw.githubusercontent.com/', LG_BG = LG_GH + 'script-handler/Custom-Scripts/main/glass-theme-bg/', LG_DL = LG_GH + 'dusklinux/images/main/dark/';
-const LG_PAL = { ocean: ['#1F66E5', '#0A2C70', '#E8F2FF', '#0C4BC4', '#2F7CE8', '#8FC0F3'], violet: ['#6A50E0', '#140A30', '#F1EDFF', '#3A23A8', '#6B50E2', '#BFB2FB'],
+const LG_PAL = { ocean: ['#1F66E5', '#0A2C70', '#E8F2FF', '#0C4BC4', '#2F7CE8', '#8FC0F3', LG_BG + 'ocean-glass.png'], violet: ['#6A50E0', '#140A30', '#F1EDFF', '#3A23A8', '#6B50E2', '#BFB2FB', LG_BG + 'violet-glass.png'],
     graphite: ['#5B616B', '#0D0F12', '#F2F3F5', '#2B2E34', '#4B5059', '#B9BEC6', LG_BG + 'dark-graphite.jpg'], teal: ['#007888', '#03222A', '#E6FBFC', '#056573', '#0F8E9C', '#97DCE0', LG_DL + '0005.jpg'],
     green: ['#2F7A5E', '#04140F', '#E4F4EC', '#1B4A3B', '#3F806A', '#9CCDB7', LG_BG + 'green.png'], dusk: ['#B05A16', '#10122E', '#FFF3E6', '#1D2A72', '#35499F', '#F4B784', LG_DL + '0003.jpg'] };
 const LG_ST = { ok: '#7FE0B4', danger: '#FF9DA8', low: '#9CC4FF', tense: '#FFC68C', void: '#C9B8FF', home: '#FFB1C8' };
