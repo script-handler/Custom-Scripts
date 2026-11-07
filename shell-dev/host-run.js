@@ -271,7 +271,7 @@ async function main() {
     await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), lgHoverFx: false })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`); await sleep(1500);
     const still = await drawsWhileMoving();
     ok('Hover Effects off: the pointer no longer wakes it, and the CSS hover rules switch off (html.lg-nofx)', still === 0 && await ev("document.documentElement.classList.contains('lg-nofx')"), still);
-    await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'glassmorphic' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
+    await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'material' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
     ok('switching theme tears it down (no canvas, no lg-gl, no Liquid CSS)', await until("!document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl') && !document.getElementById('atc-lg-css')"));
     for (const pal of ['ocean', 'violet', 'graphite', 'green']) {
         await go(TL, { displayTheme: 'liquid', lgPalette: pal }); await until("!!document.querySelector('.atc-time')");
@@ -282,10 +282,17 @@ async function main() {
     const acc = await ev("(() => { const d = document.querySelector('.lg-optics'), seen = s => document.querySelector(s).checkVisibility(); return [!!d, !!d && !d.open, !seen('[data-pref=lgRefract]'), seen('[data-pref=lgPalette]'), !seen('[data-pref=lgAccent]')]; })()");
     ok('Theme tab: Clarity and the sliders sit closed under Glass Optics; Glass Colors only for Custom', acc.every(Boolean), acc);
     ok('…picking Custom shows Glass Colors', await ev("(() => { const s = document.querySelector('[data-pref=lgPalette]'); s.value = 'custom'; return document.querySelector('[data-pref=lgAccent]').checkVisibility(); })()"));
-    const rows = await ev(`(() => { const v = p => document.querySelector('[data-pref=' + p + ']').checkVisibility(), t = document.getElementById('theme-selector'), was = [v('neumorphicDepth'), v('fluidGradients'), v('lgPalette')];
-        t.value = 'glassmorphic'; t.dispatchEvent(new Event('change')); return was.concat(v('neumorphicDepth'), v('fluidGradients'), v('lgPalette')); })()`);
-    ok("Glassmorphic's rows are hidden under Liquid (not greyed) and show on switching; Liquid's hide", rows.join() === 'false,false,true,true,true,false', rows);
+    const rows = await ev(`(() => { const v = p => document.querySelector('[data-pref=' + p + ']').checkVisibility(), t = document.getElementById('theme-selector'), was = [v('auBg'), v('lgHoverFx'), v('lgPalette')];
+        t.value = 'glassmorphic'; t.dispatchEvent(new Event('change')); return was.concat(v('auBg'), v('lgHoverFx'), v('lgPalette')); })()`);
+    ok("Aurora's Background rows are hidden under Liquid and show on switching; Hover Effects stays (shared); Liquid's hide", rows.join() === 'false,true,true,true,true,false', rows);
+    ok('the old Neumorphic Depth / Fluid Gradients toggles are gone', await ev("!document.querySelector('[data-pref=neumorphicDepth],[data-pref=fluidGradients]')"));
     await ev("document.querySelector('.lg-optics>summary').click(); 1"); await sleep(300); await zoom('lg-settings-open', '.settings-modal', 8);
+    for (const sc of ['dark', 'light']) {
+        await scheme(sc); await go(TL, { auBg: 'image', auBgUrl: 'https://github.com/script-handler/Custom-Scripts/blob/main/glass-theme-bg/violet-glass.png?raw=true' }); await until("!!document.querySelector('.atc-time')");
+        ok(`Aurora (${sc}): its own image (a github.com page link) goes through the engine; still family aurora`, await until("document.documentElement.classList.contains('lg-gl') && document.documentElement.dataset.xFam === 'aurora'", 8000));
+        await sleep(800); await shot('tl-aurora-image-' + sc);
+    }
+    await scheme('dark');
     // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
     // the page scrolls, then 2 s with no input: Aurora, Liquid in CSS, Liquid with the engine bending an image.
     if (process.env.PERF) {

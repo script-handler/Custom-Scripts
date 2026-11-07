@@ -381,8 +381,6 @@
     const IMAGE_BOX_IDB_REF = 'idb:customImage';
 
     let userPreferences = {
-        neumorphicDepth: true,
-        fluidGradients: true,
         emojiSet: 'fun', // 'fun', 'none'
         displayTheme: 'glassmorphic', // 'glassmorphic' | 'retro-futuristic' | 'business' (Just Business) | 'material' (Material You) | 'liquid' (Liquid Glass)
         gameModeHidden: true, // true = Game Mode ON (panels visible); false = Game Mode OFF (panels hidden, widget shrinks)
@@ -456,7 +454,8 @@
         cyberBgOpacity: 0.15,   // 0–1 opacity for background image overlay
         // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'auto' (the palette's image, if any) | 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
         lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
-        lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1
+        lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1,
+        auBg: 'mesh', auBgUrl: '', auBgDim: 0.15 // Glassmorphic Aurora's background, as Liquid's (file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
     };
 
     // Convert "#rrggbb" → "r, g, b" (for use inside rgba(var(--x-rgb), a))
@@ -19174,36 +19173,12 @@
                 background-size: 200% 100%;
             }
 
-            .attendance-summary:hover {
-                box-shadow:
-                    0 20px 60px rgba(0, 0, 0, 0.2),
-                    0 6px 16px rgba(0, 0, 0, 0.1),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                    8px 8px 20px rgba(0, 0, 0, 0.12),
-                    -8px -8px 20px rgba(255, 255, 255, 0.08);
-            }
-
-            .summary-header {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 16px;
-                margin-bottom: 32px;
-                text-align: center;
-            }
-
             .emoji-display {
                 font-size: 4rem;
                 line-height: 1;
-                animation: emojiPulse 3s ease-in-out infinite, emojiFloat 6s ease-in-out infinite;
                 filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25));
                 transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
                 cursor: pointer;
-                filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25));
-                /* Force GPU layer for smooth animation */
-                will-change: transform, filter;
-                transform: translateZ(0);
-                backface-visibility: hidden;
             }
 
             .emoji-display:hover {
@@ -19229,7 +19204,6 @@
                 background-clip: text;
                 margin: 0;
                 letter-spacing: -0.02em;
-                animation: gradientFlow 8s ease infinite, titlePulse 4s ease-in-out infinite;
             }
 
             .modern-table {
@@ -19491,7 +19465,7 @@
             #total-time-summary .ws-head .emoji-display:focus-visible { outline: 2px solid var(--att-ink); outline-offset: 3px; }
             .ws-title { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
             #total-time-summary .ws-head .summary-title { margin: 0; font: 700 26px/1.1 var(--att-display); }
-            /* Plain text in every glass setting: !important beats Fluid Gradients off (.no-fluid), which clips the old title to #667eea. */
+            /* Plain text in every non-Cyberpunk theme: !important beats the base .summary-title gradient clip. */
             .attendance-summary:not(.retro-theme) .ws-head .summary-title { background: none !important; color: var(--att-text); -webkit-text-fill-color: var(--att-text) !important; animation: none !important; }
             .ws-sub { font-size: 12px; color: var(--att-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #total-time-summary .ws-head .bottom-control-bar { width: auto; margin: 0; padding: 0; gap: 8px; flex-shrink: 0; }
@@ -19652,13 +19626,11 @@
             .rcv-modal .rcv-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--ach-muted); }
             .rcv-modal .rcv-field input { height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid var(--ach-inner-border); background: var(--ach-inner); color: var(--ach-text); font: 14px var(--ach-font); letter-spacing: 0; outline: none; }
             .rcv-modal .rcv-field input:focus { border-color: var(--ach-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ach-accent) 25%, transparent); }
-            .rcv-modal .rcv-go, .rcv-modal .rcv-sec { height: 44px; border-radius: 12px; border: 0; padding: 0 16px; font: 600 14px var(--ach-font); cursor: pointer; }
+            .rcv-modal .rcv-go { height: 44px; border-radius: 12px; border: 0; padding: 0 16px; font: 600 14px var(--ach-font); cursor: pointer; }
             .rcv-modal .rcv-go { background: var(--ach-accent); color: var(--ach-on-accent); }
             .rcv-modal .rcv-go:disabled { opacity: 0.6; cursor: progress; }
-            .rcv-modal .rcv-sec { background: var(--ach-inner); color: var(--ach-text); border: 1px solid var(--ach-inner-border); }
-            .rcv-modal .rcv-go:focus-visible, .rcv-modal .rcv-sec:focus-visible { outline: 2px solid var(--ach-focus); outline-offset: 2px; }
+            .rcv-modal .rcv-go:focus-visible { outline: 2px solid var(--ach-focus); outline-offset: 2px; }
             .rcv-modal .rcv-status { min-height: 18px; font-size: 12px; line-height: 1.5; color: var(--ach-muted); }
-            .rcv-modal .rcv-status.is-ok { color: var(--ach-ok); }
             .rcv-modal .rcv-status.is-busy { display: flex; align-items: center; gap: 8px; }
             .rcv-modal .rcv-status.is-busy::before { content: ''; width: 14px; height: 14px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--ach-inner-border); border-top-color: var(--ach-accent); animation: rcv-spin 0.8s linear infinite; }
             @keyframes rcv-spin { to { transform: rotate(360deg); } }
@@ -19669,7 +19641,6 @@
             .rcv-modal .rcv-status.is-hot { color: #FF8A8A; }
             @media (prefers-color-scheme: light) { body:not(:has(.attendance-summary.retro-theme)) .rcv-modal .rcv-status.is-hot { color: #B3263A; } }
             .rcv-modal .rcv-done { display: flex; flex-direction: column; gap: 12px; }
-            .rcv-modal .rcv-code { display: block; padding: 14px; border-radius: 12px; text-align: center; font: 700 18px ui-monospace, Consolas, monospace; letter-spacing: 0.06em; color: var(--ach-text); background: var(--ach-inner); border: 1px dashed var(--ach-accent); user-select: all; }
             .rcv-modal .rcv-row { display: flex; gap: 8px; }
             .rcv-modal .rcv-row > * { flex: 1 1 0; }
             /* Six rows (6 × 40 + 5 × 2 gap), then it scrolls: taller, it stretches the column beside it. */
@@ -19781,27 +19752,6 @@
                 backface-visibility: hidden;
             }
 
-            .progress-fill::after {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-                animation: progressShimmer 2s ease-in-out infinite;
-            }
-
-            @keyframes emojiPulse {
-                0%, 100% { transform: scale(1); }
-                50% { transform: scale(1.1); }
-            }
-
-            @keyframes emojiFloat {
-                0%, 100% { transform: translateY(0px); }
-                50% { transform: translateY(-10px); }
-            }
-
             @keyframes shimmer {
                 0% {
                     background-position: -200% center;
@@ -19811,31 +19761,10 @@
                 }
             }
 
-            @keyframes cardShimmer {
-                0% { left: -100%; }
-                50% { left: 50%; }
-                100% { left: 100%; }
-            }
-
-            @keyframes progressShimmer {
-                0% { left: -100%; }
-                50% { left: 50%; }
-                100% { left: 100%; }
-            }
-
             @keyframes gradientFlow {
                 0% { background-position: 0% 50%; }
                 50% { background-position: 100% 50%; }
                 100% { background-position: 0% 50%; }
-            }
-
-            @keyframes titlePulse {
-                0%, 100% {
-                    font-variation-settings: 'wght' 700;
-                }
-                50% {
-                    font-variation-settings: 'wght' 800;
-                }
             }
 
             @keyframes warningPulse {
@@ -19846,90 +19775,6 @@
                 50% {
                     opacity: 0.85;
                     transform: scale(0.98);
-                }
-            }
-
-            @keyframes celebrationPulse {
-                0%, 100% {
-                    transform: scale(1);
-                }
-                25% {
-                    transform: scale(1.03) rotate(1deg);
-                }
-                75% {
-                    transform: scale(1.03) rotate(-1deg);
-                }
-            }
-
-            @keyframes scanlines {
-                0% {
-                    transform: translateY(0);
-                }
-                100% {
-                    transform: translateY(4px);
-                }
-            }
-
-            @keyframes rgbFlowBacklight {
-                0% {
-                    background-position: 0% 50%;
-                }
-                50% {
-                    background-position: 100% 50%;
-                }
-                100% {
-                    background-position: 0% 50%;
-                }
-            }
-
-            @keyframes auroraGlow {
-                0%, 100% {
-                    box-shadow:
-                        0 0 20px rgba(102, 126, 234, 0.5),
-                        0 0 40px rgba(118, 75, 162, 0.4),
-                        0 0 60px rgba(240, 147, 251, 0.3),
-                        inset 0 0 30px rgba(102, 126, 234, 0.15) !important;
-                }
-                33% {
-                    box-shadow:
-                        0 0 25px rgba(118, 75, 162, 0.6),
-                        0 0 50px rgba(240, 147, 251, 0.5),
-                        0 0 75px rgba(79, 172, 254, 0.4),
-                        inset 0 0 35px rgba(118, 75, 162, 0.2) !important;
-                }
-                66% {
-                    box-shadow:
-                        0 0 30px rgba(240, 147, 251, 0.6),
-                        0 0 60px rgba(79, 172, 254, 0.5),
-                        0 0 90px rgba(102, 126, 234, 0.4),
-                        inset 0 0 40px rgba(240, 147, 251, 0.2) !important;
-                }
-            }
-
-            @keyframes neonGlowPulse {
-                0%, 100% {
-                    box-shadow:
-                        0 0 20px rgba(0, 240, 255, 0.6),
-                        0 0 40px rgba(255, 0, 255, 0.5),
-                        0 0 60px rgba(0, 255, 65, 0.4),
-                        inset 0 0 30px rgba(0, 240, 255, 0.2);
-                    border-color: rgba(0, 240, 255, 0.4);
-                }
-                33% {
-                    box-shadow:
-                        0 0 25px rgba(255, 0, 255, 0.7),
-                        0 0 50px rgba(0, 255, 65, 0.6),
-                        0 0 75px rgba(0, 240, 255, 0.5),
-                        inset 0 0 35px rgba(255, 0, 255, 0.25);
-                    border-color: rgba(255, 0, 255, 0.5);
-                }
-                66% {
-                    box-shadow:
-                        0 0 30px rgba(0, 255, 65, 0.7),
-                        0 0 60px rgba(0, 240, 255, 0.6),
-                        0 0 90px rgba(255, 0, 255, 0.5),
-                        inset 0 0 40px rgba(0, 255, 65, 0.25);
-                    border-color: rgba(0, 255, 65, 0.5);
                 }
             }
 
@@ -20350,13 +20195,6 @@
                     color: rgba(255, 255, 255, 0.75);
                 }
 
-                .attendance-summary:hover {
-                    box-shadow:
-                        0 16px 48px rgba(0, 0, 0, 0.25),
-                        0 4px 12px rgba(0, 0, 0, 0.18),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.15);
-                }
-
                 .pip-button {
                     background: linear-gradient(135deg, #667eea, #764ba2);
                     border-color: rgba(255, 255, 255, 0.2);
@@ -20526,109 +20364,9 @@
 
             }
 
-            /* NEUMORPHIC DEPTH — class-toggled via .neumorphic-active
-               Adds pronounced 3-D inset / outset shadows to every surface */
-
-            .attendance-summary.neumorphic-active {
-                box-shadow:
-                    14px 14px 28px rgba(0, 0, 0, 0.22),
-                    -10px -10px 22px rgba(255, 255, 255, 0.04),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-                    0 8px 32px rgba(0, 0, 0, 0.12) !important;
-                border-color: rgba(255, 255, 255, 0.22);
-            }
-
-            .attendance-summary.neumorphic-active .modern-table {
-                box-shadow:
-                    inset 0 2px 6px rgba(0, 0, 0, 0.12),
-                    6px 6px 14px rgba(0, 0, 0, 0.14),
-                    -4px -4px 10px rgba(255, 255, 255, 0.03) !important;
-                border-radius: 18px;
-            }
-
-            .attendance-summary.neumorphic-active .progress-bar {
-                box-shadow:
-                    inset 4px 4px 10px rgba(0, 0, 0, 0.18),
-                    inset -4px -4px 10px rgba(255, 255, 255, 0.04) !important;
-            }
-
-            .attendance-summary.neumorphic-active .developer-info,
-            .attendance-summary.neumorphic-active .settings-button,
-            .attendance-summary.neumorphic-active .pip-button {
-                box-shadow:
-                    4px 4px 10px rgba(0, 0, 0, 0.15),
-                    -3px -3px 8px rgba(255, 255, 255, 0.03),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-            }
-
-            @media (prefers-color-scheme: light) {
-                .attendance-summary.neumorphic-active {
-                    box-shadow:
-                        14px 14px 28px rgba(0, 0, 0, 0.06),
-                        -10px -10px 22px rgba(255, 255, 255, 0.85),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.9),
-                        0 8px 32px rgba(0, 0, 0, 0.06) !important;
-                    border-color: rgba(0, 0, 0, 0.08);
-                }
-
-                .attendance-summary.neumorphic-active .modern-table {
-                    box-shadow:
-                        inset 0 2px 6px rgba(0, 0, 0, 0.04),
-                        6px 6px 14px rgba(0, 0, 0, 0.05),
-                        -4px -4px 10px rgba(255, 255, 255, 0.75) !important;
-                }
-
-                .attendance-summary.neumorphic-active .progress-bar {
-                    box-shadow:
-                        inset 4px 4px 10px rgba(0, 0, 0, 0.06),
-                        inset -4px -4px 10px rgba(255, 255, 255, 0.7) !important;
-                }
-
-                .attendance-summary.neumorphic-active .developer-info,
-                .attendance-summary.neumorphic-active .settings-button,
-                .attendance-summary.neumorphic-active .pip-button {
-                    box-shadow:
-                        4px 4px 10px rgba(0, 0, 0, 0.06),
-                        -3px -3px 8px rgba(255, 255, 255, 0.7),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
-                }
-            }
-
-            /* Neumorphic OFF = flat clean look (reset from defaults) */
-            .attendance-summary:not(.neumorphic-active):not(.retro-theme) {
+            /* Business and Material: a flat, quiet panel shadow. */
+            .attendance-summary:is(.biz-theme, .mat-theme) {
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
-            }
-
-            /* FLUID GRADIENTS — class-toggled OFF via .no-fluid
-               Removes all animated color-flow; makes everything static */
-
-            .attendance-summary.no-fluid .summary-title {
-                animation: none !important;
-                background: var(--aurora-1) !important;
-                background-size: 100% 100% !important;
-                -webkit-background-clip: text !important;
-                -webkit-text-fill-color: transparent !important;
-                background-clip: text !important;
-            }
-
-            /* Top accent bar: static line instead of flowing shimmer */
-            .attendance-summary.no-fluid::before {
-                animation: none !important;
-                background: var(--aurora-1) !important;
-                opacity: 0.5 !important;
-            }
-
-            .attendance-summary.no-fluid .progress-fill {
-                animation: none !important;
-                background: var(--aurora-1) !important;
-                background-size: 100% 100% !important;
-            }
-            .attendance-summary.no-fluid .progress-fill::after {
-                display: none !important;
-            }
-
-            .attendance-summary.no-fluid .modern-table thead {
-                background: #667eea !important;
             }
 
             /* ═══ CYBERPUNK HUD THEME — generated from cyber-dev/cyber-theme.css, do not edit here ═══ */
@@ -25553,11 +25291,6 @@
                 to { transform: translateX(0); opacity: 1; }
             }
 
-            @keyframes ibToastIn {
-                from { opacity: 0; transform: translateY(-4px); }
-                to { opacity: 1; transform: none; }
-            }
-
             #flappy-canvas {
                 cursor: pointer;
                 border-radius: 12px;
@@ -26101,17 +25834,6 @@
             .lb-row-me .lb-rank, .lb-row-me .lb-name {
                 background: linear-gradient(rgba(102,126,234,0.32), rgba(102,126,234,0.32)), rgba(16,18,28,0.94);
             }
-            .lb-level { white-space: nowrap; min-width: 44px; }
-            .lb-level-pill {
-                display: inline-block;
-                padding: 1px 7px;
-                border-radius: 999px;
-                background: rgba(255,255,255,0.08);
-                border: 1px solid rgba(255,255,255,0.14);
-                font-size: 0.66rem;
-                font-weight: 700;
-            }
-            .lb-xp { white-space: nowrap; min-width: 58px; font-variant-numeric: tabular-nums; }
             .lb-score { text-align: right; min-width: 52px; font-variant-numeric: tabular-nums; opacity: 0.9; white-space: nowrap; }
             .lb-you {
                 display: inline-block;
@@ -26218,7 +25940,6 @@
                 .attendance-summary:not(.retro-theme) .lb-table tbody tr:hover .lb-name { filter: brightness(0.97); }
                 .attendance-summary:not(.retro-theme) .lb-row-me .lb-rank,
                 .attendance-summary:not(.retro-theme) .lb-row-me .lb-name { background: linear-gradient(rgba(102, 126, 234, 0.18), rgba(102, 126, 234, 0.18)), #fafafd; }
-                .attendance-summary:not(.retro-theme) .lb-level-pill { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.1); }
                 .attendance-summary:not(.retro-theme) .lb-you { background: rgba(102, 126, 234, 0.2); }
                 .attendance-summary:not(.retro-theme) .game-lb-overlay { background: rgba(250, 250, 253, 0.97); border-color: rgba(0, 0, 0, 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18); }
                 .attendance-summary:not(.retro-theme) .game-lb-head { color: rgba(0, 0, 0, 0.85); border-bottom-color: rgba(0, 0, 0, 0.08); }
@@ -26401,13 +26122,17 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <select class="settings-select" data-pref="${pref}"${id ? ` id="${id}"` : ''}>${options.map(([val, text]) => `<option value="${val}"${val === cur ? ' selected' : ''}>${text}</option>`).join('')}</select>
                 </div>`;
     }
-    // Liquid Glass rows show only under that theme (updateThemeDependentOptions toggles them). A slider row: frost reads in px, the rest as a percentage of the design's value.
-    const lgRow = () => ' data-theme-dependent="liquid"' + (userPreferences.displayTheme === 'liquid' ? '' : ' style="display:none;"');
+    // A theme's own rows (data-theme-dependent: its theme, or several space-separated) show only under it (updateThemeDependentOptions).
+    // A slider row: frost reads in px, the rest as a percentage of the design's value.
+    const lgRow = (th = 'liquid') => ` data-theme-dependent="${th}"` + (th.split(' ').includes(userPreferences.displayTheme) ? '' : ' style="display:none;"');
     const rngOut = (pref, v) => pref === 'lgFrost' ? v + 'px' : Math.round(v * 100) + '%';
-    function rng(pref, label, min, max, step) {
+    function rng(pref, label, min, max, step, th) {
         const v = +userPreferences[pref];
-        return `<div class="settings-option"${lgRow()}><span class="settings-option-label">${label}</span><label class="cyber-bg-opacity-label"><input type="range" data-pref="${pref}" min="${min}" max="${max}" step="${step}" value="${v}"><span>${rngOut(pref, v)}</span></label></div>`;
+        return `<div class="settings-option"${lgRow(th)}><span class="settings-option-label">${label}</span><label class="cyber-bg-opacity-label"><input type="range" data-pref="${pref}" min="${min}" max="${max}" step="${step}" value="${v}"><span>${rngOut(pref, v)}</span></label></div>`;
     }
+    // A glass theme's background (Liquid: lg* prefs, Aurora: au*): the Background select, its image buttons and status, and the dim.
+    const bgRows = (k, th, opts) => `${sel(k + 'Bg', 'Background', opts, { row: lgRow(th), icon: 'image' })}
+                <div class="settings-option"${lgRow(th)}><span class="settings-option-label">${attIcon('image')} Background Image</span><div class="cyber-bg-controls"><button class="cyber-bg-btn" data-bg-url="${k}">Image URL</button><button class="cyber-bg-btn" data-bg-file="${k}">Choose file</button><span class="cyber-bg-opacity-label" data-bg-status="${k}"></span></div></div>${rng(k + 'BgDim', 'Image Dim', 0, .7, .05, th)}`;
 
     // ⚙️ Table Cloth, per game: the presets as the gradient they draw, then Custom, whose two
     // colours (centre and edge) open below it. Snooker shows pool's cloth until it has its own.
@@ -26448,7 +26173,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         modal.id = 'attendance-settings-modal';
         modal.className = 'settings-modal';
 
-        const isGlassmorphic = userPreferences.displayTheme === 'glassmorphic';
 
         modal.innerHTML = `
             <div class="settings-title">${attIcon('u-settings')} Customize Your Experience</div>
@@ -26479,22 +26203,14 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('monitor')} Web Theme <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:6px;background:var(--att-accent, #8B78F0);color:var(--att-on-accent, #14111F);vertical-align:1px;">PLUS</span> <small style="opacity:0.6;font-size:0.75rem;">Timeline &amp; Attendance follow the theme; off themes the widget only</small></span>
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
                 </div>
-                <div class="settings-option" data-theme-dependent="glassmorphic" style="${isGlassmorphic ? '' : 'display:none;'}">
-                    <span class="settings-option-label">${attIcon('f-skins')} Neumorphic Depth</span>
-                    <div class="toggle-switch ${userPreferences.neumorphicDepth ? 'active' : ''}" data-pref="neumorphicDepth"></div>
-                </div>
-                <div class="settings-option" data-theme-dependent="glassmorphic" style="${isGlassmorphic ? '' : 'display:none;'}">
-                    <span class="settings-option-label">${attIcon('wave')} Fluid Gradients</span>
-                    <div class="toggle-switch ${userPreferences.fluidGradients ? 'active' : ''}" data-pref="fluidGradients"></div>
-                </div>
+                ${bgRows('au', 'glassmorphic', [['mesh', 'Aurora mesh'], ['image', 'My image — the URL or file below']])}
                 ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option lg-colors"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
-                ${sel('lgBg', 'Background', [['auto', 'Palette image (Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']], { row: lgRow(), icon: 'image' })}
-                <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('image')} Background Image</span><div class="cyber-bg-controls"><button class="cyber-bg-btn" id="lg-bg-url">Image URL</button><button class="cyber-bg-btn" id="lg-bg-file">Choose file</button><input type="file" accept="image/*" id="lg-bg-input" hidden><span class="cyber-bg-opacity-label" id="lg-bg-status"></span></div></div>
-                <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('wave')} Hover Effects</span><div class="toggle-switch ${userPreferences.lgHoverFx !== false ? 'active' : ''}" data-pref="lgHoverFx"></div></div>
-                <details class="lg-optics"${lgRow()}><summary class="settings-option"><span class="settings-option-label">${attIcon('sparkle')} Glass Optics</span><small>Clarity, dim, refraction, frost…</small></summary>
+                ${bgRows('lg', 'liquid', [['auto', 'Palette image (Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']])}
+                <div class="settings-option"${lgRow('glassmorphic liquid')}><span class="settings-option-label">${attIcon('wave')} Hover Effects</span><div class="toggle-switch ${userPreferences.lgHoverFx !== false ? 'active' : ''}" data-pref="lgHoverFx"></div></div>
+                <details class="lg-optics"${lgRow()}><summary class="settings-option"><span class="settings-option-label">${attIcon('sparkle')} Glass Optics</span><small>Clarity, refraction, frost…</small></summary>
                 ${sel('lgClarity', 'Clarity', [['regular', 'Regular — light frost'], ['clear', 'Clear']], { row: lgRow() })}
-                ${[['lgBgDim', 'Image Dim', 0, .7, .05], ['lgRefract', 'Refraction', 0, 2, .05], ['lgEdge', 'Edge Thickness', .5, 1.6, .05], ['lgChroma', 'Dispersion', 0, 2, .05], ['lgFrost', 'Frost', 0, 4, .1], ['lgTint', 'Tint', 0, 1.5, .05], ['lgSpec', 'Highlights', 0, 2, .05], ['lgLegible', 'Legibility Boost', 0, 1.5, .05]].map(a => rng(...a)).join('')}</details>
+                ${[['lgRefract', 'Refraction', 0, 2, .05], ['lgEdge', 'Edge Thickness', .5, 1.6, .05], ['lgChroma', 'Dispersion', 0, 2, .05], ['lgFrost', 'Frost', 0, 4, .1], ['lgTint', 'Tint', 0, 1.5, .05], ['lgSpec', 'Highlights', 0, 2, .05], ['lgLegible', 'Legibility Boost', 0, 1.5, .05]].map(a => rng(...a)).join('')}</details>
                 <div class="settings-option cyber-color-row" data-theme-dependent="retro-futuristic" style="${userPreferences.displayTheme === 'retro-futuristic' ? '' : 'display:none;'}">
                     <span class="settings-option-label">${attIcon('f-skins')} Palette</span>
                     <div class="cyber-palette-swatches" id="cyber-palette-swatches">
@@ -26680,7 +26396,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         // A theme's own rows show only under that theme.
         function updateThemeDependentOptions(modal, theme) {
             modal.querySelectorAll('[data-theme-dependent]').forEach(option => {
-                option.style.display = (theme === option.dataset.themeDependent) ? '' : 'none';
+                option.style.display = option.dataset.themeDependent.split(' ').includes(theme) ? '' : 'none';
             });
         }
 
@@ -26727,10 +26443,10 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         // Liquid Glass: sliders preview on input and save on release; an image URL or a picked file (IndexedDB 'liquid', its pref a stamp) switches the background to it.
         modal.querySelectorAll('input[type="range"][data-pref]').forEach(r => ['input', 'change'].forEach(ev => r.addEventListener(ev, () => {
             userPreferences[r.dataset.pref] = parseFloat(r.value); r.nextElementSibling.textContent = rngOut(r.dataset.pref, +r.value); if (ev === 'change') savePreferences(); applyPreferences(); })));
-        const lgImage = url => { userPreferences.lgBgUrl = url; modal.querySelector('[data-pref="lgBg"]').value = userPreferences.lgBg = 'image'; savePreferences(); applyPreferences(); };
-        modal.querySelector('#lg-bg-url').addEventListener('click', () => { const u = prompt('Background image URL:', /^https?:/.test(userPreferences.lgBgUrl) ? userPreferences.lgBgUrl : ''); if (u && u.trim()) lgImage(u.trim()); });
-        modal.querySelector('#lg-bg-file').addEventListener('click', () => modal.querySelector('#lg-bg-input').click());
-        modal.querySelector('#lg-bg-input').addEventListener('change', e => { const f = e.target.files[0]; if (f) saveImageBlob(f, 'liquid').then(() => lgImage('idb:' + Date.now())).catch(() => deskToast('Couldn’t save that image')); });
+        const bgImage = (k, url) => { userPreferences[k + 'BgUrl'] = url; modal.querySelector(`[data-pref="${k}Bg"]`).value = userPreferences[k + 'Bg'] = 'image'; savePreferences(); applyPreferences(); };
+        modal.querySelectorAll('[data-bg-url]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.bgUrl, was = userPreferences[k + 'BgUrl'], u = prompt('Background image URL:', /^https?:/.test(was) ? was : ''); if (u && u.trim()) bgImage(k, u.trim()); }));
+        modal.querySelectorAll('[data-bg-file]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.bgFile, i = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' });
+            i.onchange = () => { const f = i.files[0]; if (f) saveImageBlob(f, k === 'lg' ? 'liquid' : 'aurora').then(() => bgImage(k, 'idb:' + Date.now())).catch(() => deskToast('Couldn’t save that image')); }; i.click(); }));
 
         // Glow intensity has its own listener: the slider is 0-100, the stored value 0-1. Routed
         // through cyberGlowFromPct/ToPct so this panel and the dev harness share one conversion.
@@ -27161,27 +26877,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             clearCyberpunkTheme(container);
             const bgEl = container.querySelector('.cyber-bg-image');
             if (bgEl) bgEl.remove();
-        }
-
-        if (userPreferences.displayTheme === 'glassmorphic') {
-            container.style.boxShadow = ''; // clear any old inline override
-            if (userPreferences.neumorphicDepth) {
-                container.classList.add('neumorphic-active');
-            } else {
-                container.classList.remove('neumorphic-active');
-            }
-        } else {
-            container.classList.remove('neumorphic-active');
-        }
-
-        if (userPreferences.displayTheme === 'glassmorphic') {
-            if (userPreferences.fluidGradients) {
-                container.classList.remove('no-fluid');
-            } else {
-                container.classList.add('no-fluid');
-            }
-        } else {
-            container.classList.remove('no-fluid');
         }
 
         const emojiDisplay = container.querySelector('.emoji-display');
