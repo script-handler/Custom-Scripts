@@ -77,6 +77,7 @@ async function main() {
             if (u.includes('/api/Home/getDashboardPerformanceRecord')) { hits.api++; reply(rid, 'application/json', JSON.stringify({ _ActualActiveTime: [{ Actual_Time: '4.5', Actual_Time2: '', Active_Time: '4.05' }], _Total_Checkin_Hours: [{ checkin: '1:55 PM', checkout: api.checkout }], _ShiftUser: [{ shift_name: 'Morning' }] })); }
             else if (u.startsWith(BASE)) reply(rid, 'text/html; charset=utf-8', page());
             else if (u.includes('/ATCShell.js')) { hits.shell++; reply(rid, 'text/plain', fs.readFileSync(path.join(ROOT, 'ATCShell.js'), 'utf8')); }
+            else if (u.includes('/glass-theme-bg/')) { const f = u.split('/glass-theme-bg/')[1]; reply(rid, f.endsWith('.png') ? 'image/png' : 'image/jpeg', fs.readFileSync(path.join(ROOT, 'glass-theme-bg', f))); }
             else send('Fetch.failRequest', { requestId: rid, errorReason: 'BlockedByClient' });
         }
         if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
@@ -265,6 +266,11 @@ async function main() {
         setTimeout(() => { P.drawArrays = d; r(n === 0 || n); }, 2000); })`) === true);
     await ev(`localStorage.setItem('attendancePrefs', JSON.stringify({ ...JSON.parse(localStorage.getItem('attendancePrefs')), displayTheme: 'glassmorphic' })); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); 1`);
     ok('switching theme tears it down (no canvas, no lg-gl, no Liquid CSS)', await until("!document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl') && !document.getElementById('atc-lg-css')"));
+    for (const pal of ['graphite', 'green']) {
+        await go(TL, { displayTheme: 'liquid', lgPalette: pal }); await until("!!document.querySelector('.atc-time')");
+        ok(`${pal}: Background › Palette image (the default) loads its image into the engine`, await until("document.documentElement.classList.contains('lg-gl')", 8000));
+        await sleep(800); await shot('tl-lg-' + pal); await send('Page.navigate', { url: BASE + '#/time-absence/attendence-record' }); await until("!!document.getElementById('total-time-summary')"); await sleep(1500); await shot('att-lg-' + pal);
+    }
     // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
     // the page scrolls, then 2 s with no input: Aurora, Liquid in CSS, Liquid with the engine bending an image.
     if (process.env.PERF) {

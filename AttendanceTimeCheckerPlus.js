@@ -454,8 +454,8 @@
         cyberPanelShape: 'notched',
         cyberBgImage: '',       // URL for custom background image
         cyberBgOpacity: 0.15,   // 0–1 opacity for background image overlay
-        // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
-        lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'mesh', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
+        // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'auto' (the palette's image, if any) | 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
+        lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
         lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1
     };
 
@@ -26487,10 +26487,10 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('wave')} Fluid Gradients <small style="opacity: 0.6; font-size: 0.75rem;">(Glassmorphic only)</small></span>
                     <div class="toggle-switch ${userPreferences.fluidGradients ? 'active' : ''} ${!isGlassmorphic ? 'disabled' : ''}" data-pref="fluidGradients"></div>
                 </div>
-                ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
+                ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
                 ${sel('lgClarity', 'Clarity', [['regular', 'Regular — light frost'], ['clear', 'Clear']], { row: lgRow(), icon: 'sparkle' })}
-                ${sel('lgBg', 'Background', [['mesh', 'Mesh'], ['image', 'Image — the glass bends it']], { row: lgRow(), icon: 'image' })}
+                ${sel('lgBg', 'Background', [['auto', 'Palette image (Ocean, Violet, Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']], { row: lgRow(), icon: 'image' })}
                 <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('image')} Background Image</span><div class="cyber-bg-controls"><button class="cyber-bg-btn" id="lg-bg-url">Image URL</button><button class="cyber-bg-btn" id="lg-bg-file">Choose file</button><input type="file" accept="image/*" id="lg-bg-input" hidden><span class="cyber-bg-opacity-label" id="lg-bg-status"></span></div></div>
                 ${[['lgBgDim', 'Image Dim', 0, .7, .05], ['lgRefract', 'Refraction', 0, 2, .05], ['lgEdge', 'Edge Thickness', .5, 1.6, .05], ['lgChroma', 'Dispersion', 0, 2, .05], ['lgFrost', 'Frost', 0, 4, .1], ['lgTint', 'Tint', 0, 1.5, .05], ['lgSpec', 'Highlights', 0, 2, .05], ['lgLegible', 'Legibility Boost', 0, 1.5, .05]].map(a => rng(...a)).join('')}
                 <div class="settings-option"${lgRow()}><span class="settings-option-label">${attIcon('wave')} Hover Effects</span><div class="toggle-switch ${userPreferences.lgHoverFx !== false ? 'active' : ''}" data-pref="lgHoverFx"></div></div>

@@ -171,10 +171,12 @@ function cyber(p) {
 }
 // LIQUID GLASS (design: Liquid Glass): clear bevelled glass tinted with the palette's ink over its drifting mesh, or over the user's
 // image (lgEngine bends it). One look whatever the OS scheme: ink glass, white type. Presets (Liquid-Settings PALETTES): accent,
-// ink, highlight, then the mesh's deep, mid and light; Custom takes the widget's three colours and derives the rest.
+// ink, highlight, then the mesh's deep, mid and light, and the palette's own background image (Background › Palette image);
+// Custom takes the widget's three colours and derives the rest. Graphite is neutral grey, so it sits on light or dark images.
+const LG_GH = 'https://raw.githubusercontent.com/', LG_BG = LG_GH + 'script-handler/Custom-Scripts/main/glass-theme-bg/', LG_DL = LG_GH + 'dusklinux/images/main/dark/';
 const LG_PAL = { ocean: ['#1F66E5', '#0A2C70', '#E8F2FF', '#0C4BC4', '#2F7CE8', '#8FC0F3'], violet: ['#6A50E0', '#140A30', '#F1EDFF', '#3A23A8', '#6B50E2', '#BFB2FB'],
-    graphite: ['#3A63D6', '#0E1218', '#F2F5FA', '#2A323F', '#4B5668', '#B5BDC8'], teal: ['#007888', '#03222A', '#E6FBFC', '#056573', '#0F8E9C', '#97DCE0'],
-    dusk: ['#B05A16', '#10122E', '#FFF3E6', '#1D2A72', '#35499F', '#F4B784'] };
+    graphite: ['#5B616B', '#0D0F12', '#F2F3F5', '#2B2E34', '#4B5059', '#B9BEC6', LG_BG + 'dark-graphite.jpg'], teal: ['#007888', '#03222A', '#E6FBFC', '#056573', '#0F8E9C', '#97DCE0', LG_DL + '0005.jpg'],
+    green: ['#2F7A5E', '#04140F', '#E4F4EC', '#1B4A3B', '#3F806A', '#9CCDB7', LG_BG + 'green.png'], dusk: ['#B05A16', '#10122E', '#FFF3E6', '#1D2A72', '#35499F', '#F4B784', LG_DL + '0003.jpg'] };
 const LG_ST = { ok: '#7FE0B4', danger: '#FF9DA8', low: '#9CC4FF', tense: '#FFC68C', void: '#C9B8FF', home: '#FFB1C8' };
 const LG_KEYS = ['lgPalette', 'lgAccent', 'lgInk', 'lgHi', 'lgClarity', 'lgTint', 'lgFrost'];
 const lgPal = p => { const b = LG_PAL[p.lgPalette] || LG_PAL.ocean; if (p.lgPalette !== 'custom') return b;
@@ -1248,10 +1250,13 @@ function lgLoad(src) {
         if (lgE) { lgOpt = ''; lgE.set(lgOpts(P())); lgE.image(u); }
     };
     if (src.startsWith('idb:')) (ATC.img ? ATC.img('liquid') : Promise.resolve(null)).then(b => got(b ? URL.createObjectURL(b) : ''), () => got(''));
-    else if (/^https?:\/\//i.test(src)) got(src); else lgMsg = 'Use an http(s) address, or Choose file.';
+    // A github.com …/blob/… page link becomes its raw file: the redirect github.com answers with carries no CORS header, so WebGL can't read it.
+    else if (/^https?:\/\//i.test(src)) got(src.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^?#]+).*$/, LG_GH + '$1/$2')); else lgMsg = 'Use an http(s) address, or Choose file.';
 }
+// Background: 'auto' is the palette's image (none: the mesh), 'image' the user's URL or file (none yet: the palette's), 'mesh' the mesh.
 function liquidSync(p) {
-    const on = p.displayTheme === 'liquid' && !!H.dataset.attSkin && p.lgBg === 'image' && !!p.lgBgUrl, src = on ? p.lgBgUrl : '';
+    const img = p.lgBg === 'mesh' ? '' : (p.lgBg === 'image' && p.lgBgUrl) || lgPal(p)[6] || '';
+    const on = p.displayTheme === 'liquid' && !!H.dataset.attSkin && !!img, src = on ? img : '';
     if (src !== lgSrc) { lgSrc = src; lgLoad(src); }
     const dim = Math.max(0, Math.min(.9, +p.lgBgDim || 0)).toFixed(2);
     style('atc-lg-bg', on && lgObj ? `${L}{--x-mesh:linear-gradient(rgba(0,0,0,${dim}),rgba(0,0,0,${dim})),url("${lgObj.replace(/"/g, '%22')}") center/cover no-repeat}` : null);
