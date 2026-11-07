@@ -282,6 +282,9 @@ async function main() {
     const acc = await ev("(() => { const d = document.querySelector('.lg-optics'), seen = s => document.querySelector(s).checkVisibility(); return [!!d, !!d && !d.open, !seen('[data-pref=lgRefract]'), seen('[data-pref=lgPalette]'), !seen('[data-pref=lgAccent]')]; })()");
     ok('Theme tab: Clarity and the sliders sit closed under Glass Optics; Glass Colors only for Custom', acc.every(Boolean), acc);
     ok('…picking Custom shows Glass Colors', await ev("(() => { const s = document.querySelector('[data-pref=lgPalette]'); s.value = 'custom'; return document.querySelector('[data-pref=lgAccent]').checkVisibility(); })()"));
+    const rows = await ev(`(() => { const v = p => document.querySelector('[data-pref=' + p + ']').checkVisibility(), t = document.getElementById('theme-selector'), was = [v('neumorphicDepth'), v('fluidGradients'), v('lgPalette')];
+        t.value = 'glassmorphic'; t.dispatchEvent(new Event('change')); return was.concat(v('neumorphicDepth'), v('fluidGradients'), v('lgPalette')); })()`);
+    ok("Glassmorphic's rows are hidden under Liquid (not greyed) and show on switching; Liquid's hide", rows.join() === 'false,false,true,true,true,false', rows);
     await ev("document.querySelector('.lg-optics>summary').click(); 1"); await sleep(300); await zoom('lg-settings-open', '.settings-modal', 8);
     // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
     // the page scrolls, then 2 s with no input: Aurora, Liquid in CSS, Liquid with the engine bending an image.

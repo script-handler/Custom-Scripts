@@ -26479,13 +26479,13 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('monitor')} Web Theme <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:6px;background:var(--att-accent, #8B78F0);color:var(--att-on-accent, #14111F);vertical-align:1px;">PLUS</span> <small style="opacity:0.6;font-size:0.75rem;">Timeline &amp; Attendance follow the theme; off themes the widget only</small></span>
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
                 </div>
-                <div class="settings-option ${!isGlassmorphic ? 'disabled' : ''}" data-theme-dependent="glassmorphic">
-                    <span class="settings-option-label">${attIcon('f-skins')} Neumorphic Depth <small style="opacity: 0.6; font-size: 0.75rem;">(Glassmorphic only)</small></span>
-                    <div class="toggle-switch ${userPreferences.neumorphicDepth ? 'active' : ''} ${!isGlassmorphic ? 'disabled' : ''}" data-pref="neumorphicDepth"></div>
+                <div class="settings-option" data-theme-dependent="glassmorphic" style="${isGlassmorphic ? '' : 'display:none;'}">
+                    <span class="settings-option-label">${attIcon('f-skins')} Neumorphic Depth</span>
+                    <div class="toggle-switch ${userPreferences.neumorphicDepth ? 'active' : ''}" data-pref="neumorphicDepth"></div>
                 </div>
-                <div class="settings-option ${!isGlassmorphic ? 'disabled' : ''}" data-theme-dependent="glassmorphic">
-                    <span class="settings-option-label">${attIcon('wave')} Fluid Gradients <small style="opacity: 0.6; font-size: 0.75rem;">(Glassmorphic only)</small></span>
-                    <div class="toggle-switch ${userPreferences.fluidGradients ? 'active' : ''} ${!isGlassmorphic ? 'disabled' : ''}" data-pref="fluidGradients"></div>
+                <div class="settings-option" data-theme-dependent="glassmorphic" style="${isGlassmorphic ? '' : 'display:none;'}">
+                    <span class="settings-option-label">${attIcon('wave')} Fluid Gradients</span>
+                    <div class="toggle-switch ${userPreferences.fluidGradients ? 'active' : ''}" data-pref="fluidGradients"></div>
                 </div>
                 ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option lg-colors"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
@@ -26677,22 +26677,9 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             });
         });
 
+        // A theme's own rows show only under that theme.
         function updateThemeDependentOptions(modal, theme) {
-            const isGlassmorphic = theme === 'glassmorphic';
-            const dependentOptions = modal.querySelectorAll('[data-theme-dependent="glassmorphic"]');
-
-            dependentOptions.forEach(option => {
-                const toggle = option.querySelector('.toggle-switch');
-                if (isGlassmorphic) {
-                    option.classList.remove('disabled');
-                    if (toggle) toggle.classList.remove('disabled');
-                } else {
-                    option.classList.add('disabled');
-                    if (toggle) toggle.classList.add('disabled');
-                }
-            });
-
-            modal.querySelectorAll('[data-theme-dependent]:not([data-theme-dependent="glassmorphic"])').forEach(option => {
+            modal.querySelectorAll('[data-theme-dependent]').forEach(option => {
                 option.style.display = (theme === option.dataset.themeDependent) ? '' : 'none';
             });
         }
