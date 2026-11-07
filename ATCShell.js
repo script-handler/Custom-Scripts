@@ -90,7 +90,7 @@ const hsl = h => { const [r, g, b] = hex(h).map(v => v / 255), mx = Math.max(r, 
     const hu = !d ? 0 : mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return [hu * 60, d ? d / (1 - Math.abs(2 * l - 1)) : 0, l]; };
 // The USA map is a blue raster (about hsl 205° 65%): turned to the primary's hue and saturation.
 const mapFilter = p => { const [h, sat] = hsl(p); return `hue-rotate(${Math.round(h - 205)}deg) saturate(${Math.max(.15, sat / .65).toFixed(2)})`; };
-// Just Business never morphs, so its circle and square are exact.
+// Just Business and Liquid Glass never morph, so their circles and squares are exact.
 const sh = (n, flat) => flat && n === 'circle' ? 'circle(50%)' : flat && n === 'square' ? 'inset(0 round 22%)' : `polygon(${SHAPES[n].replace(/(\d+) (\d+)/g, '$1% $2%')})`;
 const SPR = { // M3 Expressive springs as CSS linear()
     es: '414ms linear(0,0.061,0.202,0.379,0.56,0.724,0.859,0.961,1.028,1.071,1.09,1.093,1.084,1.07,1.053,1.036,1.022,1.01,1.002,0.996,0.993,0.991,0.992,0.993,0.994,0.995,0.997,0.998,0.999,1,1,1.001,1)',
@@ -117,7 +117,7 @@ const SH_KEYS = ['avatar', 'avatar-2', 'i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'badg
 // The drifting mesh: four [r, g, b, a] blobs at these corners, over an optional base layer.
 const meshOf = (at, stops, base) => stops.map(([r, gg, b, a], i) => `radial-gradient(${at[i]}, rgba(${r},${gg},${b},${a}) 0, transparent ${base ? 60 : 70}%)`).join(',') + (base ? ',' + base : '');
 const MESH_AT = ['42% 52% at 12% 8%', '40% 50% at 88% 4%', '46% 56% at 78% 92%', '40% 48% at 20% 96%'];
-// Glass bevel (Aurora and Liquid): top and bottom edge lines, a lit top-left and a softer bottom-right, and a faint dispersion fringe at the sides.
+// Liquid's glass bevel: top and bottom edge lines, a lit top-left and a softer bottom-right, and a faint dispersion fringe at the sides.
 const W = a => `rgba(255,255,255,${a})`;
 const BEVEL = (fringe, k = 1) => `inset 0 1px .5px ${W(.7 * k)},inset 0 -1px .5px ${W(.22 * k)},inset 12px 14px 24px -18px ${W(.42 * k)},inset -14px -16px 28px -20px ${W(.3 * k)},inset 3px 0 6px -4px rgba(255,138,160,${.3 * k}),inset -3px 0 6px -4px ${rgba(fringe, .34 * k)}`;
 // Glassmorphic Aurora: frosted glass (heavy blur, more fill than Liquid) over the violet/blue/pink aurora mesh, following the browser's light/dark.
@@ -131,10 +131,10 @@ const AURORA = d => {
         spatial: SPR.ss, 'spatial-fast': SPR.sd, effects: SPR.xs, drift: 'atcDrift 36s ease-in-out infinite alternate',
         ...(d ? { card: 'rgba(36,32,48,.5)', 'card-border': '1px solid rgba(255,255,255,.09)', 'card-shadow': 'inset 0 1px 0 rgba(255,255,255,.10),0 12px 32px rgba(0,0,0,.35)',
             hero: g(HERO, m(.55, .4, .42, .55), 'rgba(36,32,48,.6)'), 'hero-ink': '#B3A6FF', 'hero-shadow': 'inset 0 1px 0 rgba(255,255,255,.14),0 16px 40px rgba(0,0,0,.4)',
-            mesh: g(MESH, m(.5, .34, .34, .55)), glass: 'rgba(36,32,48,.45)', nav: 'rgba(36,32,48,.4)', 'nav-border': 'rgba(255,255,255,.08)', tile: 'rgba(255,255,255,.06)', 'lg-bevel': BEVEL('#B3A6FF') }
+            mesh: g(MESH, m(.5, .34, .34, .55)), glass: 'rgba(36,32,48,.45)', nav: 'rgba(36,32,48,.4)', 'nav-border': 'rgba(255,255,255,.08)', tile: 'rgba(255,255,255,.06)' }
             : { card: 'rgba(255,255,255,.45)', 'card-border': '1px solid rgba(255,255,255,.85)', 'card-shadow': 'inset 0 1px 0 rgba(255,255,255,.95),0 12px 32px rgba(60,40,120,.14)',
             hero: g(HERO, m(.38, .34, .4, .28), 'rgba(255,255,255,.5)'), 'hero-ink': '#5A47BF', 'hero-shadow': 'inset 0 1px 0 #FFFFFF,0 16px 40px rgba(60,40,120,.18)',
-            mesh: g(MESH, m(.42, .38, .4, .3)), glass: 'rgba(255,255,255,.4)', nav: 'rgba(255,255,255,.4)', 'nav-border': 'rgba(255,255,255,.85)', tile: 'rgba(255,255,255,.5)', 'lg-bevel': BEVEL('#8B78F0', 1.2) }) };
+            mesh: g(MESH, m(.42, .38, .4, .3)), glass: 'rgba(255,255,255,.4)', nav: 'rgba(255,255,255,.4)', 'nav-border': 'rgba(255,255,255,.85)', tile: 'rgba(255,255,255,.5)' }) };
 };
 const BIZ = { page: '#EEF2F6', region: 'transparent', 'r-region': '0px', card: '#FFFFFF', 'card-border': '1px solid #E3E8EF', 'card-shadow': '0 1px 3px rgba(16,24,40,.08)', 'r-card': '8px', 'r-card-sm': '8px',
     hero: '#FFFFFF', 'on-hero': '#2B2B2B', 'hero-ink': '#1565C0', 'hero-shadow': '0 1px 3px rgba(16,24,40,.08),inset 0 3px 0 #1E88E5', 'r-hero': '10px', glass: '#FFFFFF', nav: '#FFFFFF', 'nav-border': '#E3E8EF',
@@ -201,7 +201,7 @@ function liquid(p) {
         mesh: meshOf(MESH_AT, [[...hex(light), .5], [...hex(acc), .45], [...hex(mid), .42], [...hex(light), .32]], `linear-gradient(160deg,${mix(deep, ink, .5)},${ink})`), 'mesh-d': 'block',
         glass: rgba(ink, (.34 * k).toFixed(3)), 'glass-blur': `blur(${((clear ? 3 : 7) * fr).toFixed(1)}px) saturate(190%)`, nav: rgba(ink, (.36 * k).toFixed(3)), 'nav-border': W(.14),
         tile: W(.07), 'tile-2': rgba(acc, .42), 'on-tile-2': '#FFFFFF', 'tile-3': rgba(light, .2), 'on-tile-3': hi, 'r-btn': '999px', 'r-btn-inner': '12px', 'r-chip': '999px', 'r-field': '16px',
-        sh: AURORA(1).sh, 'font-display': "'Sora','Roboto Flex',sans-serif", 'font-num': "'Sora','Roboto Flex',sans-serif", 'num-fvs': 'normal', 'num-fvs-sm': 'normal', 'display-fvs': 'normal', 'title-ls': '-.01em',
+        sh: Array(11).fill('circle'), 'font-display': "'Sora','Roboto Flex',sans-serif", 'font-num': "'Sora','Roboto Flex',sans-serif", 'num-fvs': 'normal', 'num-fvs-sm': 'normal', 'display-fvs': 'normal', 'title-ls': '-.01em',
         spatial: SPR.ss, 'spatial-fast': SPR.sd, effects: SPR.xs, drift: 'atcDrift 36s ease-in-out infinite alternate', 'lg-bevel': BEVEL(mix(acc, '#FFFFFF', .6)) };
     return { c, st, x };
 }
@@ -220,7 +220,7 @@ function tokens() {
         const [ink, fill, onFill, track] = v.slice(ROLES.length + ST.length); x = { ink, fill, 'on-fill': onFill, track, 'state-ink': c['on-surface'], ...(fam === 'aurora' ? AURORA(dark) : fam === 'biz' ? BIZ : {}) }; }
     const t = { ...DEF, ...x };
     const vars = Object.entries(c).map(([k, v]) => `--md-sys-color-${k}:${v}`).concat(Object.entries(st).map(([k, v]) => `--x-${k}:${v}`),
-        Object.entries(t).filter(([k]) => k !== 'sh').map(([k, v]) => `--x-${k}:${v}`), t.sh.map((n, i) => `--x-sh-${SH_KEYS[i]}:${sh(n, fam === 'biz')}`), [`--x-wave:${WAVE}`, `--x-map:${mapFilter(c.primary)}`]);
+        Object.entries(t).filter(([k]) => k !== 'sh').map(([k, v]) => `--x-${k}:${v}`), t.sh.map((n, i) => `--x-sh-${SH_KEYS[i]}:${sh(n, fam === 'biz' || fam === 'lg')}`), [`--x-wave:${WAVE}`, `--x-map:${mapFilter(c.primary)}`]);
     style('atc-x-tokens', `html{${vars.join(';')}}`);
     H.dataset.xFam = fam; H.toggleAttribute('data-x-glass', fam === 'lg' || fam === 'aurora'); isDark = dark;
     let f = D.getElementById('atc-x-fonts'); const href = FONT[fam] && 'https://fonts.googleapis.com/css2?' + FONT[fam] + '&display=swap';
@@ -1023,12 +1023,12 @@ html.atc-mat .settings-modal .toggle-switch.active{background:var(--att-accent);
 html.atc-mat .settings-modal .toggle-switch.active::after{top:4px;left:4px;width:24px;height:24px;background:var(--att-on-accent);transform:translateX(20px)}
 html.atc-mat .xp-milestone-notification{background:var(--m-inv);color:var(--m-on-inv);border:0;border-radius:8px;box-shadow:0 4px 8px 3px rgba(0,0,0,.15),0 1px 3px rgba(0,0,0,.3)}`;
 
-// GLASS surfaces for Liquid Glass and Glassmorphic Aurora (design: Liquid Glass · Materials; html[data-x-glass]), injected for those two. CSS glass: a top sheen over the ink tint,
+// LIQUID GLASS surfaces (design: Liquid Glass · Materials), injected for that theme only. CSS glass: a top sheen over the ink tint,
 // backdrop blur, the bevel, a 1.2px rim (::before) and a drop shadow. --lg names a surface's kind for lgEngine; while it runs
 // (html.lg-gl) the canvas draws body, rim and shadow and the CSS fill steps aside. Hover (off with html.lg-nofx):
 // cards brighten their rim under a cursor spotlight (--mx/--my) with one sheen sweep; controls scale on a spring, shimmer and press.
 // No card lift: a transform transition on a backdrop-filtered card restyles every frame (≈200 ms/s at 4× throttle, PERF=1 host-run).
-const L = 'html[data-att-skin][data-x-glass]', LH = L + ':not(.lg-nofx)', LGL = L + '.lg-gl', LP = L + ' #global-portal', LA = LP + ' #attendence-record-tab';
+const L = 'html[data-att-skin][data-x-fam=lg]', LH = L + ':not(.lg-nofx)', LGL = L + '.lg-gl', LP = L + ' #global-portal', LA = LP + ' #attendence-record-tab';
 const LG_CARD = [`${LP} .box-widget:not(.box-widget .box-widget)`, `${LP} .gp-footer .footer-col`, `${L} .atc-bg`, `${LP} .side-nav-tab`, `${L} #sidebarNav`, `${LA} .main-attendance-table`];
 const LG_TILE = [`${L} .atc-bt`, `${L} .attendence-outer .attendence-box`, `${L} app-health-widget li`, `${L} .box-widget .highlighted-content`];
 const LG_CTRL = [`${LA} .pagination .page-link`, `${L} .atc-lg`, `${LA} li[data-atc-xl] .gp-btn`];
@@ -1039,21 +1039,19 @@ const J = (a, s = '', f = x => x) => a.map(x => f(x) + s).join(','), hov = s => 
 const SHEEN = 'linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,0) 32%,rgba(255,255,255,0) 70%,rgba(255,255,255,.04))';
 const LG_CSS = `
 @property --lg-spot{syntax:'<number>';inherits:false;initial-value:0}@property --mx{syntax:'<length-percentage>';inherits:false;initial-value:50%}@property --my{syntax:'<length-percentage>';inherits:false;initial-value:0%}
-html[data-x-glass]{--lg-spring:cubic-bezier(.34,1.45,.55,1);--lg-ease:cubic-bezier(.22,.8,.3,1);--lg-drop:0 1px 1px rgba(0,0,0,.25),0 12px 28px -12px rgba(0,0,0,.55),0 34px 70px -34px rgba(0,0,0,.65);
+html[data-x-fam=lg]{--lg-spring:cubic-bezier(.34,1.45,.55,1);--lg-ease:cubic-bezier(.22,.8,.3,1);--lg-drop:0 1px 1px rgba(0,0,0,.25),0 12px 28px -12px rgba(0,0,0,.55),0 34px 70px -34px rgba(0,0,0,.65);
  --lg-drop-h:0 2px 2px rgba(0,0,0,.22),0 18px 36px -14px rgba(0,0,0,.6),0 44px 90px -36px rgba(0,0,0,.7);
  --lg-bead:inset 0 1px .5px rgba(255,255,255,.6),inset 0 -1px .5px rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.09),inset 6px 8px 14px -12px rgba(255,255,255,.35)}
-@media (prefers-color-scheme:light){html[data-x-fam=aurora]{--lg-drop:0 1px 1px rgba(60,40,120,.08),0 12px 28px -12px rgba(60,40,120,.22),0 34px 70px -34px rgba(60,40,120,.28);
- --lg-drop-h:0 2px 2px rgba(60,40,120,.1),0 18px 36px -14px rgba(60,40,120,.28),0 44px 90px -36px rgba(60,40,120,.34);--lg-bead:inset 0 1px .5px #FFFFFF,inset 0 -1px .5px rgba(60,40,120,.08),inset 0 0 0 1px rgba(255,255,255,.6),inset 6px 8px 14px -12px #FFFFFF}}
 ${J(LG_CARD)}{--lg:card;--lg-tint:ink .3;isolation:isolate;border:0!important;box-shadow:var(--x-lg-bevel),var(--lg-drop)!important;backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);
  background:radial-gradient(260px circle at var(--mx,50%) var(--my,0%),rgba(255,255,255,calc(var(--lg-spot) * .1)),transparent 70%),${SHEEN},var(--lg-base,var(--x-card))!important}
-${J(LG_HOV.concat(LG_CARD[3], LG_CARD[5]))}{position:relative}${L} :is(.atc-c-profile,.atc-c-careers,.atc-bg.is-hero){--lg-base:var(--x-hero)}
+${J(LG_HOV.concat(LG_CARD[5]))}{position:relative}${L} :is(.atc-c-profile,.atc-c-careers,.atc-bg.is-hero){--lg-base:var(--x-hero)}
 ${J(LG_RIM, '::before')}{--mx:inherit;--my:inherit;--lg-spot:inherit;content:"";position:absolute;inset:0;height:auto;z-index:1;border-radius:inherit;padding:1.2px;pointer-events:none;
  background:radial-gradient(170px circle at var(--mx,50%) var(--my,0%),rgba(255,255,255,calc(var(--lg-spot) * .95)),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,255,255,.28) 15%,rgba(255,255,255,.05) 40%,rgba(255,255,255,.05) 62%,rgba(255,255,255,.3) 86%,rgba(255,255,255,.72));
  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 ${J(LG_HOV, '::after')}{content:"";position:absolute;inset:0;z-index:1;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.12) 48%,rgba(255,255,255,.03) 54%,transparent 62%) 130% 0/260% 100% no-repeat}
 ${J(LG_HOV, ':hover', hov)}{box-shadow:var(--x-lg-bevel),var(--lg-drop-h)!important;--lg-spot:1}
 ${J(LG_HOV, ':hover::after', hov)}{background-position:-30% 0;transition:background-position .8s var(--lg-ease)}
-${J(LG_TILE)}{--lg:bead;--lg-tint:white .07;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03))!important;border:0!important;box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35)!important}
+${J(LG_TILE)}{--lg:bead;--lg-tint:ink .2;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03))!important;border:0!important;box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35)!important}
 ${J(LG_FIELD)}{--lg:control;--lg-tint:ink .26;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),var(--x-glass)!important;box-shadow:var(--lg-bead)!important;backdrop-filter:blur(3px) saturate(180%)}
 ${J(LG_FIELD, ':focus')}{box-shadow:var(--lg-bead),0 0 0 3px color-mix(in srgb,${MSC('inverse-surface')} 45%,transparent)!important}
 ${J(LG_KNOB)}{position:relative;overflow:hidden;isolation:isolate;border:0!important;transition:transform .3s var(--lg-spring)}
@@ -1063,26 +1061,76 @@ ${J(LG_KNOB, '::after')}{content:"";position:absolute;inset:0;border-radius:inhe
 ${J(LG_KNOB, ':hover::after', hov)}{transform:translateX(130%);transition:transform .75s var(--lg-ease)}
 ${J(LG_KNOB, ':hover', hov)}{transform:scale(1.04)}${J(LG_KNOB, ':active', hov)}{transform:scale(.95);transition-duration:.12s}
 ${J(LG_BAR)}{--lg:bar;--lg-tint:ink .3;background:${SHEEN},var(--x-nav)!important;backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);box-shadow:inset 0 -1px 0 rgba(255,255,255,.14),var(--lg-drop)!important}
+/* Liquid's own icons, tabs and rail (design: .ico, .seg/.c-on, .ib): round glossy beads over their tone colour, pill tabs, the active one an accent bead. */
+${L} :is(.atc-v-ico,.atc-hico,.atc-mood,.atc-lv){background-image:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,0) 62%)!important;box-shadow:var(--lg-bead)}
+${LP} :is(.box-widget,.gp-footer) :is(button.nav-link,.box-widget-title-new){background:rgba(255,255,255,.07)!important;border-radius:999px!important;clip-path:none!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+${LP} :is(.box-widget,.gp-footer) :is(button.nav-link.active,.box-widget-title-new.active,span.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;box-shadow:var(--lg-bead)!important}
+${L} .header-icons :is(.bg-icon,.bg-iconEmp,.bg-iconWider) .icon-link{background-image:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.04))!important;box-shadow:var(--lg-bead)}
+${L} #sidebarNav .sidebar-icons-link:is(:hover,.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;box-shadow:var(--lg-bead)}
 @media (prefers-reduced-motion:reduce){${J(LG_KNOB, ':hover', hov)}{transform:none}${J(LG_HOV.concat(LG_KNOB), '::after')}{display:none}}
 ${J(LG_CARD.concat(LG_TILE, LG_CTRL, LG_FILL, LG_FIELD, LG_BAR), '', onGL)}{background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 ${J(LG_RIM, '::before', onGL)},${LGL} body::before{display:none}${LGL}{background:var(--x-page)}${LGL} body{background:transparent!important}`;
-// The widget panel: under Liquid its --att-* tokens come from the palette (always dark), so the float follows; under both, a glass panel with bead cards.
-const TL = '#total-time-summary.lg-theme', TG = 'html:is([data-atc-theme=liquid],[data-atc-theme=glassmorphic]) #total-time-summary';
+// The widget panel under Liquid: its --att-* tokens from the palette (always dark), so the float follows; a glass panel with bead cards.
+const TL = '#total-time-summary.lg-theme', TG = 'html[data-atc-theme=liquid] #total-time-summary';
+const LSM = 'html.atc-liquid .settings-modal', INK = a => `color-mix(in srgb,${MSC('surface-container-lowest')} ${a}%,transparent)`; // Liquid's ink (its surface-container-lowest) at a%
 const LGW_CSS = `
 ${TL}{--att-panel:${MSC('surface-container')};--att-border:rgba(255,255,255,.16);--att-shadow:var(--lg-drop);--att-text:#FFFFFF;--att-muted:${OSV};--att-accent:var(--x-fill);--att-on-accent:#FFFFFF;--att-ink:${MSC('primary')};
  --att-track:var(--x-track);--att-inner:rgba(255,255,255,.07);--att-inner-b:rgba(255,255,255,.12);--att-display:'Sora',system-ui,sans-serif;--att-scheme:dark;--att-card:var(--x-glass);--att-ok:var(--x-ok);
  --att-danger:var(--x-danger);--att-low:var(--x-low);--att-tense:var(--x-tense);--att-void:var(--x-void);--att-up:var(--x-ok);--att-run:var(--x-tense);--att-home:var(--x-home);color-scheme:dark}
 ${TG}:is(*,:hover){--lg:card;--lg-tint:ink .3;background:${SHEEN},var(--x-card);border:0;border-radius:28px;box-shadow:var(--x-lg-bevel),var(--lg-drop);backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);color:var(--att-text);font-family:'Sora',system-ui,sans-serif}
 ${TG}::before,${TG} .rt-sweep{display:none}
-${TG} .ws-card{--lg:bead;--lg-tint:white .07;border:0;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35);backdrop-filter:none;-webkit-backdrop-filter:none}
+${TG} .ws-card{--lg:bead;--lg-tint:ink .2;border:0;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35);backdrop-filter:none;-webkit-backdrop-filter:none}
 ${TG} .ws-head .pip-button{border:0;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);color:var(--x-on-fill);box-shadow:var(--lg-bead)}
 ${TG} .ws-head :is(.settings-button,.developer-info){border:0;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04));box-shadow:var(--lg-bead)}
 ${TG} .modern-table{border:0;border-radius:16px;background:rgba(255,255,255,.05);box-shadow:var(--lg-bead)}
 html.lg-gl ${TG}:is(*,:hover),html.lg-gl ${TG} .ws-card{background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+${TG} .ach-ui,html.atc-liquid .ach-ui{--ach-surface:${MSC('surface-container')};--ach-panel:${SHEEN},var(--x-glass);--ach-blur:var(--x-glass-blur);--ach-border:rgba(255,255,255,.16);--ach-shadow:var(--x-lg-bevel),var(--lg-drop);
+ --ach-text:#FFFFFF;--ach-muted:${OSV};--ach-accent:var(--x-fill);--ach-on-accent:#FFFFFF;--ach-ink:${MSC('primary')};--ach-inner:rgba(255,255,255,.07);--ach-inner-border:rgba(255,255,255,.12);--ach-track:var(--x-track);--ach-ok:var(--x-ok);--ach-focus:${MSC('inverse-surface')}}
+${TG} :is(.snake-game-container,.ws-card,.xpr,.desk:not(.has-img)){--lg:card;--lg-tint:ink .3;border:0;border-radius:22px;background:${SHEEN},${INK(28)};box-shadow:var(--x-lg-bevel),0 10px 24px -14px rgba(0,0,0,.6)}
+${TG} :is(.snake-btn,.desk-ghost,.cyber-bg-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),${INK(22)};box-shadow:var(--lg-bead);transition:transform .3s var(--lg-spring)}
+${TG} :is(.snake-btn.is-primary,.desk-primary,.lb-register-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
+${TG} .game-switch-btn{border:0;border-radius:999px;background:transparent;box-shadow:none;transition:transform .3s var(--lg-spring)}
+${TG} .game-switch-btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05));box-shadow:var(--lg-bead)}
+${TG} .game-switch-btn.active{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead)}
+${TG} .ws-join-in{border:0;border-radius:16px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),${INK(28)};box-shadow:var(--lg-bead)}
+html:not(.lg-nofx) ${TG} :is(.snake-btn,.desk-ghost,.desk-primary,.lb-register-btn,.game-switch-btn):hover{transform:scale(1.04)}html:not(.lg-nofx) ${TG} :is(.snake-btn,.desk-primary,.lb-register-btn,.game-switch-btn):active{transform:scale(.95);transition-duration:.12s}
+/* The settings modal (design: Liquid · Settings): a glass dialog, a segmented tab strip, rows as glass beads, the bead switch, glass fields. */
+html.atc-liquid .settings-modal-overlay{background:${INK(35)};backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+${LSM}{--att-accent:var(--x-fill);--att-on-accent:#FFFFFF;border:0;border-radius:34px;color:#FFFFFF;font-family:'Sora',system-ui,sans-serif;background:${SHEEN},${INK(55)};backdrop-filter:blur(24px) saturate(190%);-webkit-backdrop-filter:blur(24px) saturate(190%);box-shadow:var(--x-lg-bevel),var(--lg-drop)}
+${LSM} .settings-title{background:none;color:#FFFFFF;-webkit-text-fill-color:#FFFFFF;font-weight:600;letter-spacing:-.01em}
+${LSM} .settings-tabs{width:max-content;max-width:100%;gap:2px;padding:3px;border-radius:999px;background:${INK(26)};box-shadow:inset 0 1px 3px rgba(0,0,0,.4),inset 0 -1px .5px rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.07)}
+${LSM} .settings-tab{border:0;border-radius:999px;background:transparent;color:${OSV}}${LSM} .settings-tab:hover{color:#FFFFFF}
+${LSM} .settings-tab.is-active{color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08));box-shadow:var(--lg-bead),0 2px 6px -2px rgba(0,0,0,.45)}
+${LSM} .settings-option{border:0;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35)}
+${LSM} .settings-option:hover{transform:none;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05))}${LSM} .settings-option-label{color:#FFFFFF}
+${LSM} .toggle-switch{width:56px;height:32px;flex:none;border-radius:999px;background:${INK(45)};box-shadow:var(--lg-bead),inset 0 2px 6px rgba(0,0,0,.35)}${LSM} .toggle-switch.active{background:var(--x-fill)}
+${LSM} .toggle-switch::after{top:3px;left:3px;width:26px;height:26px;background:radial-gradient(circle at 35% 28%,#FFFFFF 0%,#F3F6FB 55%,#D3DAE6 100%);box-shadow:inset 0 -2px 3px rgba(0,0,0,.14),inset 0 1px 0 #FFFFFF,0 3px 8px rgba(0,0,0,.4);transition:transform .45s var(--lg-spring)}
+${LSM} .toggle-switch.active::after{transform:translateX(24px)}
+${LSM} .settings-select{border:0;border-radius:16px;color:#FFFFFF;background-color:transparent;background-image:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03));box-shadow:var(--lg-bead),0 4px 12px -6px rgba(0,0,0,.5)}${LSM} .settings-select option{background:${MSC('surface-container-high')};color:#FFFFFF}
+${LSM} .cyber-color-pickers input[type=color]{width:40px;height:40px;border:0;border-radius:50%;box-shadow:inset 0 1px 1px rgba(255,255,255,.7),inset 0 -3px 6px rgba(0,0,0,.25),0 4px 12px -4px rgba(0,0,0,.5)}${LSM} .cyber-color-pickers input[type=color]::-webkit-color-swatch{border-radius:50%}
+${LSM} input[type=range]{accent-color:var(--x-fill)}
+${LSM} .close-modal-button{border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
 .lg-optics>summary{cursor:pointer;gap:12px}.lg-optics>summary::-webkit-details-marker{display:none}.lg-optics>summary small{margin-left:auto;opacity:.6;font-size:.75rem}
 .lg-optics>summary::after{content:"";flex:none;width:7px;height:7px;margin:0 4px 3px;border:solid currentColor;border-width:0 2px 2px 0;rotate:45deg;transition:rotate .2s}
 .lg-optics[open]>summary::after{rotate:-135deg;margin-bottom:-3px}.lg-optics>.settings-option:not(summary){margin-left:16px}
 .settings-modal:not(:has([data-pref=lgPalette] option[value=custom]:checked)) .lg-colors{display:none!important}`;
+// GLASSMORPHIC AURORA surfaces: classic frosted glassmorphism, apart from Liquid's clear bevelled glass. A light gradient over the tint,
+// heavy blur, a uniform 1px white border and a soft violet glow; on hover the aurora line (violet, pink, blue) fades in along the card's
+// top edge. No refraction engine: an image background sits behind the frost (the mesh token). The widget panel keeps the widget's own.
+const A = 'html[data-att-skin][data-x-fam=aurora]', toA = s => s.replace(L, A), toAH = s => s.replace(L, A + ':not(.lg-nofx)'), toAL = s => s.replace(L, A + '[data-att-skin=light]');
+const AU_CSS = `
+${J(LG_CARD, '', toA)}{isolation:isolate;border:1px solid rgba(255,255,255,.16)!important;backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);
+ background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 55%),var(--lg-base,var(--x-card))!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.25),0 22px 50px -24px rgba(118,75,162,.6)!important}
+${J(LG_HOV.concat(LG_CARD[5]), '', toA)}{position:relative}${A} :is(.atc-c-profile,.atc-c-careers,.atc-bg.is-hero){--lg-base:var(--x-hero)}
+${J(LG_HOV, '::after', toA)}{content:"";position:absolute;left:20px;right:20px;top:-1px;height:2px;z-index:1;border-radius:2px;pointer-events:none;background:linear-gradient(90deg,transparent,#667eea,#f093fb,#4facfe,transparent);opacity:0;transition:opacity .35s}
+${J(LG_HOV, ':hover', toAH)}{border-color:rgba(255,255,255,.3)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 10px 28px rgba(0,0,0,.28),0 26px 60px -22px rgba(240,147,251,.55)!important}
+${J(LG_HOV, ':hover::after', toAH)}{opacity:1}
+${J(LG_TILE, '', toA)}{background:rgba(255,255,255,.06)!important;border:1px solid rgba(255,255,255,.1)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)!important}
+${J(LG_FILL, '', toA)}{background:linear-gradient(135deg,${MSC('primary')},${MSC('tertiary')})!important;color:${MSC('on-primary')}!important;border:0!important;box-shadow:0 6px 18px -6px ${MSC('primary')}!important}
+${J(LG_BAR, '', toA)}{backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);border-bottom:1px solid rgba(255,255,255,.1)!important}
+${J(LG_CARD, '', toAL)}{border-color:rgba(255,255,255,.75)!important;background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,.15) 55%),var(--lg-base,var(--x-card))!important;
+ box-shadow:inset 0 1px 0 #FFFFFF,0 8px 24px rgba(60,40,120,.1),0 22px 50px -24px rgba(118,75,162,.3)!important}${J(LG_TILE, '', toAL)}{background:rgba(255,255,255,.45)!important;border-color:rgba(255,255,255,.8)!important}
+@media (prefers-reduced-motion:reduce){${J(LG_HOV, '::after', toA)}{transition:none}}`;
 // Liquid Glass is dark glass under either OS scheme: the widget sheet's OS-light rules (panel, games, modal) get a zero-specificity
 // :where(html:not(.atc-liquid)) guard, once per sheet, so the cascade among them is unchanged.
 function lgDarkOnly() {
@@ -1096,7 +1144,7 @@ function lgDarkOnly() {
 // non-inherited (only the rim's ::before inherits them), so a write restyles the card, not its whole subtree.
 let lgEv = null;
 D.addEventListener('pointermove', e => {
-    if (!H.hasAttribute('data-x-glass') || !H.dataset.attSkin || H.classList.contains('lg-nofx') || H.classList.contains('lg-gl')) return; // under the engine it draws the cursor light
+    if (H.dataset.xFam !== 'lg' || !H.dataset.attSkin || H.classList.contains('lg-nofx') || H.classList.contains('lg-gl')) return; // under the engine it draws the cursor light
     if (!lgEv) requestAnimationFrame(() => { const v = lgEv; lgEv = null; const el = v.target.closest && v.target.closest('.box-widget:not(.box-widget .box-widget),.gp-footer .footer-col,.atc-bg'); if (!el) return;
         const r = el.getBoundingClientRect(); el.style.setProperty('--mx', Math.round(v.clientX - r.left) + 'px'); el.style.setProperty('--my', Math.round(v.clientY - r.top) + 'px'); });
     lgEv = e;
@@ -1243,13 +1291,10 @@ function lgEngine(cv, o) {
     };
 }
 // Glass image backgrounds, one per theme on the web theme's pages: Liquid (lg* prefs, IndexedDB 'liquid') and Aurora (au*, 'aurora').
-// CSS shows the image under plain glass at once (and stays the fallback); the engine takes over when WebGL can read the image.
+// CSS shows the image under the glass at once; for Liquid the engine takes over when WebGL can read it (Aurora stays frosted CSS).
 const GLASS = { liquid: 'lg', glassmorphic: 'au' }, GLASS_DB = { lg: 'liquid', au: 'aurora' };
-const AU_PAL = d => d ? ['#8B78F0', '#241F33', '#E8E2FF'] : ['#6D5BD0', '#FFFFFF', '#FFFFFF']; // accent, ink (tint), highlight
 let lgE = null, lgSrc = '', lgObj = '', lgOpt = '', lgMsg = '';
-const lgOpts = (p, k) => { const n = (v, d) => isFinite(+v) && v !== '' ? +v : d, fx = p.lgHoverFx !== false;
-    // Aurora is frosted: more frost, softer dispersion, no optics settings of its own; light mode's white glass is near-opaque so dark type reads over any image.
-    if (k === 'au') { const [accent, ink, hi] = AU_PAL(isDark); return { accent, ink, hi, fx, clear: false, strength: 1, bevel: 1, chroma: .6, frost: 3, tint: isDark ? 1 : 1.9, spec: 1, adapt: 1, dim: n(p.auBgDim, .15) }; }
+const lgOpts = p => { const n = (v, d) => isFinite(+v) && v !== '' ? +v : d, fx = p.lgHoverFx !== false;
     const [accent, ink, hi] = lgPal(p);
     return { accent, ink, hi, fx, clear: p.lgClarity === 'clear', strength: n(p.lgRefract, 1), bevel: n(p.lgEdge, 1), chroma: n(p.lgChroma, 1), frost: n(p.lgFrost, 1.6), tint: n(p.lgTint, 1), spec: n(p.lgSpec, 1), adapt: n(p.lgLegible, 1), dim: n(p.lgBgDim, .15) }; };
 // src is "<theme key>|<url or idb:stamp>".
@@ -1260,9 +1305,10 @@ function lgLoad(src) {
     const got = u => {
         if (lgSrc !== src) { if (u.startsWith('blob:')) URL.revokeObjectURL(u); return; }
         if (!u) { lgMsg = 'That image isn’t saved in this browser: choose the file again.'; return; } lgObj = u;
+        if (k !== 'lg') { if (lgE) lgE.destroy(); lgE = null; return; } // Aurora: CSS only
         if (!lgE) { const cv = D.createElement('canvas'); cv.id = 'atc-lg-canvas'; cv.setAttribute('aria-hidden', 'true'); cv.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block';
             D.body.appendChild(cv); lgE = lgEngine(cv, { say: m => { lgMsg = m; } }); if (!lgE) { cv.remove(); lgMsg = 'WebGL isn’t available: showing plain glass over the image.'; } }
-        if (lgE) { lgOpt = ''; lgE.set(lgOpts(P(), k)); lgE.image(u); }
+        if (lgE) { lgOpt = ''; lgE.set(lgOpts(P())); lgE.image(u); }
     };
     if (url.startsWith('idb:')) (ATC.img ? ATC.img(GLASS_DB[k]) : Promise.resolve(null)).then(b => got(b ? URL.createObjectURL(b) : ''), () => got(''));
     // A github.com …/blob/… page link becomes its raw file: the redirect github.com answers with carries no CORS header, so WebGL can't read it.
@@ -1274,8 +1320,8 @@ function liquidSync(p) {
     const on = !!img && !!H.dataset.attSkin, src = on ? k + '|' + img : '';
     if (src !== lgSrc) { lgSrc = src; lgLoad(src); }
     const dim = Math.max(0, Math.min(.9, +(k && p[k + 'BgDim']) || 0)).toFixed(2);
-    style('atc-lg-bg', on && lgObj ? `${L}{--x-mesh:linear-gradient(rgba(0,0,0,${dim}),rgba(0,0,0,${dim})),url("${lgObj.replace(/"/g, '%22')}") center/cover no-repeat}` : null);
-    const o = lgE && JSON.stringify(lgOpts(p, k)); if (o && o !== lgOpt) { lgOpt = o; lgE.set(lgOpts(p, k)); }
+    style('atc-lg-bg', on && lgObj ? `html[data-att-skin][data-x-glass]{--x-mesh:linear-gradient(rgba(0,0,0,${dim}),rgba(0,0,0,${dim})),url("${lgObj.replace(/"/g, '%22')}") center/cover no-repeat}` : null);
+    const o = lgE && k === 'lg' && JSON.stringify(lgOpts(p)); if (o && o !== lgOpt) { lgOpt = o; lgE.set(lgOpts(p)); }
     if (k) put(D.querySelector(`[data-bg-status=${k}]`), lgMsg);
 }
 
@@ -1729,6 +1775,6 @@ ATC.apply = () => {
     const p = P(), mat = p.displayTheme === 'material', lg = p.displayTheme === 'liquid', glass = lg || p.displayTheme === 'glassmorphic';
     H.dataset.atcTheme = p.displayTheme; H.classList.toggle('atc-mat', mat); H.classList.toggle('atc-liquid', lg); H.classList.toggle('lg-nofx', p.lgHoverFx === false);
     if (lg) safe('lgDark', lgDarkOnly);
-    style('atc-base-css', BASE_CSS); style('atc-loader-css', LOADER_CSS); style('atc-skin-css', SKIN_CSS); style('atc-mat-css', mat ? MAT_CSS : null); style('atc-lg-css', glass ? LG_CSS + LGW_CSS : null);
+    style('atc-base-css', BASE_CSS); style('atc-loader-css', LOADER_CSS); style('atc-skin-css', SKIN_CSS); style('atc-mat-css', mat ? MAT_CSS : null); style('atc-lg-css', lg ? LG_CSS + LGW_CSS : glass ? AU_CSS : null);
     ATC.tick(ATC.onAtt());
 };

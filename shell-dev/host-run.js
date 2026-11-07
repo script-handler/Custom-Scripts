@@ -289,8 +289,12 @@ async function main() {
     await ev("document.querySelector('.lg-optics>summary').click(); 1"); await sleep(300); await zoom('lg-settings-open', '.settings-modal', 8);
     for (const sc of ['dark', 'light']) {
         await scheme(sc); await go(TL, { auBg: 'image', auBgUrl: 'https://github.com/script-handler/Custom-Scripts/blob/main/glass-theme-bg/violet-glass.png?raw=true' }); await until("!!document.querySelector('.atc-time')");
-        ok(`Aurora (${sc}): its own image (a github.com page link) goes through the engine; still family aurora`, await until("document.documentElement.classList.contains('lg-gl') && document.documentElement.dataset.xFam === 'aurora'", 8000));
+        ok(`Aurora (${sc}): its own image (a github.com page link) sits behind frosted CSS glass, no refraction engine`, await until("/violet-glass\\.png|blob:/.test(document.getElementById('atc-lg-bg')?.textContent || '') && !document.getElementById('atc-lg-canvas') && !document.documentElement.classList.contains('lg-gl')", 8000));
         await sleep(800); await shot('tl-aurora-image-' + sc);
+    }
+    for (const th of ['glassmorphic', 'liquid']) {
+        await go(BASE + '#/time-absence/attendence-record', { displayTheme: th, lgBg: 'mesh' }); await until("!!document.querySelector('.side-nav-tab')"); await sleep(600);
+        ok(`${th}: the side nav stays position:fixed (EGP's), so the page isn't pushed down`, await ev("getComputedStyle(document.querySelector('#global-portal .side-nav-tab')).position === 'fixed'"));
     }
     await scheme('dark');
     // PERF=1: main-thread cost per second on Timeline at 4× CPU throttle while a real mouse crosses the cards (hover, spotlight) and
