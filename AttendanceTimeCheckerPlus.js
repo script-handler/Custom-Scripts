@@ -455,7 +455,7 @@
         // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'auto' (the palette's image, if any) | 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
         lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
         lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1,
-        auBg: 'mesh', auBgUrl: '', auBgDim: 0.15 // Glassmorphic Aurora's background, as Liquid's (file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
+        auBg: 'auto', auBgUrl: '', auBgDim: 0.15, auBgV: 1 // Glassmorphic Aurora's background, as Liquid's ('auto': aurora-glass.png; file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
     };
 
     // Convert "#rrggbb" → "r, g, b" (for use inside rgba(var(--x-rgb), a))
@@ -511,7 +511,9 @@
         if (rose || always) localStorage.setItem(key, JSON.stringify(o));
     }
 
-    function loadPreferences() { userPreferences = { ...userPreferences, ...lsJSON('attendancePrefs', {}) }; }
+    // Saved prefs, before they merge over the defaults. auBgV: 'mesh' was the old default, so it moves to the aurora image once.
+    function prefsMigrate(p) { if (p && !p.auBgV) { if (p.auBg === 'mesh') p.auBg = 'auto'; p.auBgV = 1; } return p; }
+    function loadPreferences() { userPreferences = { ...userPreferences, ...prefsMigrate(lsJSON('attendancePrefs', {})) }; }
     function savePreferences() { localStorage.setItem('attendancePrefs', JSON.stringify(userPreferences)); }
 
     function loadQuotes() { return lsJSON('customQuotes', [{ text: "Do not pray for easy lives. Pray to be stronger men.", author: "John F. Kennedy" }]); }
@@ -1266,7 +1268,7 @@
         if (rec.userPreferences && typeof rec.userPreferences === 'object') {
             // Merge cloud prefs into local (cloud values fill in missing keys; local takes precedence if already set)
             let localPrefs = lsJSON('attendancePrefs', {});
-            const merged = { ...rec.userPreferences, ...localPrefs };
+            const merged = prefsMigrate({ ...rec.userPreferences, ...localPrefs });
             localStorage.setItem('attendancePrefs', JSON.stringify(merged));
             try { userPreferences = { ...userPreferences, ...merged }; } catch (_) {}
         }
@@ -26202,7 +26204,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('monitor')} Web Theme <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:6px;background:var(--att-accent, #8B78F0);color:var(--att-on-accent, #14111F);vertical-align:1px;">PLUS</span> <small style="opacity:0.6;font-size:0.75rem;">Timeline &amp; Attendance follow the theme; off themes the widget only</small></span>
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
                 </div>
-                ${bgRows('au', 'glassmorphic', [['mesh', 'Aurora mesh'], ['image', 'My image — the URL or file below']])}
+                ${bgRows('au', 'glassmorphic', [['auto', 'Aurora glass image'], ['mesh', 'Aurora mesh'], ['image', 'My image — the URL or file below']])}
                 ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option lg-colors"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
                 ${bgRows('lg', 'liquid', [['auto', 'Palette image (Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']])}
@@ -27272,12 +27274,14 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         const now0 = timeToSeconds(formatTime(today)), inAt = list.length ? timeToSeconds(list[0].checkIn) : now0 - worked;
         const at = t => { const s = timeToSeconds(t); return s < inAt ? s + 86400 : s; }, now = now0 < inAt ? now0 + 86400 : now0;
         const live = !!list.length && list[list.length - 1].checkOut === 'Current';
-        // The timeline: an hour either side of the shift.
-        const t0 = Math.floor(inAt / 3600) - 1, t1 = Math.ceil((inAt + shift) / 3600) + 1, span = (t1 - t0) * 3600;
-        const x = s => (Math.max(0, Math.min(1, (s - t0 * 3600) / span)) * 100).toFixed(1) + '%';
         let brk = 0;
         list.forEach((v, i) => { const g = i ? at(v.checkIn) - at(list[i - 1].checkOut) : 0; if (g > 0 && g < 21600) brk += g; });
-        const pct = Math.round(Math.min(1, worked / shift) * 100), per = shift / m.lad.length, hide = userPreferences.emojiSet === 'none';
+        // Shift end moves with breaks: the projected completion, or check-in + breaks + shift once done.
+        const end = left > 0 ? now + left : inAt + brk + shift;
+        // The timeline: an hour either side of the shift.
+        const t0 = Math.floor(inAt / 3600) - 1, t1 = Math.ceil(Math.max(end, now) / 3600) + 1, span = (t1 - t0) * 3600;
+        const x = s => (Math.max(0, Math.min(1, (s - t0 * 3600) / span)) * 100).toFixed(1) + '%';
+        const pct = Math.round(Math.min(1, worked / shift) * 100), per = (end - inAt) / m.lad.length, hide = userPreferences.emojiSet === 'none';
         const name = (SHIFT_DURATIONS.find(d => d[0] === userPreferences.shiftDuration) || [0, 'Standard'])[1];
         const slot = (id, k) => { const now = k === m.i && kind === 'shift';
             return `<span class="ws-slot${now ? ' is-now' : k < m.i ? ' is-past' : ''}" style="--x: ${x(inAt + (k + 0.5) * per)}" title="${moodName(id)} · ${hhmm(inAt + k * per)}–${hhmm(inAt + (k + 1) * per)}">${attIcon(id, now ? '24px' : '18px')}</span>`; };
@@ -27295,10 +27299,11 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
             worked: secondsToHHMMSS(worked), brk: secondsToHHMMSS(brk), target: `${H}h 00m · ${pct}%`,
             path: hide ? '' : m.lad.map(slot).join(''),
             bars: list.map(v => { const a = at(v.checkIn), b = v.checkOut === 'Current' ? now : at(v.checkOut); return [x(a), (Math.max(0, b - a) / span * 100).toFixed(1) + '%']; }),
-            nowX: x(now), shiftX: `left: ${x(inAt)}; width: ${(shift / span * 100).toFixed(2)}%`,
+            nowX: x(now), shiftX: `left: ${x(inAt)}; width: ${((end - inAt) / span * 100).toFixed(2)}%`,
             ticks: Array.from({ length: t1 - t0 + 1 }, (_, k) => { const h = (t0 + k + 24) % 24; return `<span style="left: ${x((t0 + k) * 3600)}">${h % 12 || 12}${h < 12 ? 'a' : 'p'}</span>`; }).join('')
         };
         r.spans = r.bars.map(([l, w]) => `<span class="ws-tl-work" style="left: ${l}; width: ${w}"></span>`).join('');
+        r.pathKey = r.key + '|' + x(inAt) + x(end);
         return r;
     }
 
@@ -27306,7 +27311,8 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     function wsUpdate(root, M) {
         const q = s => root.querySelector(s), each = (s, f) => root.querySelectorAll(s).forEach(f), set = (el, v, p = 'textContent') => { if (el && el[p] !== v) el[p] = v; };
         if (root.dataset.wsVars !== M.vars) { root.dataset.wsVars = M.vars; M.vars.split('; ').forEach(d => { const i = d.indexOf(': '); root.style.setProperty(d.slice(0, i), d.slice(i + 2)); }); }
-        if (root.dataset.wsKey !== M.key) { root.dataset.wsKey = M.key; set(q('.emoji-display'), moodHtml(M.mood), 'innerHTML'); set(q('.ws-path'), M.path, 'innerHTML'); }
+        if (root.dataset.wsKey !== M.key) { root.dataset.wsKey = M.key; set(q('.emoji-display'), moodHtml(M.mood), 'innerHTML'); }
+        if (root.dataset.wsPath !== M.pathKey) { root.dataset.wsPath = M.pathKey; set(q('.ws-path'), M.path, 'innerHTML'); }
         [['[data-ws="line-off"]', M.lineOff], ['[data-ws="sessions"]', M.sessions], ['[data-ws="worked"]', M.worked], ['[data-ws="freek"]', M.freeK], ['#remaining-time', M.freeV], ['#completion-time', M.outAt], ['[data-ws="line"]', M.line], ['[data-ws="status"]', M.status],
             ['#total-worked-time', M.worked], ['[data-ws="break"]', M.brk], ['[data-ws="target"]', M.target], ['#rt-day-total', M.worked + ' / ' + secondsToHHMMSS(getShiftSeconds())]]
             .forEach(([s, v]) => each(s, el => set(el, v)));
@@ -28018,7 +28024,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
     async function prefsFromGist() {
         const prof = lsJSON('atc_lb_profile', null); if (!prof || !prof.registered || lsJSON('attendancePrefs', {}).displayTheme) return;
         const rec = (((await fetchRegistry()) || {}).players || []).find(p => p.clientId === prof.clientId), cp = rec && rec.userPreferences;
-        if (cp && typeof cp === 'object') { const m = { ...cp, ...lsJSON('attendancePrefs', {}) }; localStorage.setItem('attendancePrefs', JSON.stringify(m)); userPreferences = { ...userPreferences, ...m }; applyPreferences(); }
+        if (cp && typeof cp === 'object') { const m = prefsMigrate({ ...cp, ...lsJSON('attendancePrefs', {}) }); localStorage.setItem('attendancePrefs', JSON.stringify(m)); userPreferences = { ...userPreferences, ...m }; applyPreferences(); }
     }
     function loadShell() {
         const url = localStorage.getItem('atcShellUrl') || 'https://raw.githubusercontent.com/script-handler/Custom-Scripts/refs/heads/main/ATCShell.js?v=' + BUILD_LABEL;

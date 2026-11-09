@@ -8,7 +8,7 @@
 
   | Display Theme | M3 family | Light/dark |
   |---|---|---|
-  | Glassmorphic | Aurora: frosted glass (the same glass build as Liquid) over the aurora mesh or its own image | follows the browser |
+  | Glassmorphic | Aurora: frosted glass (the same glass build as Liquid) over aurora-glass.png (default), the aurora mesh or its own image | follows the browser |
   | Material You | Material You | follows the browser |
   | Cyberpunk | Cyberpunk, built from the widget's 8 cyber colours | always dark |
   | Just Business | Business | always light |

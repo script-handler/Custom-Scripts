@@ -228,7 +228,7 @@ function tokens() {
     return dark;
 }
 
-// RING (M3 circular progress): outer = Actual ÷ shift with the track gap and round ends, inner = Active ÷ Actual.
+// RING (M3 circular progress): outer = Actual ÷ shift with the track gap and round ends, inner = Active ÷ shift (one scale: the gap is idle time).
 // While checked in the outer arc is wavy: a static conic mask over a spinning wave, so the turn is a composited transform.
 const RS = s => s <= 28 ? { t: 3, amp: 0, gap: 3, inner: 0 } : s <= 72 ? { t: 5, amp: 1.1, wl: 18, gap: 4, inner: 4, rg: 3 } : { t: 8, amp: 1.6, wl: 26, gap: 5, inner: 6, rg: 5 };
 const WAVES = {};
@@ -246,7 +246,7 @@ function ringHTML(s, st, pO, pI) {
     };
     arc(rO, S.t, pO, 'fo');
     if (S.inner) arc(rO - S.t / 2 - S.amp - S.rg - S.inner / 2, S.inner, pI, 'fi');
-    if (s >= 100) o += `<text class="v" x="${c}" y="${c + (st === 'none' ? 9 : 6)}">${empty ? '—' : Math.round(pI * 100) + '%'}</text>` + (empty ? '' : `<text class="l" x="${c}" y="${c + 22}">focus</text>`);
+    if (s >= 100) o += `<text class="v" x="${c}" y="${c + (st === 'none' ? 9 : 6)}">${empty ? '—' : Math.round(pI * 100) + '%'}</text>` + (empty ? '' : `<text class="l" x="${c}" y="${c + 22}">active</text>`);
     const wv = S.amp && pO > 0 ? `<div class="atc-r-wv" style="--rp:${(pO * 100).toFixed(2)}%"><svg viewBox="0 0 ${s} ${s}"><path d="${wavePath(s, rO, S.amp, Math.max(6, Math.round(2 * Math.PI * rO / S.wl)))}" stroke-width="${S.t}"/></svg></div>` : '';
     return `<svg viewBox="0 0 ${s} ${s}">${o}</svg>${wv}`;
 }
@@ -409,7 +409,12 @@ html[data-att-skin=dark]{color-scheme:dark}
 .atc-tg b{font-family:var(--x-font-num);font-variation-settings:var(--x-num-fvs-sm);font-size:14px;line-height:20px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--md-sys-color-on-surface)}
 .atc-tg>:nth-child(1){--d:var(--md-sys-color-primary)}.atc-tg>:nth-child(2){--d:var(--md-sys-color-secondary)}.atc-tg>:nth-child(3){--d:var(--md-sys-color-outline)}
 .atc-tg>:nth-child(4){--d:var(--md-sys-color-tertiary)}.atc-tg>:nth-child(4) b{color:var(--x-ink)}
-.atc-time:is(.st-none,.st-error,.st-wait) .atc-tg{display:none}`;
+.atc-time:is(.st-none,.st-error,.st-wait) .atc-tg{display:none}
+/* Bonus popover: EGP pins it at top:288px, which the taller time card puts over the icon (hover flicker); skin on or off,
+   it hangs under the row and never takes the pointer. ngx-popover parks it at -10000px to hide it. */
+#global-portal app-evaluation-widget{display:block;position:relative}
+#global-portal .performance-metrics-popover .popover{top:calc(100% + 8px)!important;left:0!important;pointer-events:none!important}
+#global-portal .performance-metrics-popover .popover[style*="-10000px"]{display:none!important}`;
 
 // LOADER (M3 loading indicator, design xLoader) over EGP's blockUI gif, every route: the img's own box is the
 // indicator (gif swapped for a clear pixel), the blockMsg its container. A spring morph and quarter turn every
@@ -782,9 +787,7 @@ ${R} .box-widget.atc-over.atc-c-company-awards>app-company-awards-widget{display
 .atc-pgrid b[data-fwd]{color:var(--x-hero-ink)}
 /* BONUS ROW (app-evaluation-widget, XProfile footer): EGP's svgs stay the hover/click targets, so the popover still
    anchors to them; each paints a Material icon through a mask on its own box, its paths hidden. Vault and More info
-   are text buttons. EGP pinned the popover at top:288px of the card, over this row: the pointer left the icon, the
-   popover closed, then opened again (the flashing). It hangs under the row now and never takes the pointer.
-   ngx-popover hides only by parking it at top/left -10000px (its fade class stays in), so parked means hidden. */
+   are text buttons. The popover's placement is in BASE_CSS (it applies with the skin off too). */
 ${EV}{display:flex!important;align-items:center;gap:4px;margin-top:8px!important;font-size:12px;line-height:16px}
 ${EV}>small{display:inline-flex!important;align-items:center;gap:2px;font-size:12px!important;font-weight:600!important;color:inherit!important;white-space:nowrap}
 ${EV}>small>span:first-child{margin-left:4px;color:var(--x-hero-ink)}${EV}>small>span{display:inline-flex}
@@ -799,9 +802,6 @@ ${EV}>span>span:hover,${EV}>span>small:hover{background:color-mix(in srgb,var(--
 ${EV}>span>span>svg{width:16px!important;height:16px!important;background:var(--x-hero-ink);-webkit-mask:${MASK('lock')};mask:${MASK('lock')}}
 ${EV}>span>span>small{position:static;display:inline;padding:0;height:auto}
 ${EV}>span a{color:var(--x-hero-ink)!important;font-size:12px;font-weight:600;text-decoration:none!important;white-space:nowrap}${EV}>span a::after{content:"";position:absolute;inset:0}
-${R} #global-portal app-evaluation-widget{display:block;position:relative}
-${R} #global-portal .performance-metrics-popover .popover{top:calc(100% + 8px)!important;left:0!important;pointer-events:none!important}
-${R} #global-portal .performance-metrics-popover .popover[style*="-10000px"]{display:none!important}
 /* PROFILE HERO (XProfile): the card is tagged atc-c-profile by tagCards(). */
 ${R} .box-widget.atc-c-profile{position:relative;background:var(--x-hero)!important;color:var(--x-on-hero);border-radius:var(--x-r-hero)!important;box-shadow:var(--x-hero-shadow)!important}
 ${R} .atc-c-profile::before{content:"";position:absolute;left:0;right:0;top:0;height:var(--x-hazard-h);background:var(--x-hazard);pointer-events:none}
@@ -1269,8 +1269,8 @@ function lgEngine(cv, o) {
     const onMove = e => { if (!o.fx || (e.target.closest && e.target.closest('#total-time-summary'))) return; mouse.x = e.clientX; mouse.y = e.clientY; mouse.onT = 1; par.tx = Math.max(-1, Math.min(1, (e.clientX / (W || 1) - .5) * 2)); par.ty = Math.max(-1, Math.min(1, (e.clientY / (Hh || 1) - .5) * 2)); kick(300); };
     const onLeave = () => { mouse.onT = 0; par.tx = par.ty = 0; kick(300); }, onRun = e => { if (set.has(e.target)) kick(650); }, onTick = () => kick(150), onAct = () => { dirty = true; kick(400); };
     const onVis = () => { if (D.hidden) { cancelAnimationFrame(raf); raf = 0; } else kick(0); }, onLost = e => { e.preventDefault(); lost = true; H.classList.remove('lg-gl'); o.say('The graphics context was lost: showing plain glass'); };
-    // Elements added, removed or reclassed can move surfaces; text ticking (the clocks) can't, so it never wakes the engine.
-    const mo = new MutationObserver(ms => { if (ms.some(m => m.type === 'attributes' || [...m.addedNodes, ...m.removedNodes].some(n => n.nodeType === 1))) { dirty = true; kick(0); } }); mo.observe(D.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    // Elements added, removed or reclassed can move surfaces; text ticking (the clocks) and ring redraws (fixed-size boxes) can't.
+    const mo = new MutationObserver(ms => { if (ms.some(m => !(m.target.closest && m.target.closest('.atc-r')) && (m.type === 'attributes' || [...m.addedNodes, ...m.removedNodes].some(n => n.nodeType === 1)))) { dirty = true; kick(0); } }); mo.observe(D.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
     const EV = [[D, 'pointermove', onMove, { passive: true }], [H, 'mouseleave', onLeave], [D, 'scroll', onTick, true], [window, 'resize', onTick], [D, 'transitionrun', onRun, true], [D, 'transitionend', onRun, true],
         [D, 'click', onAct, true], [D, 'change', onAct, true], [D, 'visibilitychange', onVis], [cv, 'webglcontextlost', onLost]];
     EV.forEach(([t, n, f, c]) => t.addEventListener(n, f, c));
@@ -1314,9 +1314,9 @@ function lgLoad(src) {
     // A github.com …/blob/… page link becomes its raw file: the redirect github.com answers with carries no CORS header, so WebGL can't read it.
     else if (/^https?:\/\//i.test(url)) got(url.replace(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^?#]+).*$/, LG_GH + '$1/$2')); else lgMsg = 'Use an http(s) address, or Choose file.';
 }
-// Background: 'auto' is Liquid's palette image (none: the mesh), 'image' the user's URL or file (Liquid, none yet: the palette's), 'mesh' the mesh.
+// Background: 'auto' is Liquid's palette image (none: the mesh) or Aurora's aurora-glass.png, 'image' the user's URL or file (none yet: the auto image), 'mesh' the mesh.
 function liquidSync(p) {
-    const k = GLASS[p.displayTheme], bg = k && p[k + 'Bg'], img = !k || bg === 'mesh' ? '' : (bg === 'image' && p[k + 'BgUrl']) || (k === 'lg' && lgPal(p)[6]) || '';
+    const k = GLASS[p.displayTheme], bg = k && p[k + 'Bg'], img = !k || bg === 'mesh' ? '' : (bg === 'image' && p[k + 'BgUrl']) || (k === 'lg' ? lgPal(p)[6] : LG_BG + 'aurora-glass.png') || '';
     const on = !!img && !!H.dataset.attSkin, src = on ? k + '|' + img : '';
     if (src !== lgSrc) { lgSrc = src; lgLoad(src); }
     const dim = Math.max(0, Math.min(.9, +(k && p[k + 'BgDim']) || 0)).toFixed(2);
@@ -1680,12 +1680,13 @@ async function floatWin() {
 }
 function paint() {
     const tm = times(), rs = D.querySelectorAll('.atc-r'); if (!rs.length) return;
-    const { st, act, actv, left, shift } = tm, pO = act == null ? 0 : Math.min(1, act / shift), pI = act ? Math.min(1, (actv || 0) / act) : 0;
-    const foc = act && actv != null ? Math.round(pI * 100) + '%' : '—', wavy = st === 'live' || st === 'over', now = Date.now();
+    const { st, act, actv, left, shift } = tm, pO = act == null ? 0 : Math.min(1, act / shift), pI = act ? Math.min(1, (actv || 0) / shift) : 0;
+    const foc = act && actv != null ? Math.round(Math.min(1, actv / act) * 100) + '%' : '—', wavy = st === 'live' || st === 'over', now = Date.now();
     const outAt = snap && snap.out || (st === 'out' ? '—' : '');
-    rs.forEach(r => { const s = +r.dataset.rs, k = st + pO.toFixed(3) + pI.toFixed(3);
+    // Rebuilt per whole pixel of arc: each rebuild wakes the Liquid engine.
+    rs.forEach(r => { const s = +r.dataset.rs, px = p => Math.round(p * Math.PI * s), k = st + px(pO) + '/' + (RS(s).inner ? px(pI) : '');
         if (r.dataset.rk !== k) { r.dataset.rk = k; r.innerHTML = ringHTML(s, st, pO, pI); r.setAttribute('aria-valuenow', Math.round(pO * 100));
-            r.setAttribute('aria-label', st === 'error' ? 'Time data unavailable' : /none|wait/.test(st) ? 'Not checked in' : `${Math.round(pO * 100)}% of shift, ${foc} focus`); }
+            r.setAttribute('aria-label', st === 'error' ? 'Time data unavailable' : /none|wait/.test(st) ? 'Not checked in' : `${Math.round(pO * 100)}% of shift worked, ${Math.round(pI * 100)}% active`); }
         cls(r, 'atc-r st-' + st + (wavy && RS(s).amp ? ' is-wavy' : '')); });
     const hb = { live: ['Time left in shift', hms(left)], over: ['Overtime', '+' + hms(-left)], out: ['Checked out' + (outAt ? ' · ' + outAt : ''), hms(act)],
         none: ['Not checked in', hms(null)], wait: ['Today', hms(null)], error: ['Time unavailable', hms(null)] }[st];
