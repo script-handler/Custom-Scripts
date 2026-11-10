@@ -19514,6 +19514,7 @@
             .ws-tl-now { position: absolute; top: 2px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--att-text); }
             .ws-tl-ticks { position: relative; height: 14px; }
             .ws-tl-ticks span { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--att-muted); font-variant-numeric: tabular-nums; }
+            .ws-tl-ticks span:first-child { transform: none; } .ws-tl-ticks span:last-child { transform: translateX(-100%); }
             .attendance-summary:not(.retro-theme) .ws-day .modern-table { margin: 0; table-layout: fixed; background: none; backdrop-filter: none; border: 1px solid var(--att-inner-b); border-radius: 14px; box-shadow: none; }
             .attendance-summary:not(.retro-theme) .ws-day .modern-table thead { background: var(--att-inner); }
             .attendance-summary:not(.retro-theme) .ws-day .modern-table th { height: 36px; padding: 0 14px; background: none; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-align: left; color: var(--att-muted); }

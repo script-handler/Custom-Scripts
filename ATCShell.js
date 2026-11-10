@@ -531,7 +531,6 @@ ${RD} .kb-modal-content :is(.header-titles,.kb-total-label,.kb-cancel-notice,.kb
 @container (max-width: 300px){.atc-time .atc-big{font-size:28px;line-height:32px}}
 @media (max-width: 1600px){
  .atc-v-head{flex-wrap:wrap;row-gap:4px}
- .atc-v-lead{grid-template-columns:minmax(0,1fr) 124px;gap:8px}.atc-v-person{gap:8px;padding:6px}.atc-v-person img{width:36px;height:36px}.atc-v-sup img{width:48px;height:48px}.atc-v-sup b{font-size:13px}
  .atc-v-sp{flex:1 1 auto}.atc-v-sp2{flex:0 0 40px}.atc-v-sp3{display:none}
  .atc-v-seg>span{padding:0 7px;font-size:10.5px}
  .atc-v-row .atc-v-stack b{overflow-wrap:anywhere}
@@ -724,10 +723,12 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-doc .atc-v-ico{width:44px;height:44px;clip-path:var(--x-sh-i6);background:var(--x-ok-container);color:var(--x-on-ok-container);font:700 20px var(--x-font-num)}
 .atc-v-doc .atc-v-ico.is-bad{background:var(--x-danger-container);color:var(--x-on-danger-container)}
 .atc-v-doc .atc-v-strong{font-size:11px;line-height:14px}
-/* Leadership + supervisor (app-gm-widget). */
-.atc-v-lead{display:grid;grid-template-columns:1fr 150px;gap:12px;height:100%}
-.atc-v-leads{display:flex;flex-direction:column;gap:6px;justify-content:center;min-width:0}
-.atc-v-person{display:flex;align-items:center;gap:15px;padding:20px 15px;border-radius:var(--x-r-card-sm);background:var(--x-tile);min-width:0}
+/* Leadership + supervisor (app-gm-widget), sized by the card (a container): leader tiles share the height and line up with the
+   supervisor's edges; narrow, the supervisor drops under them as a row. */
+.atc-v-lw{container-type:inline-size;height:100%}
+.atc-v-lead{display:grid;grid-template-columns:minmax(0,1fr) clamp(118px,34%,160px);gap:10px;height:100%}
+.atc-v-leads{display:grid;grid-auto-rows:minmax(0,1fr);gap:8px;min-width:0}
+.atc-v-person{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--x-r-card-sm);background:var(--x-tile);min-width:0}
 .atc-v-person img,.atc-v-sup img{flex:none;object-fit:cover;background:${MSC('surface-container-highest')};clip-path:var(--x-sh-avatar)}
 .atc-v-person img{width:44px;height:44px}.atc-v-person:nth-child(2) img{clip-path:var(--x-sh-i3)}
 .atc-v-person b{display:block;font-size:14px;line-height:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -736,6 +737,11 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-sup small{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
 .atc-v-av{position:relative;flex:none;display:inline-flex}.atc-v-av.is-on::after{content:"";position:absolute;right:0;bottom:2px;width:10px;height:10px;border-radius:50%;background:var(--x-ok);box-shadow:0 0 0 2px var(--x-tile)}.atc-v-sup .atc-v-av.is-on::after{box-shadow:0 0 0 2px var(--x-tile-2)}
 .atc-v-sup img{width:56px;height:56px}.atc-v-sup b{font-size:14px;font-weight:700;white-space:nowrap}.atc-v-sup span{font-size:11px;white-space:nowrap}
+.atc-v-sup b,.atc-v-sup span{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@container (max-width: 420px){.atc-v-lead{gap:8px}.atc-v-person{gap:8px;padding:8px 10px}.atc-v-person img{width:36px;height:36px}.atc-v-sup img{width:48px;height:48px}.atc-v-sup b{font-size:13px}}
+@container (max-width: 340px){.atc-v-lead{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+ .atc-v-sup{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"av k" "av n" "av r";align-content:center;column-gap:12px;row-gap:1px;justify-items:start;align-items:center;padding:10px 14px;text-align:left}
+ .atc-v-sup small{grid-area:k}.atc-v-sup .atc-v-av{grid-area:av}.atc-v-sup b{grid-area:n}.atc-v-sup span{grid-area:r}.atc-v-sup img{width:40px;height:40px}}
 /* Shared view parts: connected tab group, pager, icon action. */
 .atc-v-seg{display:flex;gap:2px;min-width:0}
 .atc-v-seg>span{height:26px;display:flex;align-items:center;justify-content:center;padding:0 9px;box-sizing:border-box;font-size:11px;font-weight:700;white-space:nowrap;background:${MSC('surface-container-highest')};color:${OSV};
@@ -997,6 +1003,7 @@ ${T},${MS}{${M3(0)};--att-display:'Roboto Flex',Roboto,system-ui,sans-serif}
 ${T}:is(*,:hover){background:var(--att-panel);border:0;border-radius:28px;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--att-text);font-family:'Roboto Flex',Roboto,system-ui,sans-serif}
 ${T}::before,${T} .rt-sweep{display:none}
 ${T} .ws-card{border:0;border-radius:24px;background:var(--att-card);box-shadow:var(--att-shadow);backdrop-filter:none;-webkit-backdrop-filter:none}
+${T}.game-mode-off .ws-card{border-radius:0;background:none;box-shadow:none}
 ${T} .ws-head .summary-title{font:400 28px/1.15 var(--att-display)!important;letter-spacing:0}
 ${T} .ws-head .emoji-display{background:var(--m-pc);border:0;box-shadow:none;clip-path:var(--x-sh-mood)}
 ${T} .ws-head :is(.settings-button,.developer-info){border:0;border-radius:50%;background:var(--m-sc);color:var(--att-text);transition:background .2s}
@@ -1093,6 +1100,7 @@ html.lg-gl ${TG}:is(*,:hover),html.lg-gl ${TG} .ws-card{background:transparent;b
 ${TG} .ach-ui,html.atc-liquid .ach-ui{--ach-surface:${MSC('surface-container')};--ach-panel:${SHEEN},var(--x-glass);--ach-blur:var(--x-glass-blur);--ach-border:rgba(255,255,255,.16);--ach-shadow:var(--x-lg-bevel),var(--lg-drop);
  --ach-text:#FFFFFF;--ach-muted:${OSV};--ach-accent:var(--x-fill);--ach-on-accent:var(--x-on-fill);--ach-ink:${MSC('primary')};--ach-inner:rgba(255,255,255,.07);--ach-inner-border:rgba(255,255,255,.12);--ach-track:var(--x-track);--ach-ok:var(--x-ok);--ach-focus:${MSC('inverse-surface')}}
 ${TG} :is(.snake-game-container,.ws-card,.xpr,.desk:not(.has-img)){--lg:card;--lg-tint:ink .12;border:0;border-radius:22px;background:${SHEEN},${W(.05)};box-shadow:var(--x-lg-bevel),0 10px 24px -14px rgba(0,0,0,.6)}
+${TG}.game-mode-off .ws-card{--lg:none;border-radius:0;background:none;box-shadow:none}
 ${TG} :is(.snake-btn,.desk-ghost,.cyber-bg-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),${W(.04)};box-shadow:var(--lg-bead);transition:transform .3s var(--lg-spring)}
 ${TG} :is(.snake-btn.is-primary,.desk-primary,.lb-register-btn){border:0;border-radius:999px;color:var(--x-on-fill);background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
 ${TG} .game-switch-btn{border:0;border-radius:999px;background:transparent;box-shadow:none;transition:transform .3s var(--lg-spring)}
@@ -1432,8 +1440,8 @@ const VIEWS = {
     leaders: { read: c => { const f = [...c.querySelectorAll('app-gm-widget figure')]; if (f.length < 2) return null; const p = e => [e.querySelector('img') ? e.querySelector('img').getAttribute('src') : '', txt(e.querySelector('figcaption strong')), txt(e.querySelector('figcaption small')), !!e.querySelector('.fig-pod.active')];
             return { lead: f.slice(0, -1).map(p), sup: p(f[f.length - 1]), title: txt(c.querySelector('app-gm-widget .border-start > strong')) || 'Supervisor' }; },
         html: d => { const av = (s, on) => `<span class="atc-v-av${on ? ' is-on' : ''}"${on ? ' title="Online"' : ''}><img src="${esc(s)}" alt=""></span>`;
-            return `<div class="atc-v-lead"><div class="atc-v-leads">${d.lead.map(([s, n, r, on]) => `<div class="atc-v-person">${av(s, on)}<div style="min-width:0"><b>${esc(n)}</b><span>${esc(r)}</span></div></div>`).join('')}</div>`
-            + `<div class="atc-v-sup"><small>${esc(d.title)}</small>${av(d.sup[0], d.sup[3])}<b>${esc(d.sup[1])}</b><span>${esc(d.sup[2])}</span></div></div>`; } },
+            return `<div class="atc-v-lw"><div class="atc-v-lead"><div class="atc-v-leads">${d.lead.map(([s, n, r, on]) => `<div class="atc-v-person">${av(s, on)}<div style="min-width:0"><b>${esc(n)}</b><span>${esc(r)}</span></div></div>`).join('')}</div>`
+            + `<div class="atc-v-sup"><small>${esc(d.title)}</small>${av(d.sup[0], d.sup[3])}<b>${esc(d.sup[1])}</b><span>${esc(d.sup[2])}</span></div></div></div>`; } },
     // Days run newest first: ‹ is newer, › older. The host's › stays on the last day and throws there, so it's dropped;
     // the peek tiles are the next two days, the second one two clicks away.
     spotlight: { read: c => { const its = [...c.querySelectorAll('.carousel-item')], a = its.findIndex(x => x.classList.contains('active')), it = its[a], f = it && it.querySelector('.gp-user-horizontal-fig'); if (!f) return null;
@@ -1643,6 +1651,11 @@ function mountAtt() {
     const pn = D.getElementById('total-time-summary'), two = !!(pn && pn.classList.contains('game-mode-off') && wrap.contains(pn));
     if (wrap.classList.contains('atc-2col') !== two) wrap.classList.toggle('atc-2col', two);
 }
+// COLUMNS (Timeline): Careers and eGP Knowledge split their row 6/6 (EGP: 7/5); unskin() puts EGP's back.
+const COLS = [['app-career-widget', 'col-md-7', 'col-md-6'], ['do-you-know-on-egp-widget', 'col-md-5', 'col-md-6']];
+function mountCols() {
+    COLS.forEach(([t, a, b]) => { const c = D.querySelector(t)?.parentElement; if (c && c.classList.contains(a)) { c.classList.replace(a, b); c.dataset.atcCol = a + ' ' + b; } });
+}
 function markPrayer() {
     const cols = D.querySelectorAll('.prayer-col'); if (!cols.length) return;
     const d = new Date(), now = d.getHours() * 60 + d.getMinutes(), fri = d.getDay() === 5;
@@ -1724,6 +1737,7 @@ function unskin() {
     D.querySelectorAll('.atc-hide').forEach(e => { if (e !== keep) e.classList.remove('atc-hide'); });
     D.querySelectorAll('.atc-over,.atc-2col,.atc-now').forEach(e => e.classList.remove('atc-over', 'atc-2col', 'atc-now'));
     D.querySelectorAll('tr[data-atc-k]').forEach(tr => { delete tr.dataset.atcK; });
+    D.querySelectorAll('[data-atc-col]').forEach(c => { const [a, b] = c.dataset.atcCol.split(' '); c.classList.replace(b, a); delete c.dataset.atcCol; });
     D.querySelectorAll('[data-atc-ph]').forEach(e => { e.placeholder = e.dataset.atcPh; delete e.dataset.atcPh; });
 }
 // EARLY COMING (Timeline): EGP's modal has no close (static backdrop, no Escape) until a reason is saved. A close and
@@ -1768,7 +1782,7 @@ ATC.tick = att => {
     safe('time', () => mountTime(r === 'tl' && !!(snap && snap.act != null)));
     safe('panel', () => mountPanel(att && p.displayTheme === 'material'));
     safe('modal', () => { mountECClose(); unstick(); });
-    if (web && r === 'tl') [tagCards, renderOver, mountDecor, mountProfileChip, mountProfileGrid, markPrayer].forEach(f => safe(f.name, f));
+    if (web && r === 'tl') [tagCards, renderOver, mountDecor, mountProfileChip, mountProfileGrid, markPrayer, mountCols].forEach(f => safe(f.name, f));
     if (web && r === 'att') safe('att', mountAtt);
     safe('liquid', () => { if (p.displayTheme === 'liquid') lgDarkOnly(); liquidSync(p); });
     safe('paint', paint);
