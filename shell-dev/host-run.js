@@ -108,7 +108,7 @@ async function main() {
         const r = await send('Page.captureScreenshot', { format: 'png', clip: { ...b, scale: 3 } }); fs.writeFileSync(path.join(OUT, 'zoom-' + name + '.png'), Buffer.from(r.result.data, 'base64')); };
     // The open popover sits under the chip at the header's right end.
     const popShot = async name => { const r = await send('Page.captureScreenshot', { format: 'png', clip: { x: 900, y: 0, width: 500, height: 440, scale: 2 } }); fs.writeFileSync(path.join(OUT, 'pop-' + name + '.png'), Buffer.from(r.result.data, 'base64')); };
-    const PRIMARY = { glassmorphic: ['#6d5bd0', '#8b78f0'], material: ['#0b57d0', '#a8c7fa'], business: ['#1e88e5', '#1e88e5'], 'retro-futuristic': ['#fff200', '#fff200'], liquid: ['#9abaf3', '#9abaf3'] };
+    const PRIMARY = { glassmorphic: ['#6d5bd0', '#8b78f0'], material: ['#0b57d0', '#a8c7fa'], business: ['#1e88e5', '#1e88e5'], 'retro-futuristic': ['#fff200', '#fff200'], liquid: ['#b9defb', '#b9defb'] };
 
     console.log('\n── Timeline, Glassmorphic Aurora (default prefs)');
     for (const sc of ['dark', 'light']) {

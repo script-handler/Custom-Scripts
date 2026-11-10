@@ -453,7 +453,7 @@
         cyberBgImage: '',       // URL for custom background image
         cyberBgOpacity: 0.15,   // 0–1 opacity for background image overlay
         // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'auto' (the palette's image, if any) | 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
-        lgPalette: 'ocean', lgAccent: '#1F66E5', lgInk: '#0A2C70', lgHi: '#E8F2FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
+        lgPalette: 'ocean', lgAccent: '#64B5F6', lgInk: '#101B2D', lgHi: '#F4F8FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
         lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1,
         auBg: 'auto', auBgUrl: '', auBgDim: 0.15, auBgV: 1 // Glassmorphic Aurora's background, as Liquid's ('auto': aurora-glass.png; file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
     };
@@ -26205,7 +26205,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
                 </div>
                 ${bgRows('au', 'glassmorphic', [['auto', 'Aurora glass image'], ['mesh', 'Aurora mesh'], ['image', 'My image — the URL or file below']])}
-                ${sel('lgPalette', 'Palette', [['ocean', 'Ocean'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
+                ${sel('lgPalette', 'Palette', [['ocean', 'Arctic'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option lg-colors"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
                 ${bgRows('lg', 'liquid', [['auto', 'Palette image (Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']])}
                 <div class="settings-option"${lgRow('glassmorphic liquid')}><span class="settings-option-label">${attIcon('wave')} Hover Effects</span><div class="toggle-switch ${userPreferences.lgHoverFx !== false ? 'active' : ''}" data-pref="lgHoverFx"></div></div>

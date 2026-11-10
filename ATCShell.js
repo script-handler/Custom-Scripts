@@ -84,6 +84,8 @@ const famOf = th => ({ material: 'my', business: 'biz', 'retro-futuristic': 'cyb
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const rgba = (h, a) => `rgba(${hex(h).join(',')},${a})`;
 const mix = (a, b, w) => { const B = hex(b); return '#' + hex(a).map((v, i) => Math.round(v * w + B[i] * (1 - w)).toString(16).padStart(2, '0')).join(''); };
+// Saturation capped at cap: toward the grey of equal lightness, hue kept.
+const calm = (h, cap) => { const s = hsl(h)[1]; if (s <= cap) return h; const [r, g, b] = hex(h), y = Math.round(.299 * r + .587 * g + .114 * b).toString(16).padStart(2, '0'); return mix(h, '#' + y + y + y, cap / s); };
 const lum = h => { const q = hex(h).map(x => (x /= 255) <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4); return .2126 * q[0] + .7152 * q[1] + .0722 * q[2]; };
 const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
 const hsl = h => { const [r, g, b] = hex(h).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
@@ -175,32 +177,36 @@ function cyber(p) {
 }
 // LIQUID GLASS (design: Liquid Glass): clear bevelled glass tinted with the palette's ink over its drifting mesh, or over the user's
 // image (lgEngine bends it). One look whatever the OS scheme: ink glass, white type. Presets (Liquid-Settings PALETTES): accent,
-// ink, highlight, then the mesh's deep, mid and light, and the palette's own background image (Background › Palette image);
-// Custom takes the widget's three colours and derives the rest. Graphite is neutral grey, so it sits on light or dark images.
+// ink, highlight, then the mesh's deep, mid and light, the palette's own background image (Background › Palette image) and a second
+// accent in another hue (status, secondary). Custom takes the widget's three colours and derives the rest. Ocean is the Arctic set.
 const LG_GH = 'https://raw.githubusercontent.com/', LG_BG = LG_GH + 'script-handler/Custom-Scripts/main/glass-theme-bg/', LG_DL = LG_GH + 'dusklinux/images/main/dark/';
-const LG_PAL = { ocean: ['#1F66E5', '#0A2C70', '#E8F2FF', '#0C4BC4', '#2F7CE8', '#8FC0F3', LG_BG + 'ocean-glass.png'], violet: ['#6A50E0', '#140A30', '#F1EDFF', '#3A23A8', '#6B50E2', '#BFB2FB', LG_BG + 'violet-glass.png'],
-    graphite: ['#5B616B', '#0D0F12', '#F2F3F5', '#2B2E34', '#4B5059', '#B9BEC6', LG_BG + 'dark-graphite.jpg'], teal: ['#007888', '#03222A', '#E6FBFC', '#056573', '#0F8E9C', '#97DCE0', LG_DL + '0005.jpg'],
-    green: ['#2F7A5E', '#04140F', '#E4F4EC', '#1B4A3B', '#3F806A', '#9CCDB7', LG_BG + 'green.png'], dusk: ['#B05A16', '#10122E', '#FFF3E6', '#1D2A72', '#35499F', '#F4B784', LG_DL + '0003.jpg'] };
+const LG_PAL = { ocean: ['#64B5F6', '#101B2D', '#F4F8FF', '#192A40', '#2A4566', '#A6C8E8', LG_BG + 'ocean-glass.png', '#4DD0C8'], violet: ['#6A50E0', '#140A30', '#F1EDFF', '#3A23A8', '#6B50E2', '#BFB2FB', LG_BG + 'violet-glass.png', '#F0A6CA'],
+    graphite: ['#5B616B', '#0D0F12', '#F2F3F5', '#2B2E34', '#4B5059', '#B9BEC6', LG_BG + 'dark-graphite.jpg', '#7FC8D6'], teal: ['#007888', '#03222A', '#E6FBFC', '#056573', '#0F8E9C', '#97DCE0', LG_DL + '0005.jpg', '#FFC38A'],
+    green: ['#2F7A5E', '#04140F', '#E4F4EC', '#1B4A3B', '#3F806A', '#9CCDB7', LG_BG + 'green.png', '#E3D27A'], dusk: ['#B05A16', '#10122E', '#FFF3E6', '#1D2A72', '#35499F', '#F4B784', LG_DL + '0003.jpg', '#8FB4FF'] };
 const LG_ST = { ok: '#7FE0B4', danger: '#FF9DA8', low: '#9CC4FF', tense: '#FFC68C', void: '#C9B8FF', home: '#FFB1C8' };
-const LG_KEYS = ['lgPalette', 'lgAccent', 'lgInk', 'lgHi', 'lgClarity', 'lgTint', 'lgFrost'];
+const LG_KEYS = ['lgPalette', 'lgAccent', 'lgInk', 'lgHi', 'lgClarity', 'lgTint', 'lgFrost', 'lgBg', 'lgBgUrl'];
 const lgPal = p => { const b = LG_PAL[p.lgPalette] || LG_PAL.ocean; if (p.lgPalette !== 'custom') return b;
-    const [acc, ink, hi] = ['lgAccent', 'lgInk', 'lgHi'].map((k, i) => /^#[0-9a-f]{6}$/i.test(p[k]) ? p[k] : b[i]); return [acc, ink, hi, mix(acc, ink, .6), acc, mix(acc, '#FFFFFF', .55)]; };
+    const [acc, ink, hi] = ['lgAccent', 'lgInk', 'lgHi'].map((k, i) => /^#[0-9a-f]{6}$/i.test(p[k]) ? p[k] : b[i]); return [acc, ink, hi, mix(acc, ink, .6), acc, mix(acc, '#FFFFFF', .55), '', mix(acc, hi, .45)]; };
+// Restraint: surfaces are the palette's dark colours with saturation capped, tinted toward the highlight (frost; over an image,
+// darker and denser so type holds); the accent is for what you act on, the second accent for status, tiles faint, outlines neutral.
 function liquid(p) {
-    const [acc, ink, hi, deep, mid, light] = lgPal(p), clear = p.lgClarity === 'clear', k = Math.max(0, +p.lgTint || 1), fr = Math.max(0, +p.lgFrost || 1.6) / 1.6;
-    const bg = mix(deep, ink, .3), pri = mix(acc, '#FFFFFF', .45), osv = mix(hi, ink, .78), warm = LG_ST.tense;
+    const [acc, ink0, hi, deep0, mid0, light, img, sec] = lgPal(p), clear = p.lgClarity === 'clear', fr = Math.max(0, +p.lgFrost || 1.6) / 1.6;
+    const onImg = p.lgBg !== 'mesh' && !!((p.lgBg === 'image' && p.lgBgUrl) || img), k = Math.max(0, +p.lgTint || 1) * (onImg ? 1.35 : 1);
+    const ink = calm(ink0, .5), deep = calm(deep0, .45), mid = calm(mid0, .4), sur = onImg ? ink : mix(hi, ink, .14);
+    const bg = mix(deep, ink, .3), pri = mix(acc, '#FFFFFF', .45), osv = mix(hi, ink, .72), warm = LG_ST.tense, onFill = contrast(acc, '#FFFFFF') >= 3 ? '#FFFFFF' : ink;
     const c = { primary: pri, 'on-primary': ink, 'primary-container': mix(acc, ink, .5), 'on-primary-container': hi, 'inverse-primary': acc,
-        secondary: mix(light, '#FFFFFF', .7), 'on-secondary': ink, 'secondary-container': mix(mid, ink, .35), 'on-secondary-container': hi, tertiary: warm, 'on-tertiary': ink,
+        secondary: sec, 'on-secondary': ink, 'secondary-container': mix(mid, ink, .35), 'on-secondary-container': hi, tertiary: warm, 'on-tertiary': ink,
         'tertiary-container': mix(warm, ink, .3), 'on-tertiary-container': '#FFF1D6', error: LG_ST.danger, 'on-error': ink, 'error-container': mix(LG_ST.danger, ink, .3), 'on-error-container': '#FFE0E3',
         surface: bg, 'surface-dim': bg, 'surface-bright': mix(mid, ink, .35), 'surface-container-lowest': ink, 'surface-container-low': mix(deep, ink, .2), 'surface-container': mix(deep, ink, .3),
-        'surface-container-high': mix(deep, ink, .4), 'surface-container-highest': mix(mid, ink, .4), 'on-surface': '#FFFFFF', 'on-surface-variant': osv, outline: mix(hi, ink, .45),
-        'outline-variant': mix(hi, ink, .2), 'inverse-surface': hi, 'inverse-on-surface': ink, scrim: '#000000', shadow: '#000000' };
+        'surface-container-high': mix(deep, ink, .4), 'surface-container-highest': mix(mid, ink, .4), 'on-surface': '#FFFFFF', 'on-surface-variant': osv, outline: calm(mix(hi, ink, .45), .2),
+        'outline-variant': rgba(hi, .12), 'inverse-surface': hi, 'inverse-on-surface': ink, scrim: '#000000', shadow: '#000000' };
     const st = {}; for (const s in LG_ST) { st[s] = LG_ST[s]; st[s + '-container'] = mix(LG_ST[s], ink, .28); st['on-' + s + '-container'] = mix(LG_ST[s], '#FFFFFF', .45); }
-    const x = { ink: pri, fill: acc, 'on-fill': '#FFFFFF', track: rgba(hi, .18), 'state-ink': '#FFFFFF', page: bg, region: 'transparent', 'r-region': '0px',
-        card: rgba(ink, Math.min(.95, (clear ? .1 : .3) * k).toFixed(3)), 'card-border': `1px solid ${W(.16)}`, 'card-shadow': 'var(--lg-drop)', 'r-card': '24px', 'r-card-sm': '16px',
-        hero: `linear-gradient(135deg,${rgba(light, .26)},${rgba(light, .04)} 60%),${rgba(ink, (.3 * k).toFixed(3))}`, 'on-hero': '#FFFFFF', 'hero-ink': hi, 'hero-shadow': 'var(--lg-drop)', 'r-hero': '24px',
-        mesh: meshOf(MESH_AT, [[...hex(light), .5], [...hex(acc), .45], [...hex(mid), .42], [...hex(light), .32]], `linear-gradient(160deg,${mix(deep, ink, .5)},${ink})`), 'mesh-d': 'block',
-        glass: rgba(ink, (.34 * k).toFixed(3)), 'glass-blur': `blur(${((clear ? 3 : 7) * fr).toFixed(1)}px) saturate(190%)`, nav: rgba(ink, (.36 * k).toFixed(3)), 'nav-border': W(.14),
-        tile: W(.07), 'tile-2': rgba(acc, .42), 'on-tile-2': '#FFFFFF', 'tile-3': rgba(light, .2), 'on-tile-3': hi, 'r-btn': '999px', 'r-btn-inner': '12px', 'r-chip': '999px', 'r-field': '16px',
+    const x = { ink: pri, fill: acc, 'on-fill': onFill, track: rgba(hi, .18), 'state-ink': '#FFFFFF', page: bg, region: 'transparent', 'r-region': '0px',
+        card: rgba(sur, Math.min(.95, (clear ? .1 : .3) * k).toFixed(3)), 'card-border': `1px solid ${W(.16)}`, 'card-shadow': 'var(--lg-drop)', 'r-card': '24px', 'r-card-sm': '16px',
+        hero: `linear-gradient(135deg,${rgba(light, .16)},${rgba(light, .03)} 60%),${rgba(sur, (.3 * k).toFixed(3))}`, 'on-hero': '#FFFFFF', 'hero-ink': hi, 'hero-shadow': 'var(--lg-drop)', 'r-hero': '24px',
+        mesh: meshOf(MESH_AT, [[...hex(acc), .22], [...hex(sec), .16], [...hex(light), .12], [...hex(acc), .1]], `linear-gradient(160deg,${mix(deep, ink, .5)},${ink})`), 'mesh-d': 'block',
+        glass: rgba(sur, (.34 * k).toFixed(3)), 'glass-blur': `blur(${((clear ? 3 : 7) * fr).toFixed(1)}px) saturate(120%)`, nav: rgba(ink, (.5 * k).toFixed(3)), 'nav-border': W(.12),
+        tile: W(.07), 'tile-2': rgba(acc, .14), 'on-tile-2': pri, 'tile-3': rgba(sec, .14), 'on-tile-3': sec, 'r-btn': '999px', 'r-btn-inner': '12px', 'r-chip': '999px', 'r-field': '16px',
         sh: Array(11).fill('circle'), 'font-display': "'Sora','Roboto Flex',sans-serif", 'font-num': "'Sora','Roboto Flex',sans-serif", 'num-fvs': 'normal', 'num-fvs-sm': 'normal', 'display-fvs': 'normal', 'title-ls': '-.01em',
         spatial: SPR.ss, 'spatial-fast': SPR.sd, effects: SPR.xs, drift: 'atcDrift 36s ease-in-out infinite alternate', 'lg-bevel': BEVEL(mix(acc, '#FFFFFF', .6)) };
     return { c, st, x };
@@ -1052,7 +1058,7 @@ ${J(LG_HOV, '::after')}{content:"";position:absolute;inset:0;z-index:1;border-ra
 ${J(LG_HOV, ':hover', hov)}{box-shadow:var(--x-lg-bevel),var(--lg-drop-h)!important;--lg-spot:1}
 ${J(LG_HOV, ':hover::after', hov)}{background-position:-30% 0;transition:background-position .8s var(--lg-ease)}
 ${J(LG_TILE)}{--lg:bead;--lg-tint:ink .2;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03))!important;border:0!important;box-shadow:var(--lg-bead),0 3px 8px -4px rgba(0,0,0,.35)!important}
-${J(LG_FIELD)}{--lg:control;--lg-tint:ink .26;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),var(--x-glass)!important;box-shadow:var(--lg-bead)!important;backdrop-filter:blur(3px) saturate(180%)}
+${J(LG_FIELD)}{--lg:control;--lg-tint:ink .26;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),var(--x-glass)!important;box-shadow:var(--lg-bead)!important;backdrop-filter:blur(3px) saturate(120%)}
 ${J(LG_FIELD, ':focus')}{box-shadow:var(--lg-bead),0 0 0 3px color-mix(in srgb,${MSC('inverse-surface')} 45%,transparent)!important}
 ${J(LG_KNOB)}{position:relative;overflow:hidden;isolation:isolate;border:0!important;transition:transform .3s var(--lg-spring)}
 ${J(LG_CTRL)}{--lg:control;--lg-tint:ink .22;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),var(--x-glass)!important;box-shadow:var(--lg-bead)!important;color:${OS}!important}
@@ -1064,7 +1070,7 @@ ${J(LG_BAR)}{--lg:bar;--lg-tint:ink .3;background:${SHEEN},var(--x-nav)!importan
 /* Liquid's own icons, tabs and rail (design: .ico, .seg/.c-on, .ib): round glossy beads over their tone colour, pill tabs, the active one an accent bead. */
 ${L} :is(.atc-v-ico,.atc-hico,.atc-mood,.atc-lv){background-image:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,0) 62%)!important;box-shadow:var(--lg-bead)}
 ${LP} :is(.box-widget,.gp-footer) :is(button.nav-link,.box-widget-title-new){background:rgba(255,255,255,.07)!important;border-radius:999px!important;clip-path:none!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
-${LP} :is(.box-widget,.gp-footer) :is(button.nav-link.active,.box-widget-title-new.active,span.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;box-shadow:var(--lg-bead)!important}
+${LP} :is(.box-widget,.gp-footer) :is(button.nav-link.active,.box-widget-title-new.active,span.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;color:var(--x-on-fill)!important;box-shadow:var(--lg-bead)!important}
 ${L} .header-icons :is(.bg-icon,.bg-iconEmp,.bg-iconWider) .icon-link{background-image:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.04))!important;box-shadow:var(--lg-bead)}
 ${L} #sidebarNav .sidebar-icons-link:is(:hover,.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;box-shadow:var(--lg-bead)}
 @media (prefers-reduced-motion:reduce){${J(LG_KNOB, ':hover', hov)}{transform:none}${J(LG_HOV.concat(LG_KNOB), '::after')}{display:none}}
@@ -1074,7 +1080,7 @@ ${J(LG_RIM, '::before', onGL)},${LGL} body::before{display:none}${LGL}{backgroun
 const TL = '#total-time-summary.lg-theme', TG = 'html[data-atc-theme=liquid] #total-time-summary';
 const LSM = 'html.atc-liquid .settings-modal', INK = a => `color-mix(in srgb,${MSC('surface-container-lowest')} ${a}%,transparent)`; // Liquid's ink (its surface-container-lowest) at a%
 const LGW_CSS = `
-${TL}{--att-panel:${MSC('surface-container')};--att-border:rgba(255,255,255,.16);--att-shadow:var(--lg-drop);--att-text:#FFFFFF;--att-muted:${OSV};--att-accent:var(--x-fill);--att-on-accent:#FFFFFF;--att-ink:${MSC('primary')};
+${TL}{--att-panel:${MSC('surface-container')};--att-border:rgba(255,255,255,.16);--att-shadow:var(--lg-drop);--att-text:#FFFFFF;--att-muted:${OSV};--att-accent:var(--x-fill);--att-on-accent:var(--x-on-fill);--att-ink:${MSC('primary')};
  --att-track:var(--x-track);--att-inner:rgba(255,255,255,.07);--att-inner-b:rgba(255,255,255,.12);--att-display:'Sora',system-ui,sans-serif;--att-scheme:dark;--att-card:var(--x-glass);--att-ok:var(--x-ok);
  --att-danger:var(--x-danger);--att-low:var(--x-low);--att-tense:var(--x-tense);--att-void:var(--x-void);--att-up:var(--x-ok);--att-run:var(--x-tense);--att-home:var(--x-home);color-scheme:dark}
 ${TG}:is(*,:hover){--lg:card;--lg-tint:ink .3;background:${SHEEN},var(--x-card);border:0;border-radius:28px;box-shadow:var(--x-lg-bevel),var(--lg-drop);backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);color:var(--att-text);font-family:'Sora',system-ui,sans-serif}
@@ -1085,18 +1091,18 @@ ${TG} .ws-head :is(.settings-button,.developer-info){border:0;border-radius:50%;
 ${TG} .modern-table{border:0;border-radius:16px;background:rgba(255,255,255,.05);box-shadow:var(--lg-bead)}
 html.lg-gl ${TG}:is(*,:hover),html.lg-gl ${TG} .ws-card{background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 ${TG} .ach-ui,html.atc-liquid .ach-ui{--ach-surface:${MSC('surface-container')};--ach-panel:${SHEEN},var(--x-glass);--ach-blur:var(--x-glass-blur);--ach-border:rgba(255,255,255,.16);--ach-shadow:var(--x-lg-bevel),var(--lg-drop);
- --ach-text:#FFFFFF;--ach-muted:${OSV};--ach-accent:var(--x-fill);--ach-on-accent:#FFFFFF;--ach-ink:${MSC('primary')};--ach-inner:rgba(255,255,255,.07);--ach-inner-border:rgba(255,255,255,.12);--ach-track:var(--x-track);--ach-ok:var(--x-ok);--ach-focus:${MSC('inverse-surface')}}
-${TG} :is(.snake-game-container,.ws-card,.xpr,.desk:not(.has-img)){--lg:card;--lg-tint:ink .3;border:0;border-radius:22px;background:${SHEEN},${INK(28)};box-shadow:var(--x-lg-bevel),0 10px 24px -14px rgba(0,0,0,.6)}
-${TG} :is(.snake-btn,.desk-ghost,.cyber-bg-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),${INK(22)};box-shadow:var(--lg-bead);transition:transform .3s var(--lg-spring)}
-${TG} :is(.snake-btn.is-primary,.desk-primary,.lb-register-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
+ --ach-text:#FFFFFF;--ach-muted:${OSV};--ach-accent:var(--x-fill);--ach-on-accent:var(--x-on-fill);--ach-ink:${MSC('primary')};--ach-inner:rgba(255,255,255,.07);--ach-inner-border:rgba(255,255,255,.12);--ach-track:var(--x-track);--ach-ok:var(--x-ok);--ach-focus:${MSC('inverse-surface')}}
+${TG} :is(.snake-game-container,.ws-card,.xpr,.desk:not(.has-img)){--lg:card;--lg-tint:ink .12;border:0;border-radius:22px;background:${SHEEN},${W(.05)};box-shadow:var(--x-lg-bevel),0 10px 24px -14px rgba(0,0,0,.6)}
+${TG} :is(.snake-btn,.desk-ghost,.cyber-bg-btn){border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),${W(.04)};box-shadow:var(--lg-bead);transition:transform .3s var(--lg-spring)}
+${TG} :is(.snake-btn.is-primary,.desk-primary,.lb-register-btn){border:0;border-radius:999px;color:var(--x-on-fill);background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
 ${TG} .game-switch-btn{border:0;border-radius:999px;background:transparent;box-shadow:none;transition:transform .3s var(--lg-spring)}
 ${TG} .game-switch-btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05));box-shadow:var(--lg-bead)}
 ${TG} .game-switch-btn.active{background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead)}
-${TG} .ws-join-in{border:0;border-radius:16px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),${INK(28)};box-shadow:var(--lg-bead)}
+${TG} .ws-join-in{border:0;border-radius:16px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03)),${W(.05)};box-shadow:var(--lg-bead)}
 html:not(.lg-nofx) ${TG} :is(.snake-btn,.desk-ghost,.desk-primary,.lb-register-btn,.game-switch-btn):hover{transform:scale(1.04)}html:not(.lg-nofx) ${TG} :is(.snake-btn,.desk-primary,.lb-register-btn,.game-switch-btn):active{transform:scale(.95);transition-duration:.12s}
 /* The settings modal (design: Liquid · Settings): a glass dialog, a segmented tab strip, rows as glass beads, the bead switch, glass fields. */
 html.atc-liquid .settings-modal-overlay{background:${INK(35)};backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-${LSM}{--att-accent:var(--x-fill);--att-on-accent:#FFFFFF;border:0;border-radius:34px;color:#FFFFFF;font-family:'Sora',system-ui,sans-serif;background:${SHEEN},${INK(55)};backdrop-filter:blur(24px) saturate(190%);-webkit-backdrop-filter:blur(24px) saturate(190%);box-shadow:var(--x-lg-bevel),var(--lg-drop)}
+${LSM}{--att-accent:var(--x-fill);--att-on-accent:var(--x-on-fill);border:0;border-radius:34px;color:#FFFFFF;font-family:'Sora',system-ui,sans-serif;background:${SHEEN},${INK(55)};backdrop-filter:blur(24px) saturate(120%);-webkit-backdrop-filter:blur(24px) saturate(120%);box-shadow:var(--x-lg-bevel),var(--lg-drop)}
 ${LSM} .settings-title{background:none;color:#FFFFFF;-webkit-text-fill-color:#FFFFFF;font-weight:600;letter-spacing:-.01em}
 ${LSM} .settings-tabs{width:max-content;max-width:100%;gap:2px;padding:3px;border-radius:999px;background:${INK(26)};box-shadow:inset 0 1px 3px rgba(0,0,0,.4),inset 0 -1px .5px rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.07)}
 ${LSM} .settings-tab{border:0;border-radius:999px;background:transparent;color:${OSV}}${LSM} .settings-tab:hover{color:#FFFFFF}
@@ -1109,7 +1115,7 @@ ${LSM} .toggle-switch.active::after{transform:translateX(24px)}
 ${LSM} .settings-select{border:0;border-radius:16px;color:#FFFFFF;background-color:transparent;background-image:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.03));box-shadow:var(--lg-bead),0 4px 12px -6px rgba(0,0,0,.5)}${LSM} .settings-select option{background:${MSC('surface-container-high')};color:#FFFFFF}
 ${LSM} .cyber-color-pickers input[type=color]{width:40px;height:40px;border:0;border-radius:50%;box-shadow:inset 0 1px 1px rgba(255,255,255,.7),inset 0 -3px 6px rgba(0,0,0,.25),0 4px 12px -4px rgba(0,0,0,.5)}${LSM} .cyber-color-pickers input[type=color]::-webkit-color-swatch{border-radius:50%}
 ${LSM} input[type=range]{accent-color:var(--x-fill)}
-${LSM} .close-modal-button{border:0;border-radius:999px;color:#FFFFFF;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
+${LSM} .close-modal-button{border:0;border-radius:999px;color:var(--x-on-fill);background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill);box-shadow:var(--lg-bead),0 8px 20px -8px var(--x-fill)}
 .lg-optics>summary{cursor:pointer;gap:12px}.lg-optics>summary::-webkit-details-marker{display:none}.lg-optics>summary small{margin-left:auto;opacity:.6;font-size:.75rem}
 .lg-optics>summary::after{content:"";flex:none;width:7px;height:7px;margin:0 4px 3px;border:solid currentColor;border-width:0 2px 2px 0;rotate:45deg;transition:rotate .2s}
 .lg-optics[open]>summary::after{rotate:-135deg;margin-bottom:-3px}.lg-optics>.settings-option:not(summary){margin-left:16px}
@@ -1295,7 +1301,7 @@ function lgEngine(cv, o) {
 const GLASS = { liquid: 'lg', glassmorphic: 'au' }, GLASS_DB = { lg: 'liquid', au: 'aurora' };
 let lgE = null, lgSrc = '', lgObj = '', lgOpt = '', lgMsg = '';
 const lgOpts = p => { const n = (v, d) => isFinite(+v) && v !== '' ? +v : d, fx = p.lgHoverFx !== false;
-    const [accent, ink, hi] = lgPal(p);
+    const [accent, ink0, hi] = lgPal(p), ink = calm(ink0, .5);
     return { accent, ink, hi, fx, clear: p.lgClarity === 'clear', strength: n(p.lgRefract, 1), bevel: n(p.lgEdge, 1), chroma: n(p.lgChroma, 1), frost: n(p.lgFrost, 1.6), tint: n(p.lgTint, 1), spec: n(p.lgSpec, 1), adapt: n(p.lgLegible, 1), dim: n(p.lgBgDim, .15) }; };
 // src is "<theme key>|<url or idb:stamp>".
 function lgLoad(src) {
