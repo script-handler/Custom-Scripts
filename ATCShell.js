@@ -344,7 +344,6 @@ const MASK = n => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='htt
 const BASE_CSS = `
 html:root{--x-r-btn-c:min(var(--x-r-btn),16px)}
 html[data-att-skin=dark]{color-scheme:dark}
-@media (prefers-reduced-motion:reduce){html:root{--x-anim:paused;--x-drift:none;--x-spatial:0ms linear;--x-spatial-fast:0ms linear}}
 @keyframes atcSpin{to{transform:rotate(1turn)}}@keyframes atcSlide{to{transform:translateX(-40px)}}
 @keyframes atcDrift{0%{transform:translate3d(-3%,-2%,0) scale(1.05)}100%{transform:translate3d(3%,2%,0) scale(1.12)}}
 @keyframes atcMood{0%,100%{clip-path:var(--x-sh-mood);transform:rotate(0)}50%{clip-path:var(--x-sh-mood-2);transform:rotate(20deg)}}
@@ -450,8 +449,7 @@ html[data-x-fam=aurora] ${MSG} ${GIF}{margin-top:6px}
 html[data-x-fam=lg] ${MSG}{background:var(--x-glass)!important;border:0!important;box-shadow:var(--x-lg-bevel),var(--lg-drop);backdrop-filter:var(--x-glass-blur)}html[data-x-fam=lg] ${MSG} ${GIF}{margin-top:6px}
 html[data-x-fam=cyber] ${MSG}{border-radius:var(--x-r-btn);border:1px solid var(--md-sys-color-outline)!important;box-shadow:var(--x-glow);--li:var(--md-sys-color-primary)}
 html[data-x-fam=cyber] ${MSG} ${GIF},html[data-x-fam=biz] ${MSG} ${GIF}{margin-top:6px}
-html[data-x-fam=biz] ${MSG}{background:var(--x-card)!important;border:var(--x-card-border)!important;box-shadow:var(--x-card-shadow);--li:var(--md-sys-color-primary)}
-@media (prefers-reduced-motion:reduce){html[data-x-fam] ${GIF}{animation:atcSpin 4666ms linear infinite}}`.replace(/html\[data-x-fam/g, 'html[data-atc-web][data-x-fam');
+html[data-x-fam=biz] ${MSG}{background:var(--x-card)!important;border:var(--x-card-border)!important;box-shadow:var(--x-card-shadow);--li:var(--md-sys-color-primary)}`.replace(/html\[data-x-fam/g, 'html[data-atc-web][data-x-fam');
 
 // PORTAL THEME: Timeline and Attendance only (data-att-skin), so untested pages are never half-themed. EGP's own
 // tokens (EnhancedStyle.css :root) are remapped first, then the surfaces those miss. No :has().
@@ -1080,7 +1078,6 @@ ${LP} :is(.box-widget,.gp-footer) :is(button.nav-link,.box-widget-title-new){bac
 ${LP} :is(.box-widget,.gp-footer) :is(button.nav-link.active,.box-widget-title-new.active,span.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;color:var(--x-on-fill)!important;box-shadow:var(--lg-bead)!important}
 ${L} .header-icons :is(.bg-icon,.bg-iconEmp,.bg-iconWider) .icon-link{background-image:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.04))!important;box-shadow:var(--lg-bead)}
 ${L} #sidebarNav .sidebar-icons-link:is(:hover,.selected){background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0) 60%),var(--x-fill)!important;box-shadow:var(--lg-bead)}
-@media (prefers-reduced-motion:reduce){${J(LG_KNOB, ':hover', hov)}{transform:none}${J(LG_HOV.concat(LG_KNOB), '::after')}{display:none}}
 ${J(LG_CARD.concat(LG_TILE, LG_CTRL, LG_FILL, LG_FIELD, LG_BAR), '', onGL)}{background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 ${J(LG_RIM, '::before', onGL)},${LGL} body::before{display:none}${LGL}{background:var(--x-page)}${LGL} body{background:transparent!important}`;
 // The widget panel under Liquid: its --att-* tokens from the palette (always dark), so the float follows; a glass panel with bead cards.
@@ -1143,8 +1140,7 @@ ${J(LG_TILE, '', toA)}{background:rgba(255,255,255,.06)!important;border:1px sol
 ${J(LG_FILL, '', toA)}{background:linear-gradient(135deg,${MSC('primary')},${MSC('tertiary')})!important;color:${MSC('on-primary')}!important;border:0!important;box-shadow:0 6px 18px -6px ${MSC('primary')}!important}
 ${J(LG_BAR, '', toA)}{backdrop-filter:var(--x-glass-blur);-webkit-backdrop-filter:var(--x-glass-blur);border-bottom:1px solid rgba(255,255,255,.1)!important}
 ${J(LG_CARD, '', toAL)}{border-color:rgba(255,255,255,.75)!important;background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,.15) 55%),var(--lg-base,var(--x-card))!important;
- box-shadow:inset 0 1px 0 #FFFFFF,0 8px 24px rgba(60,40,120,.1),0 22px 50px -24px rgba(118,75,162,.3)!important}${J(LG_TILE, '', toAL)}{background:rgba(255,255,255,.45)!important;border-color:rgba(255,255,255,.8)!important}
-@media (prefers-reduced-motion:reduce){${J(LG_HOV, '::after', toA)}{transition:none}}`;
+ box-shadow:inset 0 1px 0 #FFFFFF,0 8px 24px rgba(60,40,120,.1),0 22px 50px -24px rgba(118,75,162,.3)!important}${J(LG_TILE, '', toAL)}{background:rgba(255,255,255,.45)!important;border-color:rgba(255,255,255,.8)!important}`;
 // Liquid Glass is dark glass under either OS scheme: the widget sheet's OS-light rules (panel, games, modal) get a zero-specificity
 // :where(html:not(.atc-liquid)) guard, once per sheet, so the cascade among them is unchanged.
 function lgDarkOnly() {
@@ -1217,7 +1213,7 @@ function lgEngine(cv, o) {
     gl.bindBuffer(gl.ARRAY_BUFFER, full); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const texP = () => [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]].forEach(([k, v]) => gl.texParameteri(gl.TEXTURE_2D, k, v));
     let data = new Float32Array(S * 6 * 64), count = 0, split = 0, W = 0, Hh = 0, dpr = 1, raf = 0, until = 0, lost = false, dirty = true, surfaces = [], set = new Set(), pal = null, url = '';
-    const img = { ready: false, w: 1, h: 1 }, par = { x: 0, y: 0, tx: 0, ty: 0 }, mouse = { x: -9999, y: -9999, on: 0, onT: 0 }, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const img = { ready: false, w: 1, h: 1 }, par = { x: 0, y: 0, tx: 0, ty: 0 }, mouse = { x: -9999, y: -9999, on: 0, onT: 0 };
     const tint = s => { const m = /^([a-z]+)\s+([\d.]+)$/.exec(s.trim()); if (!m) return [...pal.ink, .2]; const c = pal[m[1]] || pal.ink; return [...c, Math.min(.95, m[2] * (m[1] === 'ink' ? 1.4 : 1))]; };
     function scan() {
         surfaces = []; D.querySelectorAll(LG_SEL).forEach(el => { const cs = getComputedStyle(el), k = KINDS[cs.getPropertyValue('--lg').trim()]; if (!k) return;
@@ -1263,15 +1259,15 @@ function lgEngine(cv, o) {
         gl.uniform1i(u.u_bg, 0); gl.uniform2f(u.u_res, W, Hh); gl.uniform1f(u.u_chroma, .055 * o.chroma); gl.uniform1f(u.u_str, o.strength); gl.uniform1f(u.u_frostK, o.clear ? 0 : o.frost);
         gl.uniform1f(u.u_tintK, (o.clear ? .45 : 1) * o.tint); gl.uniform1f(u.u_adaptK, o.adapt); gl.uniform3fv(u.u_ink, pal.ink); gl.drawArrays(gl.TRIANGLES, first, n);
         gl.blendFunc(gl.ONE, gl.ONE); gl.useProgram(G.spec.p); attribs(G.spec);
-        gl.uniform2f(v.u_res, W, Hh); gl.uniform2f(v.u_mouse, mouse.x, mouse.y); gl.uniform1f(v.u_mouseOn, reduce ? 0 : mouse.on); gl.uniform1f(v.u_specK, o.spec); gl.uniform3fv(v.u_specCol, pal.hi);
+        gl.uniform2f(v.u_res, W, Hh); gl.uniform2f(v.u_mouse, mouse.x, mouse.y); gl.uniform1f(v.u_mouseOn, mouse.on); gl.uniform1f(v.u_specK, o.spec); gl.uniform3fv(v.u_specCol, pal.hi);
         gl.drawArrays(gl.TRIANGLES, first, n); gl.disable(gl.BLEND);
     }
     function frame(now) {
         raf = 0; if (lost || !img.ready) return; resize();
-        const pOn = !reduce; par.x += ((pOn ? par.tx : 0) - par.x) * .06; par.y += ((pOn ? par.ty : 0) - par.y) * .06; mouse.on += (mouse.onT - mouse.on) * .15;
+        par.x += (par.tx - par.x) * .06; par.y += (par.ty - par.y) * .06; mouse.on += (mouse.onT - mouse.on) * .15;
         collect();
         const b = G.bg.u; gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, cv.width, cv.height); gl.disable(gl.BLEND); gl.useProgram(G.bg.p); fullQ(G.bg);
-        gl.uniform2f(b.u_res, W, Hh); gl.uniform1f(b.u_dpr, dpr); gl.uniform2f(b.u_par, par.x, par.y); gl.uniform2f(b.u_mouse, mouse.x, mouse.y); gl.uniform1f(b.u_mouseOn, reduce ? 0 : mouse.on);
+        gl.uniform2f(b.u_res, W, Hh); gl.uniform1f(b.u_dpr, dpr); gl.uniform2f(b.u_par, par.x, par.y); gl.uniform2f(b.u_mouse, mouse.x, mouse.y); gl.uniform1f(b.u_mouseOn, mouse.on);
         gl.uniform3fv(b.u_glint, pal.hi); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, imgTex); gl.uniform1i(b.u_img, 1); gl.uniform2f(b.u_imgSize, img.w, img.h); gl.uniform1f(b.u_imgDim, o.dim);
         gl.activeTexture(gl.TEXTURE0); gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbuf); gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, Math.max(count, 6) * S), gl.DYNAMIC_DRAW);

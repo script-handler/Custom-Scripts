@@ -10545,8 +10545,7 @@
         // The shooter's cue; an Epic or Legendary cue's sheen moves unless motion is reduced.
         const cue = pqById(poolRemoteTurn() ? poolSeatCueId(S.frame.turn) : poolCueStats().id);
         poolCuePill();
-        if (S.still === undefined) S.still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-        const cueT = cue.sheen && aiming && !S.still ? Math.floor(Date.now() / 40) * 40 : null;
+        const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
@@ -19510,7 +19509,6 @@
             .ws-tl-work { position: absolute; top: 6px; bottom: 6px; border-radius: 6px; background-color: var(--ws-fill); background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, .28) 0 4px, transparent 4px 8px); animation: wsStripeCrawl 1.23s linear infinite; }
             /* One horizontal repeat of the 45° stripes (8 × √2 px) per cycle: the Punch Log chevrons' speed. */
             @keyframes wsStripeCrawl { to { background-position: 11.314px 0; } }
-            @media (prefers-reduced-motion: reduce) { .ws-tl-work { animation: none; } }
             .ws-tl-now { position: absolute; top: 2px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--att-text); }
             .ws-tl-ticks { position: relative; height: 14px; }
             .ws-tl-ticks span { position: absolute; transform: translateX(-50%); font-size: 10px; color: var(--att-muted); font-variant-numeric: tabular-nums; }
@@ -19637,7 +19635,6 @@
             .rcv-modal .rcv-status.is-busy { display: flex; align-items: center; gap: 8px; }
             .rcv-modal .rcv-status.is-busy::before { content: ''; width: 14px; height: 14px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--ach-inner-border); border-top-color: var(--ach-accent); animation: rcv-spin 0.8s linear infinite; }
             @keyframes rcv-spin { to { transform: rotate(360deg); } }
-            @media (prefers-reduced-motion: reduce) { .rcv-modal .rcv-status.is-busy::before { animation-duration: 2.4s; } }
             .rcv-modal .rcv-link { align-self: center; border: 0; background: none; padding: 4px; font: 500 13px var(--ach-font); color: var(--ach-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
             .rcv-modal .rcv-lead .rcv-link { padding: 0 2px; font-size: 12px; }
             .rcv-modal .rcv-link:focus-visible { outline: 2px solid var(--ach-focus); outline-offset: 2px; border-radius: 4px; }
@@ -19673,7 +19670,6 @@
             .desk.has-img .desk-q { top: auto; bottom: 16px; transform: none; color: #FFFFFF; }
             .desk-q { transition: opacity .45s ease, translate .45s ease; }
             .desk-q.is-fading { opacity: 0; translate: 0 6px; }
-            @media (prefers-reduced-motion: reduce) { .desk-q { transition: opacity .2s linear; } .desk-q.is-fading { translate: none; } }
             .desk-q svg { opacity: .9; }
             .desk-q blockquote { margin: 0; font-size: 18px; font-style: italic; font-weight: 600; line-height: 1.45; }
             .desk.has-img .desk-q blockquote { font-size: 14px; }
@@ -22732,7 +22728,6 @@
             .pool-hud .ph-bubble[data-seat="1"] { left: 10px; border-top-left-radius: 3px; }
             .pool-hud .ph-bubble[data-seat="2"] { right: 10px; border-top-right-radius: 3px; }
             @keyframes ph-bubble-in { from { opacity: 0; transform: translateY(-4px) scale(0.96); } to { opacity: 1; transform: none; } }
-            @media (prefers-reduced-motion: reduce) { .pool-hud .ph-bubble { animation: none; } }
             .pool-hud[data-layout="max"] .ph-bubble { top: 64px; font-size: 12px; max-width: 320px; }
             .pool-hud .ph-react {
                 position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 6; box-sizing: border-box; padding: 8px;
@@ -23017,7 +23012,6 @@
             .pool-hud .pu-hero .pu-note { text-wrap: balance; }
             .pool-hud .pu-hero-n { max-width: 100%; font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 28px; line-height: 1.15; overflow-wrap: anywhere; }
             @keyframes pu-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-            @media (prefers-reduced-motion: reduce) { .pool-hud .pu-hero { animation: none; } }
             .pool-hud .pu-runs { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
             .pool-hud .pu-run {
                 display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px;
@@ -25229,14 +25223,6 @@
                 from { opacity: 0; transform: translateX(-4px); }
                 to { opacity: 1; transform: none; }
             }
-            @keyframes achFade { from { opacity: 0; } }
-            @media (prefers-reduced-motion: reduce) {
-                .ach-toast { animation: achFade 150ms ease-out both; }
-                .ach-toast .ach-md,
-                .ach-toast .ach-draw,
-                .ach-toast-chip { animation: none; }
-                .ach-md.ach-t-legendary::after { animation: none; opacity: 0; }
-            }
 
             .xp-milestone-notification {
                 position: fixed;
@@ -27203,7 +27189,6 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
         .rail i { width: 100%; background: var(--fill); transition: height .6s ease; }
         @media (max-width: 230px) { .label { display: none; } }
         @media (max-width: 170px) { .rail { display: none; } }
-        @media (prefers-reduced-motion: reduce) { .mood svg { animation: none; } }
         .biz * { animation: none !important; transition: none !important; }`;
 
     async function togglePictureInPicture() {

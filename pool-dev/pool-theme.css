@@ -765,7 +765,6 @@
             .pool-hud .ph-bubble[data-seat="1"] { left: 10px; border-top-left-radius: 3px; }
             .pool-hud .ph-bubble[data-seat="2"] { right: 10px; border-top-right-radius: 3px; }
             @keyframes ph-bubble-in { from { opacity: 0; transform: translateY(-4px) scale(0.96); } to { opacity: 1; transform: none; } }
-            @media (prefers-reduced-motion: reduce) { .pool-hud .ph-bubble { animation: none; } }
             .pool-hud[data-layout="max"] .ph-bubble { top: 64px; font-size: 12px; max-width: 320px; }
             .pool-hud .ph-react {
                 position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 6; box-sizing: border-box; padding: 8px;
@@ -1050,7 +1049,6 @@
             .pool-hud .pu-hero .pu-note { text-wrap: balance; }
             .pool-hud .pu-hero-n { max-width: 100%; font-family: var(--pool-display); font-weight: var(--pool-display-weight); font-size: 28px; line-height: 1.15; overflow-wrap: anywhere; }
             @keyframes pu-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-            @media (prefers-reduced-motion: reduce) { .pool-hud .pu-hero { animation: none; } }
             .pool-hud .pu-runs { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
             .pool-hud .pu-run {
                 display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px;
