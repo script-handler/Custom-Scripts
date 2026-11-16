@@ -784,12 +784,15 @@ ${R} #global-portal .atc-v-sl .atc-v-t{font-size:15px!important;line-height:20px
 /* The pill pager: the active day an elongated pill, the others small dots. */
 .atc-v-sl-dots{display:flex;align-items:center;gap:4px}.atc-v-sl-dots>i{flex:none;width:5px;height:5px;border-radius:999px;background:${LAYER(30)};transition:width var(--x-effects),background-color var(--x-effects)}
 .atc-v-sl-dots>i.is-on{width:14px;background:${MSC('primary')}}
+/* Cyberpunk clips button corners, which cuts a border: its buttons are borderless fills, as its own controls are. */
+html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill,.atc-v-sl-rec){border-color:transparent}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill){background:${LAYER(12)}}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill):hover{background:${LAYER(20)}}
 @container (max-width: 300px){.atc-v-sl-rec{width:30px;padding:0}.atc-v-sl-rec>span{display:none}}
 @container (max-width: 250px){.atc-v-sl-who{gap:12px}.atc-v-sl-av{width:48px;height:48px}}
 @container (max-width: 240px){.atc-v-sl-act{column-gap:6px}.atc-v-sl-grp{gap:4px}.atc-v-sl-grp+.atc-v-sl-grp{gap:8px}.atc-v-sl-ib{width:28px;height:28px}.atc-v-sl-pill{height:28px;padding:0 9px}}
 @container (max-width: 200px){.atc-v-sl{gap:12px}.atc-v-sl-grp,.atc-v-sl-grp+.atc-v-sl-grp{flex:1 0 100%;justify-content:center;margin:0}.atc-v-sl-date{display:none}
  .atc-v-sl-who{flex-direction:column;justify-content:center;gap:8px;text-align:center}.atc-v-sl-who .atc-v-stack{flex:none;width:100%;align-items:center}
  .atc-v-sl-who .atc-v-stack>*{max-width:100%;box-sizing:border-box}.atc-v-sl-who .atc-v-stack>.atc-v-sl-by{justify-content:center}}
+.atc-v-bday{flex-direction:column;justify-content:center;text-align:center;gap:6px}.atc-v-bday>*{max-width:100%;overflow-wrap:anywhere}
 /* eGP Knowledge: an icon tile and the item. */
 .atc-v-row{flex:1;display:flex;align-items:center;gap:10px;min-width:0}.atc-v-row b{font-size:13px;line-height:17px;font-weight:700}
 .atc-c-egp-knowledge .atc-v-ico{width:52px;height:52px;clip-path:var(--x-sh-i5)}
@@ -1467,7 +1470,8 @@ const VIEWS = {
     approval: { read: c => /no records/i.test(c.textContent) ? {} : null,
         html: () => `<div class="atc-v-empty">${ico('task')}<div class="atc-v-stack"><h3 class="atc-v-t">Approval</h3><span class="atc-v-strong">All caught up</span><span class="atc-v-mute">No records waiting for your approval</span></div></div>` },
     birthday: { read: c => /no birthdays/i.test(c.textContent) ? { day: txt(c.querySelector('.box-widget-title small')) } : null,
-        html: d => `<div class="atc-v-empty" style="flex-direction:column;justify-content:center;text-align:center;gap:6px">${ico('cake')}<h3 class="atc-v-t" style="font-size:13px">Birthdays${d.day ? ' · ' + esc(d.day) : ''}</h3><span class="atc-v-mute">None today</span></div>` },
+        // The day under the title, not in it: Cyberpunk's spaced capitals don't fit "Birthdays · Oct 30" in the narrow card.
+        html: d => `<div class="atc-v-empty atc-v-bday">${ico('cake')}<h3 class="atc-v-t">Birthdays</h3><span class="atc-v-mute">${d.day ? esc(d.day) + ' · ' : ''}None today</span></div>` },
     leaders: { read: c => { const f = [...c.querySelectorAll('app-gm-widget figure')]; if (f.length < 2) return null; const p = e => [e.querySelector('img') ? e.querySelector('img').getAttribute('src') : '', txt(e.querySelector('figcaption strong')), txt(e.querySelector('figcaption small')), !!e.querySelector('.fig-pod.active')];
             return { lead: f.slice(0, -1).map(p), sup: p(f[f.length - 1]), title: txt(c.querySelector('app-gm-widget .border-start > strong')) || 'Supervisor' }; },
         html: d => { const av = (s, on) => `<span class="atc-v-av${on ? ' is-on' : ''}"${on ? ' title="Online"' : ''}><img src="${esc(s)}" alt=""></span>`;
