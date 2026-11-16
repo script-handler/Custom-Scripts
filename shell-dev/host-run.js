@@ -359,9 +359,12 @@ async function main() {
         const pf = (n, r, t) => '<div class="gp-user-horizontal-fig"><div class="fig-pod"><img class="cursor-pointer" alt="..." title="' + t + '"></div><figcaption><strong>' + n + '</strong><small>' + r + '</small><div class="d-flex"><small>Nov 16</small></div></figcaption><div class="comments-icon"><img src="/Content/images/comment-dots-Regular.svg"></div></div>';
         col('<div class="box-widget h-100" id="pr-x"><div class="footer-title"><button class="nav-link active">Promotion</button><button class="nav-link">Work Anniversary</button><button class="nav-link">Welcome Aboard</button></div>'
             + '<div class="tab-content"><div class="tab-pane active"><div class="carousel-item active">' + pf('Muhammad Arshid', 'COO Coordinator', '${PROMO}') + pf('Zulfiqar Ali Javed', 'AI Project Manager', '') + '</div></div></div></div>');
-        col('<div class="box-widget h-100 gp-celebertions" id="sp-x"><div class="carousel slide"><div class="carousel-inner"><div class="carousel-item active"><div class="box-widget h-100 gp-celebrations p-0">'
-            + '<span class="box-widget-title">Spotlight - <small>Nov 16</small><small class="pull-right"><a>Rec. a colleague</a></small></span><div class="gp-user-horizontal-fig mb-0 mt-1"><div class="fig-pod"><img alt="..."></div><figcaption><strong class="d-block">Waseem Ahmed</strong><small class="d-block">Software Engineer</small><small>Recommended By: Munir Akhtar</small></figcaption></div>'
-            + '<div class="d-flex mt-3"><small class="timline-font-color pointer-cr" id="sp-ack">Acknowledgement</small><div class="comments-icon text-end"><img src="/Content/images/thumb-up-outline.svg"><small>74</small></div></div></div></div></div></div></div>');
+        // Five days, the middle one shown, with EGP's ‹ › controls: the view shows both arrows and a full window of dots.
+        const day = (n, on) => '<div class="carousel-item' + (on ? ' active' : '') + '"><div class="box-widget h-100 gp-celebrations p-0">'
+            + '<span class="box-widget-title">Spotlight - <small>Nov 16</small><small class="pull-right"><a>Rec. a colleague</a></small></span><div class="gp-user-horizontal-fig mb-0 mt-1"><div class="fig-pod"><img alt="..."></div><figcaption><strong class="d-block">' + n + '</strong><small class="d-block">Software Engineer</small><small>Recommended By: Munir Akhtar</small></figcaption></div>'
+            + '<div class="d-flex mt-3"><small class="timline-font-color pointer-cr"' + (on ? ' id="sp-ack"' : '') + '>Acknowledgement</small><div class="comments-icon text-end"><img src="/Content/images/thumb-up-outline.svg"><small>1,214</small><img src="/Content/images/comment-dots-Regular.svg"></div></div></div></div>';
+        col('<div class="box-widget h-100 gp-celebertions" id="sp-x"><div class="carousel slide"><div class="carousel-inner">' + ['Ali Raza', 'Sana Khan', 'Waseem Ahmed', 'Omar Farooq', 'Hina Baig'].map((n, i) => day(n, i === 2)).join('')
+            + '</div><a class="carousel-control-prev" role="button"></a><a class="carousel-control-next" role="button"></a></div></div>');
         const ack = document.getElementById('sp-ack'), sp = ack.closest('.carousel');
         ack.addEventListener('mouseenter', () => sp.insertAdjacentHTML('beforeend', '<div class="popover-Spotlight"><p class="fs-10 margin-b0" style="color:black">${ACK}</p></div>'));
         ack.addEventListener('mouseleave', () => sp.querySelectorAll('.popover-Spotlight').forEach(e => e.remove())); return 1; })()`);
@@ -375,6 +378,18 @@ async function main() {
     ok('Spotlight: Acknowledgement is back, and hovering it shows the recommendation EGP draws for its hidden label', at === ACK, at);
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 }); await sleep(150);
     ok('…leaving hides it and tells the host label (its description is cleared)', await ev("document.getElementById('atc-tip').hidden && !document.querySelector('#sp-x .popover-Spotlight')"));
+    // The actions row (Like with a long count, Acknowledgement, Message, the pager with both arrows) never wraps: the pager
+    // gives way, first dropping the dots past the active one's neighbours.
+    const slRow = w => ev(`new Promise(res => { const c = document.getElementById('sp-x'); Object.assign(c.style, { width: '${w}px', maxWidth: 'none', flex: 'none' });
+        requestAnimationFrame(() => requestAnimationFrame(() => { const a = c.querySelector('.atc-v-sl-act'), q = c.getBoundingClientRect(), vis = e => e.getBoundingClientRect().width > 0;
+            const inside = [...a.querySelectorAll('*')].filter(vis).every(e => { const r = e.getBoundingClientRect(); return r.left >= q.left - .5 && r.right <= q.right + .5; });
+            res({ lines: new Set([...a.children].map(e => Math.round(e.getBoundingClientRect().top))).size, inside, arrows: [...c.querySelectorAll('.atc-v-sl-arr')].filter(vis).length,
+                on: !!c.querySelector('.atc-v-sl-dots > i.is-on') && vis(c.querySelector('.atc-v-sl-dots > i.is-on')), dots: [...c.querySelectorAll('.atc-v-sl-dots > i')].filter(vis).length,
+                content: Math.round(c.querySelector('.atc-v-sl').getBoundingClientRect().width) }); })); })`);
+    const r250 = await slRow(250), r330 = await slRow(330);
+    await ev("(() => { const c = document.getElementById('sp-x'); c.style.width = c.style.maxWidth = c.style.flex = ''; return 1; })()");
+    ok('Spotlight pager with both arrows, card 250px wide: one actions row inside the card, both arrows and the active day shown, 3 dots', r250.lines === 1 && r250.inside && r250.arrows === 2 && r250.on && r250.dots === 3, r250);
+    ok('…and at 330px wide: one row with all 5 dots', r330.lines === 1 && r330.inside && r330.arrows === 2 && r330.on && r330.dots === 5, r330);
     console.log('\n── Early coming modal (EGP: static, no close) and a locked page');
     await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(400);
     await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade show" id="early-coming-modal" style="display:block" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><div class="section-heading"><h2 class="pull-left">EARLY COMING</h2><div class="clearfix"></div></div></div><div class="modal-body"><textarea></textarea></div><div class="modal-footer"><button class="btn btn-info" id="ec-save">Save</button></div></div></div></div><div class="modal-backdrop fade show"></div>');

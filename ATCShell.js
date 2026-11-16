@@ -759,8 +759,8 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-act{width:28px;height:28px;display:grid;place-items:center;flex:none;border-radius:50%;color:${OSV};transition:background-color var(--x-effects)}.atc-v-act:hover{background:${LAYER(8)}}.atc-v-act svg{width:18px;height:18px}
 /* Spotlight (design: Spotlight Card Redesign · A Focus card) at the design's sizes, from the theme's tokens and shapes so
    every Display Theme draws it its own way. Sized by the card (a container): narrower than the design's 308px of content,
-   Recommend keeps its icon, then the pick and the buttons shrink, then the pick stacks over the actions and the pager
-   (the pager also wraps under the actions whenever both arrows don't fit); long text ends
+   Recommend keeps its icon, then the pick and the buttons shrink (the actions row stays one line: the pager gives way),
+   then, under 200px, the pick stacks over the actions and the pager on rows of their own; long text ends
    in "…" as in the design. */
 .atc-v-sl{container-type:inline-size;display:flex;flex-direction:column;gap:14px;height:100%;min-height:0}
 .atc-v-sl>.atc-v-head{flex-wrap:nowrap;gap:8px;min-width:0}
@@ -776,20 +776,26 @@ ${R} #global-portal .atc-v-sl .atc-v-t{font-size:15px!important;line-height:20px
 .atc-v-sl-who .atc-v-stack>span:not(.atc-v-sl-by){font-size:12.5px;line-height:16px;color:${OSV}}
 .atc-v-sl-who .atc-v-stack>.atc-v-sl-by{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px;line-height:15px;color:${OSV}}
 .atc-v-sl-by svg{flex:none;width:12px;height:12px;color:${MSC('tertiary')}}.atc-v-sl-by>span{min-width:0;overflow:hidden;text-overflow:ellipsis}.atc-v-sl-by b{font-weight:600;color:${OS}}
-.atc-v-sl-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid ${OV}}
-.atc-v-sl-grp{display:flex;align-items:center;gap:6px;min-width:0}.atc-v-sl-grp+.atc-v-sl-grp{gap:10px;margin-left:auto}
+.atc-v-sl-act{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid ${OV}}
+.atc-v-sl-grp{flex:none;display:flex;align-items:center;gap:6px}
 .atc-v-sl-ib,.atc-v-sl-pill{flex:none;display:inline-flex;align-items:center;justify-content:center;height:30px;box-sizing:border-box;border:1px solid ${OV};border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);background:${LAYER(8)};color:${OS};transition:background-color var(--x-effects)}
 .atc-v-sl-ib{width:30px}.atc-v-sl-pill{gap:6px;padding:0 10px;font-size:12px;line-height:16px;font-weight:600;font-variant-numeric:tabular-nums}
 .atc-v-sl-ib:hover,.atc-v-sl-pill:hover{background:${LAYER(16)}}.atc-v-sl-ib svg{width:15px;height:15px}.atc-v-sl-pill svg{width:14px;height:14px}.atc-v-sl-ib.is-prev svg{transform:scaleX(-1)}
-/* The pill pager: the active day an elongated pill, the others small dots. */
-.atc-v-sl-dots{display:flex;align-items:center;gap:4px}.atc-v-sl-dots>i{flex:none;width:5px;height:5px;border-radius:999px;background:${LAYER(30)};transition:width var(--x-effects),background-color var(--x-effects)}
+/* The pager: one pill (the action buttons' height, border and fill) holding ‹, the dots and ›; the only part of the row
+   that gives way, so the row never wraps: the dots past the active one's neighbours go first (a narrow card with both
+   arrows), then, should a long like count squeeze it further, the dots clip evenly from both ends around the active one. */
+.atc-v-sl-pager{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:2px;height:30px;padding:0 2px;box-sizing:border-box;border:1px solid ${OV};border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);background:${LAYER(8)}}
+.atc-v-sl-arr{flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:var(--x-r-btn);color:${OS};transition:background-color var(--x-effects)}.atc-v-sl-arr:hover{background:${LAYER(14)}}
+.atc-v-sl-arr svg{width:16px;height:16px}.atc-v-sl-arr.is-prev svg{transform:scaleX(-1)}
+.atc-v-sl-dots{flex:0 1 auto;min-width:0;overflow:hidden;display:flex;justify-content:center;align-items:center;gap:4px;padding:0 6px}.atc-v-sl-dots>i{flex:none;width:5px;height:5px;border-radius:999px;background:${LAYER(30)};transition:width var(--x-effects),background-color var(--x-effects)}
 .atc-v-sl-dots>i.is-on{width:14px;background:${MSC('primary')}}
 /* Cyberpunk clips button corners, which cuts a border: its buttons are borderless fills, as its own controls are. */
-html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill,.atc-v-sl-rec){border-color:transparent}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill){background:${LAYER(12)}}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill):hover{background:${LAYER(20)}}
+html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill,.atc-v-sl-rec,.atc-v-sl-pager){border-color:transparent}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill,.atc-v-sl-pager){background:${LAYER(12)}}html[data-x-fam=cyber] :is(.atc-v-sl-ib,.atc-v-sl-pill):hover{background:${LAYER(20)}}
 @container (max-width: 300px){.atc-v-sl-rec{width:30px;padding:0}.atc-v-sl-rec>span{display:none}}
 @container (max-width: 250px){.atc-v-sl-who{gap:12px}.atc-v-sl-av{width:48px;height:48px}}
-@container (max-width: 240px){.atc-v-sl-act{column-gap:6px}.atc-v-sl-grp{gap:4px}.atc-v-sl-grp+.atc-v-sl-grp{gap:8px}.atc-v-sl-ib{width:28px;height:28px}.atc-v-sl-pill{height:28px;padding:0 9px}}
-@container (max-width: 200px){.atc-v-sl{gap:12px}.atc-v-sl-grp,.atc-v-sl-grp+.atc-v-sl-grp{flex:1 0 100%;justify-content:center;margin:0}.atc-v-sl-date{display:none}
+@container (max-width: 280px){.atc-v-sl-pager.has-both .atc-v-sl-dots>i.is-far{display:none}}
+@container (max-width: 240px){.atc-v-sl-act{gap:6px}.atc-v-sl-grp{gap:4px}.atc-v-sl-ib{width:28px;height:28px}.atc-v-sl-pill{height:28px;padding:0 9px}.atc-v-sl-pager{height:28px}.atc-v-sl-arr{width:22px;height:22px}.atc-v-sl-dots{padding:0 3px}}
+@container (max-width: 200px){.atc-v-sl{gap:12px}.atc-v-sl-act{flex-wrap:wrap;justify-content:center;row-gap:8px}.atc-v-sl-grp{flex:1 0 100%;justify-content:center}.atc-v-sl-date{display:none}
  .atc-v-sl-who{flex-direction:column;justify-content:center;gap:8px;text-align:center}.atc-v-sl-who .atc-v-stack{flex:none;width:100%;align-items:center}
  .atc-v-sl-who .atc-v-stack>*{max-width:100%;box-sizing:border-box}.atc-v-sl-who .atc-v-stack>.atc-v-sl-by{justify-content:center}}
 .atc-v-bday{flex-direction:column;justify-content:center;text-align:center;gap:6px}.atc-v-bday>*{max-width:100%;overflow-wrap:anywhere}
@@ -1494,10 +1500,14 @@ const VIEWS = {
             + (d.by ? `<span class="atc-v-sl-by">${icon('star')}<span>Recommended by <b>${esc(d.by)}</b></span></span>` : '') + '</div></div>'
             + `<div class="atc-v-sl-act"><div class="atc-v-sl-grp">${btn(1, `Like, ${esc(d.likes)} likes`, sym('thumb_up') + `<span>${esc(d.likes)}</span>`, 'atc-v-sl-pill')}`
             + (d.ack ? `<span class="atc-v-sl-ib atc-v-ack" role="button" tabindex="0" aria-label="Acknowledgement" data-tip="0">${icon('award')}</span>` : '')
-            + (d.wish ? btn(2, 'Send wishes', icon('chat'), 'atc-v-sl-ib') : '') + '</div><div class="atc-v-sl-grp">'
-            // Pill pager: the active day an elongated pill, the others dots; past five days a window of five slides with it.
-            + (d.of > 1 ? `<span class="atc-v-sl-dots" role="img" aria-label="Day ${d.at + 1} of ${d.of}">${(w => Array.from({ length: w }, (_, i) => { const s = Math.max(0, Math.min(d.at - 2, d.of - w)); return `<i${s + i === d.at ? ' class="is-on"' : ''}></i>`; }).join(''))(Math.min(5, d.of))}</span>` : '')
-            + (d.pg[0] ? btn(3, 'Newer', icon('next'), 'atc-v-sl-ib is-prev') : '') + (d.pg[1] ? btn(4, 'Older', icon('next'), 'atc-v-sl-ib') : '') + '</div></div></div>' },
+            + (d.wish ? btn(2, 'Send wishes', icon('chat'), 'atc-v-sl-ib') : '') + '</div>'
+            // The pager: one pill holding ‹, the day dots (the active day an elongated pill; past five days a window of five
+            // slides with it) and ›. Each dot carries its distance from the active one, so a narrow card can drop the outer two.
+            + (d.of > 1 || d.pg.some(Boolean) ? `<div class="atc-v-sl-pager${d.pg[0] && d.pg[1] ? ' has-both' : ''}" role="group" aria-label="Spotlight days">`
+                + (d.pg[0] ? btn(3, 'Newer', icon('next'), 'atc-v-sl-arr is-prev') : '')
+                + (d.of > 1 ? `<span class="atc-v-sl-dots" role="img" aria-label="Day ${d.at + 1} of ${d.of}">${(w => { const s = Math.max(0, Math.min(d.at - 2, d.of - w));
+                    return Array.from({ length: w }, (_, i) => `<i class="${s + i === d.at ? 'is-on' : Math.abs(s + i - d.at) > 1 ? 'is-far' : ''}"></i>`).join(''); })(Math.min(5, d.of))}</span>` : '')
+                + (d.pg[1] ? btn(4, 'Older', icon('next'), 'atc-v-sl-arr') : '') + '</div>' : '') + '</div></div>' },
     'egp-knowledge': { read: c => { const it = c.querySelector('.carousel-item.active'); if (!it) return null; const m = /(\d+)\s*\/\s*(\d+)/.exec(txt(it.querySelector('figcaption .fw-bold'))), ctl = carCtl(c);
             return { t: txt(it.querySelector('.know-knowledge')), i: m ? m[1] : '', n: m ? m[2] : '', pg: ctl.map(Boolean), fwd: [it.querySelector('.play-button-overlay'), ...ctl] }; },
         html: d => `<div class="atc-v-head"><h3 class="atc-v-t">eGP Knowledge</h3>${pager(d.pg, 1)}</div>`
