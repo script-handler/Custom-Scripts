@@ -351,6 +351,30 @@ async function main() {
     ok("profile hints: each stand-in (grid value, status chip) shows its own row's popover in the theme tooltip", Object.keys(want).every(k => got[k] === want[k]), got);
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 }); await sleep(100);
     ok('…and the tooltip hides when the pointer leaves', await ev("document.getElementById('atc-tip').hidden"));
+    // Redrawn cards: Promotion's photos carry their hint as a title; Spotlight's Acknowledgement is drawn by Angular only while
+    // its label is hovered (played here by a mouseenter/mouseleave pair on the hidden label).
+    const PROMO = 'MUHAMMAD ARSHID-6061 is promoted as Coo Coordinator, previously he was working as Assistant Manager Procurement - ADMIN department.';
+    const ACK = 'Waseem Ahmed - 16318 for employee recognition for his consistent dedication, professionalism, and positive contributions to the team.';
+    await ev(`(() => { const col = h => { const d = document.createElement('div'); d.className = 'col-xl-3 col-lg-6'; d.innerHTML = h; document.querySelector('#global-portal .box-widget').parentElement.parentElement.append(d); };
+        const pf = (n, r, t) => '<div class="gp-user-horizontal-fig"><div class="fig-pod"><img class="cursor-pointer" alt="..." title="' + t + '"></div><figcaption><strong>' + n + '</strong><small>' + r + '</small><div class="d-flex"><small>Nov 16</small></div></figcaption><div class="comments-icon"><img src="/Content/images/comment-dots-Regular.svg"></div></div>';
+        col('<div class="box-widget h-100" id="pr-x"><div class="footer-title"><button class="nav-link active">Promotion</button><button class="nav-link">Work Anniversary</button><button class="nav-link">Welcome Aboard</button></div>'
+            + '<div class="tab-content"><div class="tab-pane active"><div class="carousel-item active">' + pf('Muhammad Arshid', 'COO Coordinator', '${PROMO}') + pf('Zulfiqar Ali Javed', 'AI Project Manager', '') + '</div></div></div></div>');
+        col('<div class="box-widget h-100 gp-celebertions" id="sp-x"><div class="carousel slide"><div class="carousel-inner"><div class="carousel-item active"><div class="box-widget h-100 gp-celebrations p-0">'
+            + '<span class="box-widget-title">Spotlight - <small>Nov 16</small><small class="pull-right"><a>Rec. a colleague</a></small></span><div class="gp-user-horizontal-fig mb-0 mt-1"><div class="fig-pod"><img alt="..."></div><figcaption><strong class="d-block">Waseem Ahmed</strong><small class="d-block">Software Engineer</small><small>Recommended By: Munir Akhtar</small></figcaption></div>'
+            + '<div class="d-flex mt-3"><small class="timline-font-color pointer-cr" id="sp-ack">Acknowledgement</small><div class="comments-icon text-end"><img src="/Content/images/thumb-up-outline.svg"><small>74</small></div></div></div></div></div></div></div>');
+        const ack = document.getElementById('sp-ack'), sp = ack.closest('.carousel');
+        ack.addEventListener('mouseenter', () => sp.insertAdjacentHTML('beforeend', '<div class="popover-Spotlight"><p class="fs-10 margin-b0" style="color:black">${ACK}</p></div>'));
+        ack.addEventListener('mouseleave', () => sp.querySelectorAll('.popover-Spotlight').forEach(e => e.remove())); return 1; })()`);
+    await until("!!document.querySelector('#pr-x > .atc-view img[data-tip]') && !!document.querySelector('#sp-x > .atc-view .atc-v-ack')");
+    const hoverTip = async q => { const r = await ev(`(() => { const e = document.querySelector(${JSON.stringify(q)}); e.scrollIntoView({ block: 'center' }); const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+        await sleep(150); await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x, y: r.y }); await sleep(250);
+        return ev("(() => { const t = document.getElementById('atc-tip'); return t && !t.hidden ? t.textContent.trim() : null; })()"); };
+    const pt = await hoverTip('#pr-x > .atc-view img[data-tip]');
+    ok('Promotion / Anniversary / Welcome: a photo shows its hint (the host photo\'s title) in the theme tooltip; one without a title has none', pt === PROMO && await ev("document.querySelectorAll('#pr-x > .atc-view .atc-v-pr img[data-tip]').length === 1"), pt);
+    const at = await hoverTip('#sp-x > .atc-view .atc-v-ack');
+    ok('Spotlight: Acknowledgement is back, and hovering it shows the recommendation EGP draws for its hidden label', at === ACK, at);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 }); await sleep(150);
+    ok('…leaving hides it and tells the host label (its description is cleared)', await ev("document.getElementById('atc-tip').hidden && !document.querySelector('#sp-x .popover-Spotlight')"));
     console.log('\n── Early coming modal (EGP: static, no close) and a locked page');
     await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(400);
     await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade show" id="early-coming-modal" style="display:block" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><div class="section-heading"><h2 class="pull-left">EARLY COMING</h2><div class="clearfix"></div></div></div><div class="modal-body"><textarea></textarea></div><div class="modal-footer"><button class="btn btn-info" id="ec-save">Save</button></div></div></div></div><div class="modal-backdrop fade show"></div>');

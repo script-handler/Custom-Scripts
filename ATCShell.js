@@ -760,7 +760,8 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-spot{flex:1;display:flex;gap:6px;min-height:0}
 .atc-v-sp{position:relative;flex:0 0 66%;display:flex;align-items:center;gap:8px;padding:8px;box-sizing:border-box;min-width:0;border-radius:var(--x-r-card-sm);background:var(--x-tile-2);color:var(--x-on-tile-2);clip-path:var(--x-card-clip);font-size:11px;line-height:14px}
 .atc-v-sp img{width:40px;height:40px;flex:none;object-fit:cover;background:${MSC('surface')};clip-path:var(--x-sh-avatar)}
-.atc-v-sp .atc-v-stack>*{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.atc-v-sp b{font-size:13px;line-height:16px;font-weight:700}.atc-v-sp .atc-v-stack>span:last-child{opacity:.8}
+.atc-v-sp .atc-v-stack>*{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.atc-v-sp b{font-size:13px;line-height:16px;font-weight:700}.atc-v-sp .atc-v-stack>span:nth-child(3){opacity:.8}
+.atc-v-ack{width:fit-content;font-size:11px;font-weight:600;text-decoration:underline dotted;text-underline-offset:2px}
 .atc-v-sp .atc-v-act{position:absolute;right:2px;top:2px;width:24px;height:24px;color:inherit}.atc-v-sp .atc-v-act svg{width:15px;height:15px}
 .atc-c-spotlight .atc-v-head>.atc-v-pg{margin-left:auto}.atc-c-spotlight .atc-v-head>.atc-v-link{margin-left:4px}
 .atc-v-sp2,.atc-v-sp3{display:grid;place-items:center;overflow:hidden;border-radius:var(--x-r-card-sm);clip-path:var(--x-card-clip)}.atc-v-sp2[role=button],.atc-v-sp3[role=button]{cursor:pointer}
@@ -1405,7 +1406,8 @@ function tagCards() {
     });
 }
 // RENDER-OVER views, by card slug: read(card) → data (null leaves the host card as it is) and html(data). Elements
-// the view must act through go in data.fwd; [data-fwd=i] in the view clicks fwd[i].
+// the view must act through go in data.fwd; [data-fwd=i] in the view clicks fwd[i]. Hover hints go in data.tips
+// (tipShow sources); [data-tip=i] shows tips[i].
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // A view's text is only what the host shows: popover bodies hold the unmasked numbers behind the masked ones.
 const SKIP = 'popover-content,.popover,script,style,[hidden]';
@@ -1452,11 +1454,13 @@ const VIEWS = {
     spotlight: { read: c => { const its = [...c.querySelectorAll('.carousel-item')], a = its.findIndex(x => x.classList.contains('active')), it = its[a], f = it && it.querySelector('.gp-user-horizontal-fig'); if (!f) return null;
             const sm = f.querySelectorAll('figcaption small'), ci = it.querySelector('.comments-icon'), im = ci ? ci.querySelectorAll('img') : [], ctl = carCtl(c), nx = ctl[1] && a < its.length - 1 ? ctl[1] : null;
             const peek = nx ? its.slice(a + 1, a + 3).map(x => src(x.querySelector('.gp-user-horizontal-fig img'))) : [];
+            // Acknowledgement: EGP draws the recommendation (.popover-Spotlight) only while its label is hovered.
+            const ack = [...it.querySelectorAll('small')].find(s => /acknowledg/i.test(s.textContent));
             return { img: src(f.querySelector('img')), n: txt(f.querySelector('strong')), r: txt(sm[0]), by: txt(sm[1]).replace(/^Recommended By:\s*/i, '').replace(/^(\S)\S*\s+(?=\S)/, '$1. '),
-                likes: txt(ci && ci.querySelector('small')), pg: [!!ctl[0], !!nx], peek,
+                likes: txt(ci && ci.querySelector('small')), pg: [!!ctl[0], !!nx], peek, ack: !!ack, tips: ack ? [{ host: ack, find: () => c.querySelector('.popover-Spotlight') }] : [],
                 fwd: [[...it.querySelectorAll('.box-widget-title a')].pop(), im[0], im[1], ctl[0], nx, nx && { click: () => { nx.click(); nx.click(); } }] }; },
         html: d => `<div class="atc-v-head"><h3 class="atc-v-t">Spotlight</h3>${pager(d.pg, 3, ['Newer', 'Older'])}<a class="atc-v-link" data-fwd="0">Recommend</a></div><div class="atc-v-spot" role="list">`
-            + `<div class="atc-v-sp" role="listitem"><img src="${esc(d.img)}" alt=""><div class="atc-v-stack"><b>${esc(d.n)}</b><span>${esc(d.r)}</span><span>${btn(1, 'Like', '👍 ' + esc(d.likes), 'atc-v-like')}${d.by ? ' · by ' + esc(d.by) : ''}</span></div>${btn(2, 'Send wishes', icon('chat'), 'atc-v-act')}</div>`
+            + `<div class="atc-v-sp" role="listitem"><img src="${esc(d.img)}" alt=""><div class="atc-v-stack"><b>${esc(d.n)}</b><span>${esc(d.r)}</span><span>${btn(1, 'Like', '👍 ' + esc(d.likes), 'atc-v-like')}${d.by ? ' · by ' + esc(d.by) : ''}</span>${d.ack ? '<span class="atc-v-ack" data-tip="0" tabindex="0">Acknowledgement</span>' : ''}</div>${btn(2, 'Send wishes', icon('chat'), 'atc-v-act')}</div>`
             + [0, 1].map(i => d.peek[i] != null ? btn(4 + i, 'Older', `<img src="${esc(d.peek[i])}" alt="">`, 'atc-v-sp' + (i + 2)) : `<span class="atc-v-sp${i + 2}"></span>`).join('') + '</div>' },
     'egp-knowledge': { read: c => { const it = c.querySelector('.carousel-item.active'); if (!it) return null; const m = /(\d+)\s*\/\s*(\d+)/.exec(txt(it.querySelector('figcaption .fw-bold'))), ctl = carCtl(c);
             return { t: txt(it.querySelector('.know-knowledge')), i: m ? m[1] : '', n: m ? m[2] : '', pg: ctl.map(Boolean), fwd: [it.querySelector('.play-button-overlay'), ...ctl] }; },
@@ -1472,12 +1476,14 @@ const VIEWS = {
             + (k ? d.p.map(([s, nm, aw, wish], i) => `<div class="atc-v-pr is-award">${btn(F + i, 'Open ' + nm, `<img src="${esc(s)}" alt="">`, 'atc-v-aw')}<div style="min-width:0"><b>${esc(nm)}</b><i>${icon('star')}${esc(aw)}</i></div>${wish ? btn(F + k + i, 'Send wishes', icon('chat'), 'atc-v-act') : ''}</div>`).join('')
                 : '<span class="atc-v-mute">No awards yet</span>') + '</div>'; } },
     promotion: { read: c => { const bs = [...c.querySelectorAll('.footer-title button.nav-link')], pane = c.querySelector('.tab-pane.active'); if (!bs.length || !pane) return null;
-            const it = pane.querySelector('.carousel-item.active') || pane, fs = [...it.querySelectorAll('.gp-user-horizontal-fig')], ctl = carCtl(pane);
+            const it = pane.querySelector('.carousel-item.active') || pane, fs = [...it.querySelectorAll('.gp-user-horizontal-fig')], ctl = carCtl(pane), im = fs.map(f => f.querySelector('.fig-pod img'));
+            // Each photo's title is the host's hover hint (promoted as …, years of service, welcome).
+            const tips = im.map(m => (m && m.getAttribute('title') || '').trim() || null);
             return { tabs: tabsOf(bs, t => t.replace(/^Work /, '').replace(/ Aboard$/, '')), pg: ctl.map(Boolean),
-                p: fs.map(f => [src(f.querySelector('.fig-pod img')), txt(f.querySelector('strong')), txt(f.querySelector('figcaption > small')), txt(f.querySelector('figcaption .d-flex > small'))]),
-                fwd: [...bs, ...ctl, ...fs.map(f => f.querySelector('.comments-icon img') || f.querySelector('.fig-pod img'))] }; },
+                p: fs.map((f, i) => [src(im[i]), txt(f.querySelector('strong')), txt(f.querySelector('figcaption > small')), txt(f.querySelector('figcaption .d-flex > small')), !!tips[i]]), tips,
+                fwd: [...bs, ...ctl, ...fs.map((f, i) => f.querySelector('.comments-icon img') || im[i])] }; },
         html: d => { const n = d.tabs.length; return `<div class="atc-v-head">${seg(d.tabs, 0, 'is-fill is-lg')}${pager(d.pg, n)}</div><div class="atc-v-promo">`
-            + (d.p.length ? d.p.map(([s, nm, r, dt], i) => `<div class="atc-v-pr"><img src="${esc(s)}" alt=""><div style="min-width:0"><b>${esc(nm)}</b><span>${esc(r)}</span><i>${esc(dt)}</i></div>${btn(n + 2 + i, 'Send wishes', icon('chat'), 'atc-v-act')}</div>`).join('')
+            + (d.p.length ? d.p.map(([s, nm, r, dt, tp], i) => `<div class="atc-v-pr"><img src="${esc(s)}" alt=""${tp ? ` data-tip="${i}" tabindex="0"` : ''}><div style="min-width:0"><b>${esc(nm)}</b><span>${esc(r)}</span><i>${esc(dt)}</i></div>${btn(n + 2 + i, 'Send wishes', icon('chat'), 'atc-v-act')}</div>`).join('')
                 : '<span class="atc-v-mute">No one this month</span>') + '</div>'; } },
     'special-offers': { read: c => { const it = c.querySelector('.carousel-item.active') || c, fs = [...it.querySelectorAll('figure')]; if (!fs.length) return null;
             const bell = c.querySelector('.box-widget-title .fa-bell-o'), h = fs.map(f => f.querySelector('.fa-history'));
@@ -1503,11 +1509,11 @@ function renderOver() {
         let d = null; try { d = v.read(c); } catch (_) {}
         let o = c.querySelector(':scope > .atc-view');
         if (!d) { if (o) { o.remove(); c.classList.remove('atc-over'); } return; }
-        const { fwd, ...data } = d, k = JSON.stringify(data);
+        const { fwd, tips, ...data } = d, k = JSON.stringify(data);
         if (!o) { o = D.createElement('div'); o.className = 'atc-view'; c.appendChild(o);
             o.addEventListener('click', e => { const t = e.target.closest('[data-fwd]'), f = t && c._atcFwd && c._atcFwd[+t.dataset.fwd]; if (f) { e.preventDefault(); f.click(); } });
             o.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-fwd]')) { e.preventDefault(); e.target.click(); } }); }
-        c._atcFwd = fwd || [];
+        c._atcFwd = fwd || []; c._tips = tips || [];
         if (o.dataset.k !== k) { o.dataset.k = k; o.innerHTML = v.html(data); }
         if (!c.classList.contains('atc-over')) c.classList.add('atc-over');
     });
@@ -1524,17 +1530,30 @@ const popOf = e => { const tr = e && e.closest('tr'), row = tr ? [...tr.querySel
         if (ps.length) pc = ps.sort((x, y) => Math.abs(ks.indexOf(x) - at) - Math.abs(ks.indexOf(y) - at))[0]; else if (a.tagName.includes('-')) break; }
     if (!pc && a) { const all = [...a.querySelectorAll('popover-content')]; pc = all.find(p => e.compareDocumentPosition(p) & 4) || all.reverse().find(p => e.compareDocumentPosition(p) & 2); }
     return pc && pc.querySelector('.popover-content'); };
-let tipEl = null, tipAt = null;
-function tipShow(el) {
-    let src = null; for (let a = el; a && !src; a = a.parentElement) if (a._tips) src = a._tips[+el.dataset.tip];
-    if (!src || !src.textContent.trim()) return;
+// A source is a popover body (its nodes are copied), a string (a host title), or live: { host, find } for a hint EGP renders
+// only while its host is hovered (Spotlight's Acknowledgement): the host gets mouseenter, find() is read once Angular has
+// drawn it (in the hidden host card), and mouseleave on hide.
+let tipEl = null, tipAt = null, tipLive = null;
+function tipPut(el, nodes) {
     if (!tipEl) { tipEl = D.createElement('div'); tipEl.className = 'atc-tip'; tipEl.id = 'atc-tip'; tipEl.setAttribute('role', 'tooltip'); D.body.appendChild(tipEl); }
-    tipEl.replaceChildren(...[...src.childNodes].map(n => n.cloneNode(true))); tipEl.hidden = false; tipAt = el; el.setAttribute('aria-describedby', 'atc-tip');
+    tipEl.replaceChildren(...nodes); tipEl.hidden = false; el.setAttribute('aria-describedby', 'atc-tip');
     const r = el.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), up = r.top - t.height - 8 >= 8;
     tipEl.style.left = Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2)) + 'px';
-    tipEl.style.top = (up ? r.top - t.height - 8 : r.bottom + 8) + 'px';
+    tipEl.style.top = Math.max(8, up ? r.top - t.height - 8 : Math.min(r.bottom + 8, innerHeight - t.height - 8)) + 'px';
 }
-function tipHide() { if (tipAt) tipAt.removeAttribute('aria-describedby'); tipAt = null; if (tipEl) tipEl.hidden = true; }
+function tipShow(el) {
+    let src = null; for (let a = el; a && !src; a = a.parentElement) if (a._tips) src = a._tips[+el.dataset.tip];
+    if (!src) return; if (tipAt) tipHide(); tipAt = el;
+    if (typeof src === 'string') { if (src.trim()) tipPut(el, [D.createTextNode(src)]); return; }
+    if (!src.host) { if (src.textContent.trim()) tipPut(el, [...src.childNodes].map(n => n.cloneNode(true))); return; }
+    tipLive = src; src.host.dispatchEvent(new MouseEvent('mouseenter'));
+    let n = 0; const poll = () => { if (tipAt !== el) return; const b = src.find(); if (b && b.textContent.trim()) tipPut(el, [...b.childNodes].map(x => x.cloneNode(true))); else if (++n < 20) setTimeout(poll, 25); };
+    poll();
+}
+function tipHide() {
+    if (tipLive) { tipLive.host.dispatchEvent(new MouseEvent('mouseleave')); tipLive = null; }
+    if (tipAt) tipAt.removeAttribute('aria-describedby'); tipAt = null; if (tipEl) tipEl.hidden = true;
+}
 const tipOf = e => e.target.closest && e.target.closest('[data-tip]');
 D.addEventListener('mouseover', e => { const el = tipOf(e); if (el && el !== tipAt) tipShow(el); });
 D.addEventListener('mouseout', e => { if (tipAt && !(e.relatedTarget && tipAt.contains(e.relatedTarget))) tipHide(); });
