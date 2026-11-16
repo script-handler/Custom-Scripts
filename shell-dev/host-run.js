@@ -314,6 +314,43 @@ async function main() {
         }
     }
     await scheme('light');
+    console.log('\n── Popovers over glass cards (each glass card is a stacking context)');
+    // EGP's ngx-popover (absolute, z-index 999999) inside one card, reaching over the next one; hovered with the real mouse.
+    for (const th of ['liquid', 'glassmorphic', 'material']) {
+        await go(TL, { displayTheme: th, lgBg: 'mesh', auBg: 'mesh' }); await until("!!document.querySelector('.atc-time')"); await sleep(400);
+        const at = await ev(`(() => { const cs = [...document.querySelectorAll('#global-portal .box-widget:not(.box-widget .box-widget)')].filter(c => c.getBoundingClientRect().height > 40), a = cs[0], q = a && a.getBoundingClientRect();
+            const b = a && cs.find(c => { const r = c.getBoundingClientRect(); return c !== a && r.top < innerHeight - 40 && (r.top >= q.bottom - 1 || r.left >= q.right - 1); }); if (!b) return null;
+            a.insertAdjacentHTML('beforeend', '<span id="hr-pt" popoverOnHover="true" style="display:inline-block;width:24px;height:24px">i</span><popover-content><div id="hr-pp" class="popover" role="popover" style="position:absolute;z-index:999999;display:block;width:120px;height:60px"></div></popover-content>');
+            const pp = document.getElementById('hr-pp'), o = pp.offsetParent.getBoundingClientRect(), r = b.getBoundingClientRect(), t = document.getElementById('hr-pt').getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + Math.min(40, r.height / 2);
+            pp.style.left = (x - 60 - o.left) + 'px'; pp.style.top = (y - 30 - o.top) + 'px'; return { tx: t.left + 12, ty: t.top + 12, x, y }; })()`);
+        if (!at) { ok(`${th}: two stacked cards to test with`, false); continue; }
+        const onTop = () => ev(`(() => { const e = document.elementFromPoint(${at.x}, ${at.y}); return !!e && e.id === 'hr-pp'; })()`);
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.tx, y: at.ty }); await sleep(250);
+        ok(`${th}: with its card hovered, a card's popover paints over the next card`, await onTop());
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 }); await ev("document.getElementById('hr-pt').remove(); document.getElementById('hr-pp').parentElement.remove(); 1");
+    }
+    // Profile hints: the details table built node by node as Angular does (Employee Status's <p> sits straight in its <tr>,
+    // which re-parsed HTML would move out of the table). The theme's stand-ins must show each row's own popover.
+    await go(TL, { displayTheme: 'liquid', lgBg: 'mesh' }); await until("!!document.querySelector('.atc-time')");
+    await ev(`(() => { const el = (t, a, ...k) => { const e = document.createElement(t); for (const [n, v] of Object.entries(a || {})) e.setAttribute(n, v); e.append(...k); return e; };
+        const pop = (s, place = 'top') => el('popover-content', { class: 'popover-Generic', placement: place }, el('div', { class: 'popover fade', role: 'popover', style: 'display: block; top: -10000px; left: -10000px;' }, el('div', { class: 'popover-content' }, s)));
+        const trig = (v, cls) => el('p', { class: 'margin-b0' }, el('span', { class: 'fs-11 text-grey', popoverOnHover: 'true' }, el('b', cls ? { class: cls } : null, v)));
+        const row = (l, ...k) => el('tr', null, el('td', null, el('span', { class: 'fs-11 d-block' }, l)), ...k);
+        const tb = el('tbody', null, row('Cell #: ', el('td', null, pop('0300-1234567'), trig('**34567'))), row('Emergency #: ', el('td', null, pop('0311-7654321'), trig('**54321'))),
+            row('Employee Status: ', trig('Good Performer', 'zone-green'), el('td', null, pop('Date: 10/12/2026 - 10/17/2026 Productivity: 8.5', 'bottom'))),
+            row('Address: ', el('td', null, pop('Flat No 3, Block B, Service Road G8/1'), trig('Flat No 3, B'))));
+        document.querySelector('app-personal-info-widget .gp-user-horizontal-fig').after(el('div', { class: 'row' }, el('table', { class: 'emp-data-info' }, tb))); return 1; })()`);
+    await until("!!document.querySelector('.atc-pgrid [data-tip]') && !!document.querySelector('.atc-pchip[data-tip]')");
+    const stands = await ev(`[...document.querySelectorAll('.atc-pchip[data-tip], .atc-pgrid [data-tip]')].map((e, i) => { e.dataset.hrS = i; return { i, k: e.classList.contains('atc-pchip') ? 'Employee Status' : e.parentElement.querySelector('span').textContent }; })`);
+    const want = { 'Cell #': '0300-1234567', 'Emergency #': '0311-7654321', 'Employee Status': 'Date: 10/12/2026 - 10/17/2026 Productivity: 8.5', Address: 'Flat No 3, Block B, Service Road G8/1' }, got = {};
+    for (const s of stands) {
+        const r = await ev(`(() => { const e = document.querySelector('[data-hr-s="${s.i}"]'); e.scrollIntoView({ block: 'center' }); const q = e.getBoundingClientRect(); return { x: q.left + q.width / 2, y: q.top + q.height / 2 }; })()`);
+        await sleep(150); await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x, y: r.y }); await sleep(150); // after the scroll's event, which closes it
+        got[s.k] = await ev("(() => { const t = document.getElementById('atc-tip'); return t && !t.hidden ? t.textContent.trim() : null; })()");
+    }
+    ok("profile hints: each stand-in (grid value, status chip) shows its own row's popover in the theme tooltip", Object.keys(want).every(k => got[k] === want[k]), got);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 }); await sleep(100);
+    ok('…and the tooltip hides when the pointer leaves', await ev("document.getElementById('atc-tip').hidden"));
     console.log('\n── Early coming modal (EGP: static, no close) and a locked page');
     await go(TL); await until("!!document.querySelector('.atc-chip')"); await sleep(400);
     await ev(`(() => { document.body.insertAdjacentHTML('beforeend', '<div class="modal fade show" id="early-coming-modal" style="display:block" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><div class="section-heading"><h2 class="pull-left">EARLY COMING</h2><div class="clearfix"></div></div></div><div class="modal-body"><textarea></textarea></div><div class="modal-footer"><button class="btn btn-info" id="ec-save">Save</button></div></div></div></div><div class="modal-backdrop fade show"></div>');

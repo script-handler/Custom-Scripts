@@ -39,6 +39,69 @@ const AUDIT = `(() => {
   }
   return Object.entries(out).map(([k, n]) => (n > 1 ? n + '× ' : '') + k);
 })()`;
+// TOOLTIPS (--popovers=1): EGP's hover hints are ngx-popovers. The capture keeps each trigger's popoverOnHover/OnClick
+// attribute and the parked <popover-content>, so every trigger is hovered with the real mouse (a card's :hover counts)
+// and its popover opened where ngx-popover puts it, at its placement.
+const POP_LIST = `(() => {
+  const card = e => { const c = e.closest('.box-widget'); if (c && c.dataset.atcC) return c.dataset.atcC; for (let a = e.parentElement; a; a = a.parentElement) if (a.tagName.includes('-') && a.tagName !== 'POPOVER-CONTENT') return a.tagName.toLowerCase(); return 'page'; };
+  const label = e => (e.getAttribute('alt') || e.getAttribute('title') || e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 26) || e.tagName.toLowerCase() + (e.classList[0] ? '.' + e.classList[0] : '');
+  return [...document.querySelectorAll('[popoveronhover],[popoveronclick]')].map((e, i) => { e.dataset.atcPt = i; return { i, card: card(e), label: label(e) }; });
+})()`;
+const POP_AT = i => `(() => {
+  const e = document.querySelector('[data-atc-pt="${i}"]'); if (!e) return { why: 'gone' };
+  const img = e.tagName === 'AREA' ? document.querySelector('img[usemap="#' + e.closest('map').name + '"]') : null, t = img || e; if (!t) return { why: 'no image' };
+  t.scrollIntoView({ block: 'center', inline: 'center' });
+  const r = t.getBoundingClientRect(); if (!r.width || !r.height || getComputedStyle(t).visibility === 'hidden') return { why: 'not shown' };
+  let x = r.left + r.width / 2, y = r.top + r.height / 2;
+  if (img) { const n = e.coords.split(',').map(Number), xs = n.filter((_, k) => !(k % 2)), ys = n.filter((_, k) => k % 2), avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+    x = r.left + (e.shape === 'circle' ? n[0] : avg(xs)); y = r.top + (e.shape === 'circle' ? n[1] : avg(ys)); }
+  const h = document.elementFromPoint(x, y);
+  if (!h || !(h === e || h === t || t.contains(h))) return { why: 'not hoverable: under ' + (!h ? 'nothing' : h.closest('.atc-view') ? 'our view' : h.tagName.toLowerCase() + (typeof h.className === 'string' && h.className ? '.' + h.className.split(' ')[0] : '')) };
+  return { x, y };
+})()`;
+// A trigger's <popover-content>, as the shell's popOf finds it: in its table row; else, within the widget, the nearest
+// sibling of the trigger or an ancestor (before or after it); else, wrapped deeper, the next one after or the last before.
+// The capture is re-parsed HTML, so a <p> EGP puts straight in a <tr> (Employee Status) lands before the table here and
+// maps wrongly; host-run builds that row as Angular does and checks it there.
+const POP_FIND = `const findPop = e => { const tr = e.closest('tr'), row = tr ? [...tr.querySelectorAll('popover-content')] : [];
+  let pc = row.find(p => e.compareDocumentPosition(p) & 4) || row.pop() || null, a = !pc && e.parentElement;
+  for (let c = e; a && !pc; c = a, a = a.parentElement) { const ks = [...a.children], at = ks.indexOf(c), ps = ks.filter(k => k.tagName === 'POPOVER-CONTENT');
+    if (ps.length) pc = ps.sort((x, y) => Math.abs(ks.indexOf(x) - at) - Math.abs(ks.indexOf(y) - at))[0]; else if (a.tagName.includes('-')) break; }
+  if (!pc && a) { const all = [...a.querySelectorAll('popover-content')]; pc = all.find(p => e.compareDocumentPosition(p) & 4) || all.reverse().find(p => e.compareDocumentPosition(p) & 2); }
+  return pc; };`;
+// A hidden trigger's stand-in in the theme: the [data-tip] element whose tooltip source is that popover's body.
+const POP_STAND = i => `(() => { ${POP_FIND}
+  const pc = findPop(document.querySelector('[data-atc-pt="${i}"]')), body = pc && pc.querySelector('.popover-content'); if (!body) return null;
+  const el = [...document.querySelectorAll('[data-tip]')].find(el => { for (let a = el; a; a = a.parentElement) if (a._tips) return a._tips[+el.dataset.tip] === body; return false; });
+  if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, h = document.elementFromPoint(x, y);
+  return r.width && h && el.contains(h) ? { x, y } : { why: 'stand-in not hoverable' };
+})()`;
+const POP_TIP = i => `(() => { ${POP_FIND}
+  const body = findPop(document.querySelector('[data-atc-pt="${i}"]')).querySelector('.popover-content'), t = document.getElementById('atc-tip');
+  if (!t || t.hidden) return 'no theme tooltip';
+  const r = t.getBoundingClientRect(), n = s => s.replace(/\\s+/g, ' ').trim();
+  if (!r.width || r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight) return 'theme tooltip off-screen';
+  return n(t.textContent) === n(body.textContent) ? 'renders (theme tooltip)' : 'theme tooltip shows other text';
+})()`;
+const POP_OPEN = i => `(() => { ${POP_FIND}
+  const e = document.querySelector('[data-atc-pt="${i}"]'), t = e.tagName === 'AREA' ? document.querySelector('img[usemap="#' + e.closest('map').name + '"]') : e;
+  const pc = findPop(e), pop = pc && pc.querySelector(':scope > .popover');
+  if (!pop) return 'no popover found';
+  const place = pc.getAttribute('placement') || 'top';
+  pop.classList.add('in', 'show', place); pop.style.display = 'block'; pop.style.top = pop.style.left = '0px'; pop.style.setProperty('pointer-events', 'auto', 'important');
+  const hr = t.getBoundingClientRect(), op = pop.offsetParent, o = op ? op.getBoundingClientRect() : { top: 0, left: 0 }, p0 = pop.getBoundingClientRect();
+  const top = place === 'bottom' ? hr.bottom : /left|right/.test(place) ? hr.top + hr.height / 2 - p0.height / 2 : hr.top - p0.height;
+  const left = place === 'left' ? hr.left - p0.width : place === 'right' ? hr.right : hr.left + hr.width / 2 - p0.width / 2;
+  pop.style.top = (top - o.top) + 'px'; pop.style.left = (left - o.left) + 'px';
+  const r = pop.getBoundingClientRect(), cs = getComputedStyle(pop);
+  let res = 'renders';
+  if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < .5 || !r.width) res = 'invisible';
+  else for (const [a, b] of [[.5, .5], [.2, .25], [.8, .75]]) { const x = r.left + r.width * a, y = r.top + r.height * b;
+    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) { res = 'off-screen'; break; }
+    const h = document.elementFromPoint(x, y); if (h && !pop.contains(h)) { res = 'covered by ' + ((h.closest('.box-widget') || {}).dataset?.atcC || h.tagName.toLowerCase()); break; } }
+  pop.classList.remove('in', 'show', place); pop.style.top = pop.style.left = '-10000px'; pop.style.removeProperty('pointer-events');
+  return res;
+})()`;
 // Card crops, design selector | ours selector, per screen: the pairs to read card by card.
 // 'tag=Text' finds the design's card as the section around the first such element whose text starts with Text.
 const CARDS = { tl: { profile: ['section[aria-label="Profile"]', '.atc-c-profile'], stock: ['h3=Stock price', '.atc-c-stock-price'], careers: ['h3=Careers', '.atc-c-careers'],
@@ -144,6 +207,28 @@ async function main() {
                     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }, { name: 'prefers-reduced-motion', value: 'reduce' }] });
                 }
                 if (scheme === 'dark') { const a = await ev(AUDIT) || []; fs.writeFileSync(path.join(OUT, `audit-${sc}-${th}.txt`), a.join('\n')); console.log(`    audit: ${a.length} light leftovers`); }
+                if (flag('popovers')) { // last: it turns the Web Theme off for the baseline
+                    const rows = new Map();
+                    for (const mode of ['on', 'off']) {
+                        if (mode === 'off') { await ev("(() => { const p = JSON.parse(localStorage.getItem('attendancePrefs') || '{}'); p.webTheme = false; localStorage.setItem('attendancePrefs', JSON.stringify(p)); dispatchEvent(new StorageEvent('storage', { key: 'attendancePrefs' })); return 1; })()"); await sleep(2500); }
+                        for (const t of await ev(POP_LIST) || []) {
+                            const at = await ev(POP_AT(t.i)); let res = at.why;
+                            if (!res) { await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y }); await sleep(80); res = await ev(POP_OPEN(t.i)); }
+                            else if (res === 'not shown' || res.startsWith('not hoverable')) { // the theme hides it: hover its stand-in instead
+                                const st = await ev(POP_STAND(t.i));
+                                if (st && st.why) res = st.why;
+                                else if (st) { await sleep(150); // the scroll's event lands a frame later and closes the tooltip (as it should)
+                                    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: st.x, y: st.y }); await sleep(80); res = await ev(POP_TIP(t.i)); }
+                            }
+                            if (!rows.has(t.i)) rows.set(t.i, t); rows.get(t.i)[mode] = res;
+                        }
+                        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
+                    }
+                    const all = [...rows.values()], ok = v => /^renders/.test(v), n = m => all.filter(r => ok(r[m])).length;
+                    console.log(`    tooltips: ${n('on')}/${all.length} render with the theme, ${n('off')}/${all.length} without (✗ = lost to the theme)`);
+                    for (const r of all) console.log(`      ${ok(r.on) ? '✓' : ok(r.off) ? '✗' : '·'} ${(r.card + ' · ' + r.label).padEnd(50)} on: ${String(r.on).padEnd(34)} off: ${r.off}`);
+                    fs.writeFileSync(path.join(OUT, `popovers-${sc}-${th}.json`), JSON.stringify(all, null, 1));
+                }
             }
             rows.push({ sc, th, dFile, oFile }); console.log(`  ✓ ${sc} ${th}`);
         }

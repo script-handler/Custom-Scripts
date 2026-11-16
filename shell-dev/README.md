@@ -8,7 +8,7 @@
 
   | Display Theme | M3 family | Light/dark |
   |---|---|---|
-  | Glassmorphic | Aurora: frosted glass (the same glass build as Liquid) over aurora-glass.png (default), the aurora mesh or its own image | follows the browser |
+  | Glassmorphic | Aurora: frosted glass (the same glass build as Liquid) over the aurora mesh (default), aurora-glass.png or its own image | follows the browser |
   | Material You | Material You | follows the browser |
   | Cyberpunk | Cyberpunk, built from the widget's 8 cyber colours | always dark |
   | Just Business | Business | always light |
@@ -29,6 +29,8 @@ It has no settings of its own. It reads `attendancePrefs` and Plus (`ATC.plus`, 
     # --eval=f.js print the result of evaluating f.js on our side (first theme), for DOM questions
     # --width=N   render both sides N px wide (laptops: 1366, 1440, 1536)
     # --loader=1  inject a blockUI page block + an inline loader gif, crop loader-<theme>-<ms>.png frames with motion on
+    # --popovers=1 hover every EGP tooltip trigger (ngx-popover) with the real mouse, theme on then off: renders, covered,
+    #             hidden, or shown by the theme's own tooltip; ✗ marks one lost to the theme (popovers-<screen>-<theme>.json)
 ```
 
 ## Matching the design

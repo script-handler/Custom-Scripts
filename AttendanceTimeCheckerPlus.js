@@ -455,7 +455,7 @@
         // Liquid Glass (ATCShell.js): a palette or 'custom' (the three colours); background 'auto' (the palette's image, if any) | 'mesh' | 'image' (lgBgUrl: a URL, or 'idb:<stamp>' for the file in IndexedDB 'liquid'); optics multipliers
         lgPalette: 'ocean', lgAccent: '#64B5F6', lgInk: '#101B2D', lgHi: '#F4F8FF', lgClarity: 'regular', lgBg: 'auto', lgBgUrl: '', lgBgDim: 0.15, lgHoverFx: true,
         lgRefract: 1, lgEdge: 1, lgChroma: 1, lgFrost: 1.6, lgTint: 1, lgSpec: 1, lgLegible: 1,
-        auBg: 'auto', auBgUrl: '', auBgDim: 0.15, auBgV: 1 // Glassmorphic Aurora's background, as Liquid's ('auto': aurora-glass.png; file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
+        auBg: 'mesh', auBgUrl: '', auBgDim: 0.15, auBgV: 2 // Glassmorphic Aurora's background, as Liquid's ('auto': aurora-glass.png; file: IndexedDB 'aurora'); Hover Effects is lgHoverFx for both
     };
 
     // Convert "#rrggbb" → "r, g, b" (for use inside rgba(var(--x-rgb), a))
@@ -511,8 +511,9 @@
         if (rose || always) localStorage.setItem(key, JSON.stringify(o));
     }
 
-    // Saved prefs, before they merge over the defaults. auBgV: 'mesh' was the old default, so it moves to the aurora image once.
-    function prefsMigrate(p) { if (p && !p.auBgV) { if (p.auBg === 'mesh') p.auBg = 'auto'; p.auBgV = 1; } return p; }
+    // Saved prefs, before they merge over the defaults. auBgV 1 moved the old default 'mesh' to the aurora image ('auto');
+    // mesh is the default again, so v1's 'auto' goes back once (v2). Saved before v1: kept as chosen.
+    function prefsMigrate(p) { if (p && (p.auBgV || 0) < 2) { if (p.auBgV === 1 && p.auBg === 'auto') p.auBg = 'mesh'; p.auBgV = 2; } return p; }
     function loadPreferences() { userPreferences = { ...userPreferences, ...prefsMigrate(lsJSON('attendancePrefs', {})) }; }
     function savePreferences() { localStorage.setItem('attendancePrefs', JSON.stringify(userPreferences)); }
 
@@ -26191,7 +26192,7 @@ ${BIZ_W},${BIZ_W}::before,${BIZ_W}::after,${BIZ_W} *,${BIZ_W} *::before,${BIZ_W}
                     <span class="settings-option-label">${attIcon('monitor')} Web Theme <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:1px 6px;border-radius:6px;background:var(--att-accent, #8B78F0);color:var(--att-on-accent, #14111F);vertical-align:1px;">PLUS</span> <small style="opacity:0.6;font-size:0.75rem;">Timeline &amp; Attendance follow the theme; off themes the widget only</small></span>
                     <div class="toggle-switch ${userPreferences.webTheme !== false ? 'active' : ''}" data-pref="webTheme"></div>
                 </div>
-                ${bgRows('au', 'glassmorphic', [['auto', 'Aurora glass image'], ['mesh', 'Aurora mesh'], ['image', 'My image — the URL or file below']])}
+                ${bgRows('au', 'glassmorphic', [['mesh', 'Aurora mesh'], ['auto', 'Aurora glass image'], ['image', 'My image — the URL or file below']])}
                 ${sel('lgPalette', 'Palette', [['ocean', 'Arctic'], ['violet', 'Violet'], ['graphite', 'Graphite'], ['teal', 'Teal'], ['green', 'Green'], ['dusk', 'Dusk'], ['custom', 'Custom — the colours below']], { row: lgRow(), icon: 'f-skins' })}
                 <div class="settings-option lg-colors"${lgRow()}><span class="settings-option-label">${attIcon('f-theme')} Glass Colors</span><div class="cyber-color-pickers">${[['lgAccent', 'Accent'], ['lgInk', 'Tint'], ['lgHi', 'Highlight']].map(([k, t]) => `<label><input type="color" data-pref="${k}" value="${userPreferences[k]}"><span>${t}</span></label>`).join('')}</div></div>
                 ${bgRows('lg', 'liquid', [['auto', 'Palette image (Custom: mesh)'], ['mesh', 'Mesh'], ['image', 'My image — the URL or file below']])}

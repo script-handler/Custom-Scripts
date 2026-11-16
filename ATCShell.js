@@ -419,7 +419,13 @@ html[data-att-skin=dark]{color-scheme:dark}
    it hangs under the row and never takes the pointer. ngx-popover parks it at -10000px to hide it. */
 #global-portal app-evaluation-widget{display:block;position:relative}
 #global-portal .performance-metrics-popover .popover{top:calc(100% + 8px)!important;left:0!important;pointer-events:none!important}
-#global-portal .performance-metrics-popover .popover[style*="-10000px"]{display:none!important}`;
+#global-portal .performance-metrics-popover .popover[style*="-10000px"]{display:none!important}
+/* The theme's tooltip (tipShow): a host popover's body beside its stand-in, styled like the skin's popovers. */
+.atc-tip{position:fixed;z-index:2147483000;box-sizing:border-box;max-width:min(320px,calc(100vw - 16px));padding:8px 12px;border:1px solid var(--md-sys-color-outline-variant);border-radius:var(--x-r-card-sm);
+ background:var(--md-sys-color-surface-container-high);color:var(--md-sys-color-on-surface);font:500 12px/17px var(--x-font-body);text-align:left;box-shadow:0 8px 24px -8px rgba(0,0,0,.45);pointer-events:none}
+.atc-tip[hidden]{display:none}.atc-tip *{color:inherit!important;background:transparent!important;font-family:inherit!important;margin:0!important;max-width:100%}
+.atc-tip :is(p,div){display:block}.atc-tip img{max-height:40px}
+[data-tip]{cursor:help}[data-tip]:focus-visible{outline:2px solid var(--md-sys-color-primary);outline-offset:2px;border-radius:4px}`;
 
 // LOADER (M3 loading indicator, design xLoader) over EGP's blockUI gif, every route: the img's own box is the
 // indicator (gif swapped for a clear pixel), the blockMsg its container. A spring morph and quarter turn every
@@ -798,6 +804,9 @@ ${R} .box-widget.atc-over.atc-c-company-awards>app-company-awards-widget{display
 /* BONUS ROW (app-evaluation-widget, XProfile footer): EGP's svgs stay the hover/click targets, so the popover still
    anchors to them; each paints a Material icon through a mask on its own box, its paths hidden. Vault and More info
    are text buttons. The popover's placement is in BASE_CSS (it applies with the skin off too). */
+/* Glass cards (isolation, backdrop-filter) are stacking contexts, so a card's popovers can't rise over the next card:
+   the card in use is lifted over its neighbours. */
+html[data-att-skin][data-x-glass] #global-portal :is(.box-widget,.gp-footer .footer-col):is(:hover,:focus-within){position:relative;z-index:3}
 ${EV}{display:flex!important;align-items:center;gap:4px;margin-top:8px!important;font-size:12px;line-height:16px}
 ${EV}>small{display:inline-flex!important;align-items:center;gap:2px;font-size:12px!important;font-weight:600!important;color:inherit!important;white-space:nowrap}
 ${EV}>small>span:first-child{margin-left:4px;color:var(--x-hero-ink)}${EV}>small>span{display:inline-flex}
@@ -1503,23 +1512,53 @@ function renderOver() {
         if (!c.classList.contains('atc-over')) c.classList.add('atc-over');
     });
 }
+// TOOLTIPS: EGP's hover hints are ngx-popovers on host elements the skin hides. A stand-in marked data-tip="i" shows the
+// i-th of its nearest _tips (popover bodies) in the theme's tooltip, on hover or focus, as the host would.
+const HOVER = '[popoveronhover]';
+// The trigger's <popover-content>: in its table row if it has one (the profile's rows keep each hint in the row, some in
+// another cell); else, within its widget, the nearest sibling of the trigger or of an ancestor (templates put it before or
+// after); else, wrapped deeper, the next one after the trigger or the last before it.
+const popOf = e => { const tr = e && e.closest('tr'), row = tr ? [...tr.querySelectorAll('popover-content')] : [];
+    let pc = row.find(p => e.compareDocumentPosition(p) & 4) || row.pop() || null, a = !pc && e && e.parentElement;
+    for (let c = e; a && !pc; c = a, a = a.parentElement) { const ks = [...a.children], at = ks.indexOf(c), ps = ks.filter(k => k.tagName === 'POPOVER-CONTENT');
+        if (ps.length) pc = ps.sort((x, y) => Math.abs(ks.indexOf(x) - at) - Math.abs(ks.indexOf(y) - at))[0]; else if (a.tagName.includes('-')) break; }
+    if (!pc && a) { const all = [...a.querySelectorAll('popover-content')]; pc = all.find(p => e.compareDocumentPosition(p) & 4) || all.reverse().find(p => e.compareDocumentPosition(p) & 2); }
+    return pc && pc.querySelector('.popover-content'); };
+let tipEl = null, tipAt = null;
+function tipShow(el) {
+    let src = null; for (let a = el; a && !src; a = a.parentElement) if (a._tips) src = a._tips[+el.dataset.tip];
+    if (!src || !src.textContent.trim()) return;
+    if (!tipEl) { tipEl = D.createElement('div'); tipEl.className = 'atc-tip'; tipEl.id = 'atc-tip'; tipEl.setAttribute('role', 'tooltip'); D.body.appendChild(tipEl); }
+    tipEl.replaceChildren(...[...src.childNodes].map(n => n.cloneNode(true))); tipEl.hidden = false; tipAt = el; el.setAttribute('aria-describedby', 'atc-tip');
+    const r = el.getBoundingClientRect(), t = tipEl.getBoundingClientRect(), up = r.top - t.height - 8 >= 8;
+    tipEl.style.left = Math.max(8, Math.min(innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2)) + 'px';
+    tipEl.style.top = (up ? r.top - t.height - 8 : r.bottom + 8) + 'px';
+}
+function tipHide() { if (tipAt) tipAt.removeAttribute('aria-describedby'); tipAt = null; if (tipEl) tipEl.hidden = true; }
+const tipOf = e => e.target.closest && e.target.closest('[data-tip]');
+D.addEventListener('mouseover', e => { const el = tipOf(e); if (el && el !== tipAt) tipShow(el); });
+D.addEventListener('mouseout', e => { if (tipAt && !(e.relatedTarget && tipAt.contains(e.relatedTarget))) tipHide(); });
+D.addEventListener('focusin', e => { const el = tipOf(e); if (el) tipShow(el); });
+D.addEventListener('focusout', tipHide);
+D.addEventListener('keydown', e => { if (e.key === 'Escape') tipHide(); });
+addEventListener('scroll', tipHide, true);
 // PROFILE DETAILS: the host's label/value table becomes the design's 4-column grid (label over value), with the
-// check-in row folded in. The host rows stay, hidden; links forward.
+// check-in row folded in. The host rows stay, hidden; links forward, hover hints show in the tooltip.
 function mountProfileGrid() {
     const w = D.querySelector('app-personal-info-widget'), t = w && w.querySelector('table.emp-data-info'); if (!t) return;
-    const cells = [], fwd = [];
+    const cells = [];
     t.querySelectorAll('tr').forEach(tr => { const td = [...tr.cells];
         for (let i = 0; i < td.length; i++) { const l = txt(td[i]), a = td[i].querySelector('a');
-            if (/:$/.test(l) && td[i + 1]) { const v = txt(td[i + 1]); if (v) cells.push([l.slice(0, -1).replace('Insurance', 'Ins.'), v, td[i + 1].querySelector('a')]); i++; }
-            else if (a && l) cells.push([l.split(' ')[0], l.split(' ').slice(1).join(' ') + ' ↗', a]); } });
-    const tc = w.querySelector('.time-check'); if (tc && !/Actual Time/.test(tc.textContent)) tc.querySelectorAll('small').forEach(e => { const m = /^([^:]+):\s*(.+)$/.exec(txt(e)); if (m) cells.push([m[1], m[2], null]); });
+            if (/:$/.test(l) && td[i + 1]) { const v = txt(td[i + 1]); if (v) cells.push([l.slice(0, -1).replace('Insurance', 'Ins.'), v, td[i + 1].querySelector('a'), td[i + 1].querySelector(HOVER)]); i++; }
+            else if (a && l) cells.push([l.split(' ')[0], l.split(' ').slice(1).join(' ') + ' ↗', a, td[i].querySelector(HOVER)]); } });
+    const tc = w.querySelector('.time-check'); if (tc && !/Actual Time/.test(tc.textContent)) tc.querySelectorAll('small').forEach(e => { const m = /^([^:]+):\s*(.+)$/.exec(txt(e)); if (m) cells.push([m[1], m[2], null, e.querySelector(HOVER)]); });
     if (!cells.length) return;
-    const k = JSON.stringify(cells.map(c => c.slice(0, 2)));
+    const tips = cells.map(c => c[3] && popOf(c[3])), k = JSON.stringify(cells.map((c, i) => [c[0], c[1], !!tips[i]]));
     let g = w.querySelector('.atc-pgrid'), host = t.closest('.row');
     if (!g) { g = D.createElement('div'); g.className = 'atc-pgrid'; host.after(g);
         g.addEventListener('click', e => { const b = e.target.closest('[data-fwd]'), f = b && g._fwd[+b.dataset.fwd]; if (f) { e.preventDefault(); f.click(); } }); }
-    g._fwd = cells.map(c => c[2]);
-    if (g.dataset.k !== k) { g.dataset.k = k; g.innerHTML = cells.map(([l, v, a], i) => `<div><span>${esc(l)}</span><b${a ? ` data-fwd="${i}"` : ''}>${esc(v)}</b></div>`).join(''); }
+    g._fwd = cells.map(c => c[2]); g._tips = tips;
+    if (g.dataset.k !== k) { g.dataset.k = k; g.innerHTML = cells.map(([l, v, a], i) => `<div><span>${esc(l)}</span><b${a ? ` data-fwd="${i}"` : ''}${tips[i] ? ` data-tip="${i}" tabindex="0"` : ''}>${esc(v)}</b></div>`).join(''); }
     if (!host.classList.contains('atc-hide')) host.classList.add('atc-hide');
     if (tc && !/Actual Time/.test(tc.textContent) && !tc.classList.contains('atc-hide')) tc.classList.add('atc-hide');
 }
@@ -1533,6 +1572,8 @@ function mountProfileChip() {
     const j = fc.querySelector(':scope > small.mt-1'), m = j && /(\d{2})\/\d{2}\/\d{2}(\d{2})/.exec(j.textContent);
     if (m) { let sc = fc.querySelector('.atc-since'); if (!sc) { sc = D.createElement('span'); sc.className = 'atc-since'; j.before(sc); } put(sc, 'Since ' + m[1] + '/' + m[2]); if (!j.classList.contains('atc-hide')) j.classList.add('atc-hide'); }
     const row = z.closest('tr') || z.closest('p'); if (row && !row.classList.contains('atc-hide')) row.classList.add('atc-hide');
+    const tp = row && row.querySelector(HOVER), pb = tp && popOf(tp); c._tips = [pb];
+    if (!!pb !== c.hasAttribute('data-tip')) { if (pb) { c.dataset.tip = '0'; c.tabIndex = 0; } else { c.removeAttribute('data-tip'); c.removeAttribute('tabindex'); } }
 }
 // DECOR (Timeline): small additions to cards restyled in place (their hover popovers stay): the co-worker count,
 // the empty-team tile, Health's icon tiles.
@@ -1728,6 +1769,7 @@ function paint() {
 // WEB THEME off, or Plus gone: the page skin's marks come off and EGP reads as before; the chip, the time card and
 // the widget's own theme stay.
 function unskin() {
+    tipHide();
     D.querySelectorAll('.atc-view,.atc-deco,.atc-clk,.atc-n,.atc-hico,.atc-pgrid,.atc-pchip,.atc-since,.atc-bento,.atc-legend,.atc-lchip').forEach(e => e.remove());
     const keep = tcard && tcard.previousElementSibling;
     D.querySelectorAll('.atc-hide').forEach(e => { if (e !== keep) e.classList.remove('atc-hide'); });
