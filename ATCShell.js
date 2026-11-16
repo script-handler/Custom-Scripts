@@ -407,10 +407,10 @@ html[data-att-skin=dark]{color-scheme:dark}
 .atc-hide{display:none!important}
 .atc-time{box-sizing:border-box;display:flex;align-items:center;gap:14px;margin-top:.5rem;padding:10px 14px 10px 10px;border-radius:var(--x-r-card-sm);background:var(--x-glass);border:var(--x-card-border);
  color:var(--md-sys-color-on-surface);font-family:var(--x-font-body);clip-path:var(--x-card-clip)}
-.atc-tm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.atc-tm{flex:0 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}.atc-tm>:not(.atc-big){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .atc-time .atc-k{color:var(--x-ink);letter-spacing:.5px}.atc-time .atc-big{font-size:34px;line-height:38px;color:var(--md-sys-color-on-surface)}
 .atc-sub{font-size:12px;line-height:16px;letter-spacing:.3px;color:var(--md-sys-color-on-surface-variant);white-space:nowrap}
-.atc-tg{flex:none;display:grid;grid-template-columns:auto auto;gap:6px 12px}.atc-tg>div{display:flex;flex-direction:column;min-width:0}
+.atc-tg{flex:1 0 auto;display:grid;grid-template-columns:repeat(2,minmax(max-content,1fr));gap:6px 12px}.atc-tg>div{display:flex;flex-direction:column;min-width:0}
 .atc-tg i{display:flex;align-items:center;gap:5px;font:500 11px/14px var(--x-font-body);letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);white-space:nowrap}
 .atc-tg i::before{content:"";width:8px;height:8px;flex:none;background:var(--d);clip-path:var(--x-sh-i4)}
 .atc-tg b{font-family:var(--x-font-num);font-variation-settings:var(--x-num-fvs-sm);font-size:14px;line-height:20px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--md-sys-color-on-surface)}
@@ -531,10 +531,15 @@ ${RD} .modal-content .text-success{color:var(--x-ok)!important}${RD} .modal-cont
 ${RD} .kb-modal-content{color:${OS}}${RD} .kb-modal-content [class*="kb-"]:not(button):not(.btn){color:inherit!important}
 ${RD} .kb-modal-content :is(.header-titles,.kb-total-label,.kb-cancel-notice,.kb-logo-sub,.kb-pickup-icon,.kb-info-icon-wrap){color:${OSV}!important}
 /* RESPONSIVE: the boards are drawn at 1920; on laptops (1600 and 1440 down) crowded rows give ground. The time card
-   reads its own width (a container: it holds no fixed overlays), so its values drop under the countdown when narrow. */
-.atc-time{flex-wrap:wrap;container-type:inline-size}
-@container (max-width: 440px){.atc-tg{flex:1 0 100%;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 8px}}
-@container (max-width: 300px){.atc-time .atc-big{font-size:28px;line-height:32px}}
+   reads its own width (a container: it holds no fixed overlays) and stays one row: ring | countdown | values. The
+   countdown hugs its text and the values take the rest (four across when there is room, else two by two); narrower,
+   the ring shrinks, then the countdown, then the ring goes (the "% of shift" line still tells progress). */
+.atc-time{flex-wrap:nowrap;container-type:inline-size}
+@container (min-width: 520px){.atc-tg{grid-template-columns:repeat(4,minmax(max-content,1fr))}}
+@container (max-width: 379px){.atc-time{gap:12px}.atc-time .atc-r{--rs:52px!important}}
+@container (max-width: 339px){.atc-time{gap:10px}.atc-time .atc-r{--rs:44px!important}.atc-time .atc-big{font-size:28px;line-height:32px}.atc-tg{column-gap:10px}}
+@container (max-width: 299px){.atc-time .atc-r{display:none}}
+@container (max-width: 259px){.atc-time{gap:8px}.atc-time .atc-big{font-size:24px;line-height:28px}.atc-time .atc-k{font-size:10px;letter-spacing:.3px}.atc-tg{column-gap:6px}.atc-tg b{font-size:13px}.atc-tg i{font-size:10px;letter-spacing:.2px}}
 @media (max-width: 1600px){
  .atc-v-head{flex-wrap:wrap;row-gap:4px}
  .atc-v-seg>span{padding:0 7px;font-size:10.5px}
