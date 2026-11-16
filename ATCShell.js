@@ -301,6 +301,8 @@ const ICON = { // Material icons, 24px
     sheet: 'M19 7H9c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zm0 2v2H9V9h10zm-6 6v-2h2v2h-2zm2 2v2h-2v-2h2zm-4-2H9v-2h2v2zm6-2h2v2h-2v-2zm-8 4h2v2H9v-2zm8 2v-2h2v2h-2zM6 17H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2v1h-2V5H5v10h1v2z',
     trend: 'M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z',
     add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+    personadd: 'M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 8c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zm-6 4c.22-.72 3.31-2 6-2 2.7 0 5.8 1.29 6 2H9zm-3-3v-3h3v-2H6V7H4v3H1v2h3v3z',
+    award: 'M9.68 13.69 12 11.93l2.31 1.76-.88-2.85L15.75 9h-2.84L12 6.19 11.09 9H8.25l2.31 1.84-.88 2.85zM20 10c0-4.42-3.58-8-8-8s-8 3.58-8 8c0 2.03.76 3.87 2 5.28V23l6-2 6 2v-7.72c1.24-1.41 2-3.25 2-5.28zm-8-6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6 2.69-6 6-6zm0 15-4 1.02v-3.1c1.18.68 2.54 1.08 4 1.08s2.82-.4 4-1.08v3.1L12 19z',
     off: 'M19.35 10.04C18.67 6.59 15.64 4 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46C10.21 6.23 11.08 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 18.16 24 16.68 24 15c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z'
 };
 const icon = n => `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="${ICON[n]}"/></svg>`;
@@ -535,7 +537,6 @@ ${RD} .kb-modal-content :is(.header-titles,.kb-total-label,.kb-cancel-notice,.kb
 @container (max-width: 300px){.atc-time .atc-big{font-size:28px;line-height:32px}}
 @media (max-width: 1600px){
  .atc-v-head{flex-wrap:wrap;row-gap:4px}
- .atc-v-sp{flex:1 1 auto}.atc-v-sp2{flex:0 0 40px}.atc-v-sp3{display:none}
  .atc-v-seg>span{padding:0 7px;font-size:10.5px}
  .atc-v-row .atc-v-stack b{overflow-wrap:anywhere}
  ${R} #global-portal .atc-c-usa img[usemap]{zoom:.8}
@@ -756,16 +757,39 @@ ${R} .box-widget.atc-c-careers{background:var(--x-hero)!important;box-shadow:var
 .atc-v-pg{display:flex;gap:2px;flex:none}.atc-v-pg>span{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;background:${MSC('surface-container-highest')};color:${OSV}}
 .atc-v-pg svg{width:18px;height:18px}.atc-v-pg .is-prev svg,.atc-v-ev.is-prev svg{transform:scaleX(-1)}
 .atc-v-act{width:28px;height:28px;display:grid;place-items:center;flex:none;border-radius:50%;color:${OSV};transition:background-color var(--x-effects)}.atc-v-act:hover{background:${LAYER(8)}}.atc-v-act svg{width:18px;height:18px}
-/* Spotlight: the pick in a tile-2 tile, the next ones peeking. */
-.atc-v-spot{flex:1;display:flex;gap:6px;min-height:0}
-.atc-v-sp{position:relative;flex:0 0 66%;display:flex;align-items:center;gap:8px;padding:8px;box-sizing:border-box;min-width:0;border-radius:var(--x-r-card-sm);background:var(--x-tile-2);color:var(--x-on-tile-2);clip-path:var(--x-card-clip);font-size:11px;line-height:14px}
-.atc-v-sp img{width:40px;height:40px;flex:none;object-fit:cover;background:${MSC('surface')};clip-path:var(--x-sh-avatar)}
-.atc-v-sp .atc-v-stack>*{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.atc-v-sp b{font-size:13px;line-height:16px;font-weight:700}.atc-v-sp .atc-v-stack>span:nth-child(3){opacity:.8}
-.atc-v-ack{width:fit-content;font-size:11px;font-weight:600;text-decoration:underline dotted;text-underline-offset:2px}
-.atc-v-sp .atc-v-act{position:absolute;right:2px;top:2px;width:24px;height:24px;color:inherit}.atc-v-sp .atc-v-act svg{width:15px;height:15px}
-.atc-c-spotlight .atc-v-head>.atc-v-pg{margin-left:auto}.atc-c-spotlight .atc-v-head>.atc-v-link{margin-left:4px}
-.atc-v-sp2,.atc-v-sp3{display:grid;place-items:center;overflow:hidden;border-radius:var(--x-r-card-sm);clip-path:var(--x-card-clip)}.atc-v-sp2[role=button],.atc-v-sp3[role=button]{cursor:pointer}
-.atc-v-sp2 img,.atc-v-sp3 img{width:32px;height:32px;object-fit:cover;background:${MSC('surface')};clip-path:var(--x-sh-avatar)}.atc-v-sp3 img{width:26px;height:26px;opacity:.8}.atc-v-sp2{flex:0 0 20%;background:var(--x-tile-3)}.atc-v-sp3{flex:1;background:var(--x-tile)}
+/* Spotlight (design: Spotlight Card Redesign · A Focus card) at the design's sizes, from the theme's tokens and shapes so
+   every Display Theme draws it its own way. Sized by the card (a container): narrower than the design's 308px of content,
+   Recommend keeps its icon, then the pick and the buttons shrink, then the pick stacks over the actions and the pager
+   (the pager also wraps under the actions whenever both arrows don't fit); long text ends
+   in "…" as in the design. */
+.atc-v-sl{container-type:inline-size;display:flex;flex-direction:column;gap:14px;height:100%;min-height:0}
+.atc-v-sl>.atc-v-head{flex-wrap:nowrap;gap:8px;min-width:0}
+${R} #global-portal .atc-v-sl .atc-v-t{font-size:15px!important;line-height:20px!important;font-weight:700!important;letter-spacing:-.01em}
+.atc-v-sl-date{flex:none;padding:3px 8px;border:1px solid ${OV};border-radius:var(--x-r-chip);background:${LAYER(8)};color:${OSV};font-size:11px;line-height:14px;font-weight:500;white-space:nowrap}
+.atc-v-sl-rec{flex:none;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 12px;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--x-on-tile-2) 30%,transparent);border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);background:var(--x-tile-2);color:var(--x-on-tile-2);font-size:12px;line-height:16px;font-weight:600;white-space:nowrap;transition:filter var(--x-effects)}
+.atc-v-sl-rec:hover{filter:brightness(1.08)}.atc-v-sl-rec svg{flex:none;width:15px;height:15px}
+.atc-v-sl-who{flex:1;min-height:0;display:flex;align-items:center;gap:14px}
+.atc-v-sl-av{flex:none;width:56px;height:56px;padding:2px;box-sizing:border-box;clip-path:var(--x-sh-avatar);background:conic-gradient(from 200deg,${MSC('primary')},${MSC('tertiary')},${MSC('secondary')},${MSC('primary')})}
+.atc-v-sl-av img{display:block;width:100%;height:100%;object-fit:cover;clip-path:var(--x-sh-avatar);background:${MSC('surface')}}
+.atc-v-sl-who .atc-v-stack{flex:1;min-width:0;gap:2px}.atc-v-sl-who .atc-v-stack>*{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.atc-v-sl-who .atc-v-stack>b{font-size:16px;line-height:20px;font-weight:700;letter-spacing:-.01em}
+.atc-v-sl-who .atc-v-stack>span:not(.atc-v-sl-by){font-size:12.5px;line-height:16px;color:${OSV}}
+.atc-v-sl-who .atc-v-stack>.atc-v-sl-by{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px;line-height:15px;color:${OSV}}
+.atc-v-sl-by svg{flex:none;width:12px;height:12px;color:${MSC('tertiary')}}.atc-v-sl-by>span{min-width:0;overflow:hidden;text-overflow:ellipsis}.atc-v-sl-by b{font-weight:600;color:${OS}}
+.atc-v-sl-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:12px;border-top:1px solid ${OV}}
+.atc-v-sl-grp{display:flex;align-items:center;gap:6px;min-width:0}.atc-v-sl-grp+.atc-v-sl-grp{gap:10px;margin-left:auto}
+.atc-v-sl-ib,.atc-v-sl-pill{flex:none;display:inline-flex;align-items:center;justify-content:center;height:30px;box-sizing:border-box;border:1px solid ${OV};border-radius:var(--x-r-btn);clip-path:var(--x-btn-clip);background:${LAYER(8)};color:${OS};transition:background-color var(--x-effects)}
+.atc-v-sl-ib{width:30px}.atc-v-sl-pill{gap:6px;padding:0 10px;font-size:12px;line-height:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.atc-v-sl-ib:hover,.atc-v-sl-pill:hover{background:${LAYER(16)}}.atc-v-sl-ib svg{width:15px;height:15px}.atc-v-sl-pill svg{width:14px;height:14px}.atc-v-sl-ib.is-prev svg{transform:scaleX(-1)}
+/* The pill pager: the active day an elongated pill, the others small dots. */
+.atc-v-sl-dots{display:flex;align-items:center;gap:4px}.atc-v-sl-dots>i{flex:none;width:5px;height:5px;border-radius:999px;background:${LAYER(30)};transition:width var(--x-effects),background-color var(--x-effects)}
+.atc-v-sl-dots>i.is-on{width:14px;background:${MSC('primary')}}
+@container (max-width: 300px){.atc-v-sl-rec{width:30px;padding:0}.atc-v-sl-rec>span{display:none}}
+@container (max-width: 250px){.atc-v-sl-who{gap:12px}.atc-v-sl-av{width:48px;height:48px}}
+@container (max-width: 240px){.atc-v-sl-act{column-gap:6px}.atc-v-sl-grp{gap:4px}.atc-v-sl-grp+.atc-v-sl-grp{gap:8px}.atc-v-sl-ib{width:28px;height:28px}.atc-v-sl-pill{height:28px;padding:0 9px}}
+@container (max-width: 200px){.atc-v-sl{gap:12px}.atc-v-sl-grp,.atc-v-sl-grp+.atc-v-sl-grp{flex:1 0 100%;justify-content:center;margin:0}.atc-v-sl-date{display:none}
+ .atc-v-sl-who{flex-direction:column;justify-content:center;gap:8px;text-align:center}.atc-v-sl-who .atc-v-stack{flex:none;width:100%;align-items:center}
+ .atc-v-sl-who .atc-v-stack>*{max-width:100%;box-sizing:border-box}.atc-v-sl-who .atc-v-stack>.atc-v-sl-by{justify-content:center}}
 /* eGP Knowledge: an icon tile and the item. */
 .atc-v-row{flex:1;display:flex;align-items:center;gap:10px;min-width:0}.atc-v-row b{font-size:13px;line-height:17px;font-weight:700}
 .atc-c-egp-knowledge .atc-v-ico{width:52px;height:52px;clip-path:var(--x-sh-i5)}
@@ -1449,19 +1473,27 @@ const VIEWS = {
         html: d => { const av = (s, on) => `<span class="atc-v-av${on ? ' is-on' : ''}"${on ? ' title="Online"' : ''}><img src="${esc(s)}" alt=""></span>`;
             return `<div class="atc-v-lw"><div class="atc-v-lead"><div class="atc-v-leads">${d.lead.map(([s, n, r, on]) => `<div class="atc-v-person">${av(s, on)}<div style="min-width:0"><b>${esc(n)}</b><span>${esc(r)}</span></div></div>`).join('')}</div>`
             + `<div class="atc-v-sup"><small>${esc(d.title)}</small>${av(d.sup[0], d.sup[3])}<b>${esc(d.sup[1])}</b><span>${esc(d.sup[2])}</span></div></div></div>`; } },
-    // Days run newest first: ‹ is newer, › older. The host's › stays on the last day and throws there, so it's dropped;
-    // the peek tiles are the next two days, the second one two clicks away.
+    // Design: Spotlight Card Redesign · A Focus card. A header (date chip, Recommend), the day's pick at full width, one
+    // action row: Like, Acknowledgement (its hint in the tooltip), Message | position, pager. Days run newest first: ‹ is
+    // newer, › older; the host's › stays on the last day and throws there, so it's dropped.
     spotlight: { read: c => { const its = [...c.querySelectorAll('.carousel-item')], a = its.findIndex(x => x.classList.contains('active')), it = its[a], f = it && it.querySelector('.gp-user-horizontal-fig'); if (!f) return null;
             const sm = f.querySelectorAll('figcaption small'), ci = it.querySelector('.comments-icon'), im = ci ? ci.querySelectorAll('img') : [], ctl = carCtl(c), nx = ctl[1] && a < its.length - 1 ? ctl[1] : null;
-            const peek = nx ? its.slice(a + 1, a + 3).map(x => src(x.querySelector('.gp-user-horizontal-fig img'))) : [];
             // Acknowledgement: EGP draws the recommendation (.popover-Spotlight) only while its label is hovered.
             const ack = [...it.querySelectorAll('small')].find(s => /acknowledg/i.test(s.textContent));
-            return { img: src(f.querySelector('img')), n: txt(f.querySelector('strong')), r: txt(sm[0]), by: txt(sm[1]).replace(/^Recommended By:\s*/i, '').replace(/^(\S)\S*\s+(?=\S)/, '$1. '),
-                likes: txt(ci && ci.querySelector('small')), pg: [!!ctl[0], !!nx], peek, ack: !!ack, tips: ack ? [{ host: ack, find: () => c.querySelector('.popover-Spotlight') }] : [],
-                fwd: [[...it.querySelectorAll('.box-widget-title a')].pop(), im[0], im[1], ctl[0], nx, nx && { click: () => { nx.click(); nx.click(); } }] }; },
-        html: d => `<div class="atc-v-head"><h3 class="atc-v-t">Spotlight</h3>${pager(d.pg, 3, ['Newer', 'Older'])}<a class="atc-v-link" data-fwd="0">Recommend</a></div><div class="atc-v-spot" role="list">`
-            + `<div class="atc-v-sp" role="listitem"><img src="${esc(d.img)}" alt=""><div class="atc-v-stack"><b>${esc(d.n)}</b><span>${esc(d.r)}</span><span>${btn(1, 'Like', '👍 ' + esc(d.likes), 'atc-v-like')}${d.by ? ' · by ' + esc(d.by) : ''}</span>${d.ack ? '<span class="atc-v-ack" data-tip="0" tabindex="0">Acknowledgement</span>' : ''}</div>${btn(2, 'Send wishes', icon('chat'), 'atc-v-act')}</div>`
-            + [0, 1].map(i => d.peek[i] != null ? btn(4 + i, 'Older', `<img src="${esc(d.peek[i])}" alt="">`, 'atc-v-sp' + (i + 2)) : `<span class="atc-v-sp${i + 2}"></span>`).join('') + '</div>' },
+            return { img: src(f.querySelector('img')), n: txt(f.querySelector('strong')), r: txt(sm[0]), by: txt(sm[1]).replace(/^Recommended By:\s*/i, ''),
+                date: txt(it.querySelector('.box-widget-title > small')), likes: txt(ci && ci.querySelector('small')), at: a, of: its.length, pg: [!!ctl[0], !!nx], wish: !!im[1],
+                ack: !!ack, tips: ack ? [{ host: ack, find: () => c.querySelector('.popover-Spotlight') }] : [],
+                fwd: [[...it.querySelectorAll('.box-widget-title a')].pop(), im[0], im[1], ctl[0], nx] }; },
+        html: d => `<div class="atc-v-sl"><div class="atc-v-head"><h3 class="atc-v-t">Spotlight</h3>${d.date ? `<span class="atc-v-sl-date">${esc(d.date)}</span>` : ''}`
+            + `<span class="atc-v-sl-rec" role="button" tabindex="0" aria-label="Recommend a colleague" data-fwd="0">${icon('personadd')}<span>Recommend</span></span></div>`
+            + `<div class="atc-v-sl-who"><span class="atc-v-sl-av"><img src="${esc(d.img)}" alt=""></span><div class="atc-v-stack"><b>${esc(d.n)}</b><span>${esc(d.r)}</span>`
+            + (d.by ? `<span class="atc-v-sl-by">${icon('star')}<span>Recommended by <b>${esc(d.by)}</b></span></span>` : '') + '</div></div>'
+            + `<div class="atc-v-sl-act"><div class="atc-v-sl-grp">${btn(1, `Like, ${esc(d.likes)} likes`, sym('thumb_up') + `<span>${esc(d.likes)}</span>`, 'atc-v-sl-pill')}`
+            + (d.ack ? `<span class="atc-v-sl-ib atc-v-ack" role="button" tabindex="0" aria-label="Acknowledgement" data-tip="0">${icon('award')}</span>` : '')
+            + (d.wish ? btn(2, 'Send wishes', icon('chat'), 'atc-v-sl-ib') : '') + '</div><div class="atc-v-sl-grp">'
+            // Pill pager: the active day an elongated pill, the others dots; past five days a window of five slides with it.
+            + (d.of > 1 ? `<span class="atc-v-sl-dots" role="img" aria-label="Day ${d.at + 1} of ${d.of}">${(w => Array.from({ length: w }, (_, i) => { const s = Math.max(0, Math.min(d.at - 2, d.of - w)); return `<i${s + i === d.at ? ' class="is-on"' : ''}></i>`; }).join(''))(Math.min(5, d.of))}</span>` : '')
+            + (d.pg[0] ? btn(3, 'Newer', icon('next'), 'atc-v-sl-ib is-prev') : '') + (d.pg[1] ? btn(4, 'Older', icon('next'), 'atc-v-sl-ib') : '') + '</div></div></div>' },
     'egp-knowledge': { read: c => { const it = c.querySelector('.carousel-item.active'); if (!it) return null; const m = /(\d+)\s*\/\s*(\d+)/.exec(txt(it.querySelector('figcaption .fw-bold'))), ctl = carCtl(c);
             return { t: txt(it.querySelector('.know-knowledge')), i: m ? m[1] : '', n: m ? m[2] : '', pg: ctl.map(Boolean), fwd: [it.querySelector('.play-button-overlay'), ...ctl] }; },
         html: d => `<div class="atc-v-head"><h3 class="atc-v-t">eGP Knowledge</h3>${pager(d.pg, 1)}</div>`
