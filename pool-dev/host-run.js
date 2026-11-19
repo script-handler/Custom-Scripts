@@ -77,10 +77,13 @@ async function main() {
     fs.mkdirSync(OUT, { recursive: true });
     const exe = CHROME;
     const port = 9300 + Math.floor(Math.random() * 400);
-    const args = ['--remote-debugging-port=' + port, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'pool-host-')),
+    const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pool-host-'));
+    const args = ['--remote-debugging-port=' + port, '--user-data-dir=' + profile,
         '--no-first-run', '--no-default-browser-check', '--window-size=1400,1000', 'about:blank'];
     if (!OPEN) args.unshift('--headless=new', '--disable-gpu');
     const proc = spawn(exe, args, { stdio: 'ignore' });
+    // Each run's profile is ~55 MB; left behind they filled the disk.
+    process.on('exit', () => { try { proc.kill(); } catch (_) {} try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch (_) {} });
     const bail = OPEN ? null : setTimeout(() => { console.log('✗ TIMEOUT'); try { proc.kill(); } catch (_) {} process.exit(2); }, 240000);
 
     let target;

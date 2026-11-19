@@ -230,6 +230,20 @@ head('Table helpers');
         if (why === 'outside' || why === 'kitchen') { clampedOk = false; break; }
     }
     ok('a clamped spot is never refused as outside or past the head string (400 drags)', clampedOk);
+    // A drag onto a ball rests the cue ball against it: touching, never overlapping, and where it was dragged.
+    const apex = w.balls.find(b => b.id !== 0 && Math.abs(b.x - T.footX) < 1 && Math.abs(b.y) < 1);
+    const touch = P.prClampPlace(w, apex.x - 5, apex.y + 3, 'anywhere'), td = Math.hypot(touch[0] - apex.x, touch[1] - apex.y);
+    ok('a drag onto a ball stops against it, on the side it came from', P.prCanPlace(w, touch[0], touch[1], 'anywhere') === null &&
+        td < 2 * R + 0.2 && touch[0] < apex.x && touch[1] > apex.y, td.toFixed(2) + ' from its centre');
+    let freeOk = 0, near = 0;
+    for (let i = 0; i < 600; i++) {
+        const x = T.footX - 60 + (i * 7.31 % 160), y = -70 + (i * 13.7 % 140), p = P.prClampPlace(w, x, y, 'anywhere');
+        if (P.prCanPlace(w, p[0], p[1], 'anywhere') === null) freeOk++;
+        if (Math.hypot(p[0] - x, p[1] - y) <= 10 * R) near++;          // the rack's middle is 9 R from its edge
+    }
+    ok('600 drags over the rack all land on a free spot, close to the pointer (within 10 R)', freeOk === 600 && near === 600, freeOk + ' free, ' + near + ' near');
+    const free = P.prClampPlace(w, -300, 40, 'anywhere');
+    ok('a drag onto open felt is left where it is', free[0] === -300 && free[1] === 40);
 
     const cue = w.balls[0];
     Object.assign(cue, { state: 'pocketed', pocket: 3 });

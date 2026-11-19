@@ -58,14 +58,15 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // edge drawn in 2D and their shadows tapered at the pockets (the user, 2026-10-27: the side pockets'
 // mouths could not be judged): only the render moves; before it bc97179947f65b1e. Then the 3D aim
 // camera v3 (the user, 2026-11-19: GTA-style low view, a ball-wide corridor, rings on the felt for the
-// ghost ball): only the render moves; before it 7fc9682570378984.
+// ghost ball): only the render moves; before it 7fc9682570378984. Then the room round the 3D table and a
+// white object-ball guide (the user, 2026-11-19): only the render moves; before it f096dcbff46b601d.
 const POOL_ON_MAIN = {
     table: '5bd733503d768ea2',
     breaks: 'ffd797cb08eacfc5',
     fuzz: '17590ecc164a4932',
     judge: '3f7cb57ff43b72e2',
     cpu: '545e1b0238ea0a97',
-    render: 'f096dcbff46b601d',
+    render: 'b5b8a5db3359ff1b',
     match: '9a523e40b537abab',
 };
 const WHAT = {
@@ -160,8 +161,11 @@ head('Snooker table: ball in hand in the D');
         if (Math.hypot(q2[0] - q[0], q2[1] - q[1]) > 1e-9) still = false;
     }
     ok('400 drags anywhere clamp to a spot inside the D, and a spot in the D stays put', inside && still);
-    const q = P.prClampPlace(w, 0, 0, 'D'), q2 = P.prClampPlace(w, -293.5 - 200, 0, 'D');
+    // The zone's shape alone (the brown sits on the line's centre).
+    const bare = Object.assign({}, w, { balls: [] }), q = P.prClampPlace(bare, 0, 0, 'D'), q2 = P.prClampPlace(bare, -293.5 - 200, 0, 'D');
     ok('dragged past the baulk line it stops on the line; past the arc it slides round it', near(q[0], -293.5) && near(q[1], 0) && near(Math.hypot(q2[0] + 293.5, q2[1]), 81.8, 1e-6));
+    const brown = w.balls.find(o => o.id === 4), qb = P.prClampPlace(w, brown.x + 1, brown.y + 2, 'D');
+    ok('dragged onto the brown it rests against it, inside the D', P.prCanPlace(w, qb[0], qb[1], 'D') === null && Math.hypot(qb[0] - brown.x, qb[1] - brown.y) < 2 * w.cfg.ballR + 0.2, qb.map(n => n.toFixed(1)).join());
     ok('pool\'s zones are unchanged by the D', P.prCanPlace(P.ppCreateWorld(), -300, 0, 'kitchen') === null && JSON.stringify(P.prClampPlace(P.ppCreateWorld(), 0, 0, 'kitchen')) === '[-250,0]');
 }
 

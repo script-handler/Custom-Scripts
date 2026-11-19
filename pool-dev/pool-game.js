@@ -998,7 +998,7 @@
         const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
         const dragging = !!(S.drag && S.drag.kind === 'power');
-        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
+        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT, pgSignVersion()]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
             // Hawkeye: full paths; never 0, which reads as Guideline None and hides the cue ball's path.

@@ -352,8 +352,33 @@ function frame(scene, w, h) {
     const c3 = P.pcProject(chase, [rack.table.headX, 0, cfg.ballR]);
     const cue3 = t3.px(c3[0], c3[1]);
     ok('3D: the cue ball sits where the camera puts it', ivory(cue3), cue3.join(','));
-    const sky = t3.px(W / 2, 20);
-    ok('3D: above the far rail is the (cleared) backdrop', sky.every(c => c < 10), sky.join(','));
+    const sky = t3.px(W / 2, 20), sky2 = frame({ view: ortho, world: rack }).px(W / 2, 4);
+    ok('3D: above the far rail is the room: dark and warm, not felt', sky.every(c => c < 70) && sky[0] >= sky[2] && sky[0] >= sky[1], sky.join(','));
+    ok('2D draws no room: its backdrop stays cleared', sky2.every(c => c < 10), sky2.join(','));
+    const sm = (P.pgDrawRoom.toString() + P.pgDrawAir.toString()).match(/createRadialGradient|createLinearGradient/g) || [];
+    // The signs: the picture as 4×3×2 textured triangles on the wall ahead, from either end; the one behind is skipped.
+    {
+        let draws = 0;
+        const was = P.PG_SIGN.img, v0 = P.pgSignVersion();
+        Ctx.prototype.clip = function () {}; Ctx.prototype.drawImage = function () { draws++; };
+        P.PG_SIGN.img = { complete: true, naturalWidth: 640, naturalHeight: 360 };
+        frame({ view: chase, world: rack });
+        const ahead = draws; draws = 0;
+        frame({ view: P.pcView(P.pcChase([rack.table.footX, 0], Math.PI, 35, W, H, cfg)), world: rack });
+        const behind = draws; draws = 0;
+        delete Ctx.prototype.clip; Ctx.prototype.drawImage = function () {};
+        P.PG_SIGN.img = was;
+        ok('looking up the table or down it, the sign ahead is drawn (24 triangles) and the one behind is not', ahead === 24 && behind === 24, ahead + ' / ' + behind);
+        ok('the sign\'s load bumps a version that keys the table cache and the game\'s redraw', P.pgSignVersion() === v0 && /pgSignVersion\(\)/.test(P.pgRender.toString()));
+    }
+    {
+        const made = [], mk = (w, h) => { made.push([w, h]); return { width: w, height: h, getContext: () => new Ctx(new Raster(w, h), 1) }; };
+        frame({ view: chase, world: rack, makeCanvas: mk }); frame({ view: chase, world: rack, makeCanvas: mk });
+        const has = (w, h) => made.filter(m => m[0] === w && m[1] === h).length;
+        ok('the room draws into a half-size layer, and the vignette is baked at an eighth once per size (aiming redraws the table each frame)',
+            has(Math.ceil(W / 2), Math.ceil(H / 2)) === 1 && has(Math.ceil(W / 8), Math.ceil(H / 8)) === 1, JSON.stringify(made));
+    }
+    ok('the room is drawn with the table layer (cached per pose), not per frame', sm.length >= 4 && !/pgDrawRoom|pgDrawAir/.test(P.pgRender.toString()));
     const hidden = frame({ view: ortho, world: rack, bih: { x: 0, y: 0, valid: true } }).px(...at(rack.table.headX, 0));
     ok('ball in hand hides the real cue ball', !ivory(hidden), hidden.join(','));
 

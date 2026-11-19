@@ -221,9 +221,9 @@
         return !!m && x <= m.baulkX + 1e-9 && (x - m.baulkX) ** 2 + y * y <= m.dR * m.dR + 1e-6;
     }
 
-    // The nearest [x, y] the zone allows, so a dragged cue ball slides along the
-    // limits instead of crossing them. Other balls are not pushed; overlap is refused.
-    function prClampPlace(world, x, y, zone) {
+    // The nearest [x, y] the zone allows, so a dragged cue ball slides along the limits instead of
+    // crossing them, and rests against another ball instead of in it (other balls are never pushed).
+    function prClampZone(world, x, y, zone) {
         const t = world.table, R = world.cfg.ballR;
         const hx = t.halfLength - R, hy = t.halfWidth - R;
         const p = [Math.max(-hx, Math.min(zone === 'kitchen' ? Math.min(hx, t.headX) : hx, x)), Math.max(-hy, Math.min(hy, y))];
@@ -234,6 +234,36 @@
             if (d > m.dR) { p[0] = m.baulkX + dx / d * m.dR; p[1] = p[1] / d * m.dR; }
         }
         return p;
+    }
+    function prClampPlace(world, x, y, zone) {
+        const want = prClampZone(world, x, y, zone);
+        if (prCanPlace(world, want[0], want[1], zone) !== 'overlap') return want;
+        const gap = 2 * world.cfg.ballR + 0.05, others = world.balls.filter(b => b.id !== 0 && b.state !== 'pocketed');
+        // Out of each ball along the line from its centre, then back into the zone; a few rounds settle a pair.
+        let p = want;
+        for (let i = 0; i < 8; i++) {
+            let moved = false;
+            others.forEach(b => {
+                const dx = p[0] - b.x, dy = p[1] - b.y, d = Math.hypot(dx, dy);
+                if (d >= gap) return;
+                const ux = d > 1e-6 ? dx / d : -1, uy = d > 1e-6 ? dy / d : 0;
+                p = [b.x + ux * gap, b.y + uy * gap]; moved = true;
+            });
+            p = prClampZone(world, p[0], p[1], zone);
+            if (!moved) break;
+        }
+        if (prCanPlace(world, p[0], p[1], zone) === null) return p;
+        // Wedged (a cluster, a ball on the cushion or the D's line): the nearest free spot touching a ball near it.
+        let best = null, bd = Infinity;
+        others.forEach(b => {
+            if (Math.hypot(b.x - want[0], b.y - want[1]) > 4 * gap) return;
+            for (let k = 0; k < 72; k++) {
+                const a = k / 72 * Math.PI * 2, q = [b.x + Math.cos(a) * gap, b.y + Math.sin(a) * gap];
+                const d = Math.hypot(q[0] - want[0], q[1] - want[1]);
+                if (d < bd && prCanPlace(world, q[0], q[1], zone) === null) { best = q; bd = d; }
+            }
+        });
+        return best || want;
     }
 
     function prPlaceCue(world, x, y) {

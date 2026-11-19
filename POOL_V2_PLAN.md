@@ -2977,9 +2977,9 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
 - **Guides** (`pool-render.js`), the user's spec, "follow the reference exactly": three bars (half-width 0.62 R, `PG_BAR`:
   narrower than the rings, as GTA's; at a full ball width they spilled past the ghost ring) with solid
   2 px edges and a gradient between them, fading along their length, no centre line. Cue ball to contact
-  (ivory, hot when illegal); the object ball's line in **that ball's colour** (dark balls lifted toward white,
-  `pgGuideColour`); the cue ball's deflection along its followed path (it was a dotted line). Rings on the felt
-  under the cue ball, the ghost (with a soft fill) and the target (its colour). The ghost and target rings sit
+  (ivory, hot when illegal); the object ball's line in **bright white** (`PG_GUIDE_OBJ`; it was that ball's
+  colour, but the user found the blue and the reds too dull on the felt); the cue ball's deflection along its followed path (it was a dotted line). Rings on the felt
+  under the cue ball, the ghost (with a soft fill) and the target (white). The ghost and target rings sit
   inside a ball's footprint (0.84 R, `PG_RING`): the two balls touch at 2 R, so their rings keep a 0.3 R gap and never
   overlap (the user, from GTA's); the cue ball's wider ring gives way to the ghost's on a short shot. The bars are
   cut out of every ring (an even-odd clip), so each ends on its ring's curve and no fade shows inside a ring. The user turned down 3D ghost
@@ -2996,9 +2996,41 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
   sizes, drawn scaled: compact 3D's full repaint is 2.3 ms (2.7 before this work).
 - **Tests.** render-verify drops the design-projection match for 3D and checks the stops, the room left for the
   cue, the eye above the cue's axis, the zoom, snooker's equal cue ball, and the contact in view at every stop
-  and aim from a corner. snooker-verify's pool render fingerprint moves (before: 7fc9682570378984).
-- **Not built yet:** the atmosphere pass (a lamp glow and vignette above the far rail, distance haze on the felt,
-  drawn into the cached table layer). The low view leaves the top ~40% as the cleared backdrop.
+  and aim from a corner. snooker-verify's pool render fingerprint moves (before: 7fc9682570378984; then
+  f096dcbff46b601d before the room).
+- **The room** (`pgDrawRoom`, `pgDrawAir`; 3D only, drawn into the table layer, so it is cached per pose). The low
+  view left the top ~40% as the cleared backdrop. Now there is a floor lit warm round the table, an amber glow along the horizon,
+  and 72 out-of-focus bar lights (a seeded ring 2.2–4.2 HL out, from floor height to above the eye; lamp amber with
+  some neon pink, cyan and violet). Over the finished table: haze on the far rail and cloth (gone by about 40° of pitch)
+  and a vignette. The user wanted it vivid and visible from Cue to Stand, not only at Cue: the lights reach down to
+  floor height, and the glow still shows when the horizon is above the frame. At High the table fills the view. Its
+  gradients keep a transparent middle stop, because the test rasterizer flattens a gradient to that stop.
+- **The sign** (`pgDrawSign`, the user's picture: palms at sunset). A lightbox on each end wall, 3 HL out, rising
+  from behind the far rail. It has a pink glow, a dark board and a neon rim, and is drawn between the lights past
+  its wall and the nearer ones, so the bokeh stays in front of it. The picture is embedded as a 640×360 JPEG, ~34 KB
+  of base64 (`PG_SIGN_SRC`; embedding avoids blocked hosts). It is mapped in perspective as a 4×3 grid of affine
+  triangles, because canvas has no projective drawImage. Each triangle draws only its own cell, opaque, since the
+  seams overlap and lighter lines showed at 94%. A dim overlay follows. `pgSignVersion()` bumps when the picture
+  decodes; it is part of the table cache key and of poolDraw's redraw key, so the first frame after load shows it.
+  There is no setting yet: a URL or upload (`poolSignUrl`) would go in userPreferences.
+- **Perf: the room is not free while aiming.** The chase camera follows the aim, so the table layer is drawn
+  straight to screen on every aim move, not from its cache. perf-check's software canvas flattens gradients and
+  could not see this. Timed in headless Chrome (software raster, dpr 2, compact): table 73 ms, of which the room
+  was 25 ms, the haze and vignette 14 ms, and the sign 8 ms. Now the room draws at half the CSS resolution into
+  a layer and is scaled up (3.6 ms with the blit); it is all glow and blur, and the sign takes on a slight
+  depth-of-field softness. The vignette is baked at an eighth of the size, once per size (`pgLayer`). Textured
+  triangles overlap by one device pixel, not one CSS pixel, or the seams show in the half-size layer. After the
+  change the whole table draw is ~11 ms (from ~78) in the same setup. GPU-raster Chrome is far cheaper for every
+  part; the ratios are what matter.
+- **Disk.** snapshot.js and host-run.js made a ~55 MB Chrome profile in %TEMP% per run and never removed it.
+  56 of them (3 GB) filled C: on 2026-11-19 and were deleted with the user's OK. Both scripts now remove their
+  profile on exit.
+- **Ball in hand rests against balls** (`prClampPlace`, the user: a note that the ball overlaps is no use). A drag onto a
+  ball slides the cue ball out to touching it, on the side it came from, then back into the zone. Wedged in a
+  cluster or against a line, it takes the nearest free spot touching a ball nearby. Other balls are never pushed.
+  `prCanPlace` still refuses an overlap, for the AI and the rules. Only the player's drag goes through the clamp.
+  rules-verify: 600 drags over the rack all land free, within 10 R (the full rack's middle is 9 R from its edge).
+  snooker-verify: a drag onto the brown rests against it, inside the D.
 
 ## Decision log
 
