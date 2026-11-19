@@ -224,7 +224,7 @@ function toggleGameMaxModal(cfg) {
     if (Q.get('palette') && CYBER_PALETTES[Q.get('palette')]) Object.assign(userPreferences, CYBER_PALETTES[Q.get('palette')]);
     if (Q.has('camera')) userPreferences.poolCamera = Q.get('camera') === '2d' ? '2d' : '3d';
     else if (still) userPreferences.poolCamera = '3d';
-    if (Q.has('lean')) userPreferences.poolLean = +Q.get('lean'); else if (still) userPreferences.poolLean = 35;
+    if (Q.has('lean')) userPreferences.poolLean = +Q.get('lean'); else if (still) userPreferences.poolLean = 0;
     if (Q.has('shotcam')) userPreferences.poolShotCam = Q.get('shotcam'); else if (still) userPreferences.poolShotCam = 'overhead';
     // ?felt= sets both games' cloth (⚙️ Table Cloth); ?feltc=rrggbb,rrggbb the custom colours (with ?felt=custom).
     if (Q.has('felt')) { userPreferences.poolTableColor = Q.get('felt'); userPreferences.snookerTableColor = ''; } else if (still) { userPreferences.poolTableColor = 'green'; userPreferences.snookerTableColor = ''; }

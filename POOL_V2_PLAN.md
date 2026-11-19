@@ -2959,6 +2959,47 @@ This is a different case from the Cyberpunk audio visualizer, which was removed 
 
 ---
 
+## 3D aim camera v3: the GTA VI reference (built 2026-11-19)
+
+The user compared the 3D aim view with GTA VI's pool: ours sat high and far, the cue ball filled the bottom edge
+so the cue barely showed, snooker's balls came out half size, and the ghost ball was a screen-space crosshair
+floating over the object ball. This replaces the design's chase camera (Table.dc.html) for 3D aiming.
+
+- **Camera** (`pool-camera.js`). The chase pose is sized in ball diameters, so snooker frames like pool
+  (this reverses S1's "chase camera unscaled on snooker"). Three lean stops, `PC_CHASE`:
+  Cue (lean 0) 12° at 7 D, cue ball 0.08·H below centre; Stand (45) 27° at 11 D, 0.15·H; High (100) 50° at 16 D, 0.2·H.
+  Focal length 1.25·H. The user asked for Cue lower than the first cut (20°): at 8° the eye sits on the
+  cue's own 5.7° rise and the cue fills the frame, so 12° is the floor that keeps the cue a cue.
+- **Dolly-zoom on far targets.** The director eases a `focus` (cue ball to contact, 250 ms low-pass) and the
+  chase zooms 1 → 1.7× from 6 to 26 D, pulling the eye back by the same factor: the cue ball keeps its size and
+  place, a 25 D target is ~1.46× bigger. The zoom fades out toward High. A contact that would pass under the top
+  overlays first sinks the cue ball (to 0.27·H), then widens the view (zoom down to 0.5).
+- **Guides** (`pool-render.js`), the user's spec, "follow the reference exactly": three bars (half-width 0.62 R, `PG_BAR`:
+  narrower than the rings, as GTA's; at a full ball width they spilled past the ghost ring) with solid
+  2 px edges and a gradient between them, fading along their length, no centre line. Cue ball to contact
+  (ivory, hot when illegal); the object ball's line in **that ball's colour** (dark balls lifted toward white,
+  `pgGuideColour`); the cue ball's deflection along its followed path (it was a dotted line). Rings on the felt
+  under the cue ball, the ghost (with a soft fill) and the target (its colour). The ghost and target rings sit
+  inside a ball's footprint (0.84 R, `PG_RING`): the two balls touch at 2 R, so their rings keep a 0.3 R gap and never
+  overlap (the user, from GTA's); the cue ball's wider ring gives way to the ghost's on a short shot. The bars are
+  cut out of every ring (an even-odd clip), so each ends on its ring's curve and no fade shows inside a ring. The user turned down 3D ghost
+  spheres and a ring at the end of the object line: the rings and bands are enough, as in GTA.
+- **Power ring.** While power is dragged in 3D, a ring beside the cue ball fills with the pull (hot from 85%).
+  The right-edge gauge stays: it also shows the CPU's power.
+- **Lean control** (`pool-hud.js`, `pool-theme.css`). The user's pick: stops plus fine tuning. The 288 px LEAN pill
+  with a pitch number became a 164 px VIEW rail named for the nearest stop, with three stop dots beside the
+  track (a click jumps there). **V** steps up the stops (C was already 2D/3D). The wheel leans in Max or with the
+  mouse locked only, so the portal still scrolls over the compact table. The 3D aim hint carries GTA's three
+  view dots. `poolLean` stays the only setting; its default is now 0 (Cue).
+- **Perf.** The low view puts every ball over the 15 px number threshold, and the digit sprites were keyed by
+  half-pixel size, so a turning camera baked new ones every frame (~2 ms). Sprites now come in quarter-octave
+  sizes, drawn scaled: compact 3D's full repaint is 2.3 ms (2.7 before this work).
+- **Tests.** render-verify drops the design-projection match for 3D and checks the stops, the room left for the
+  cue, the eye above the cue's axis, the zoom, snooker's equal cue ball, and the contact in view at every stop
+  and aim from a corner. snooker-verify's pool render fingerprint moves (before: 7fc9682570378984).
+- **Not built yet:** the atmosphere pass (a lamp glow and vignette above the far rail, distance haze on the felt,
+  drawn into the cached table layer). The low view leaves the top ~40% as the cleared backdrop.
+
 ## Decision log
 
 | Date | Decision | Reason |

@@ -394,7 +394,7 @@
         snookerTableColor: '',
         snookerFeltCustom: { centre: '#2E8F70', edge: '#114534' },
         poolCamera: '3d',        // pool's aim camera: '3d' (behind the cue ball) or '2d' (top-down)
-        poolLean: 35,            // 0–100: the 3D camera's lean, low and close to high and far
+        poolLean: 0,             // 0–100: the 3D camera's lean, Cue (0) · Stand (45) · High (100)
         // While the balls run: 'overhead' eases up to the broadcast view; '3d' stands up
         // and stays in 3D, the whole table in view (POOL_V2_PLAN.md, gap decision 9).
         poolShotCam: 'overhead',
@@ -4978,8 +4978,8 @@
     // 8-BALL POOL — CAMERA (v2)
     // ═══════════════════════════════════════════════════════════════════
     // Poses, projection and unprojection, plus the director that moves between them.
-    //   chase      behind the cue ball along the aim; lean 0–100 maps pitch 19.5°→48°
-    //              and distance 110→420, focal 1.1·H, cue ball 0.34·H below centre
+    //   chase      over the cue, behind the cue ball; lean 0–100 runs the Cue / Stand / High stops
+    //              (PC_CHASE, in ball diameters), dolly-zoomed toward far targets
     //   broadcast  high over the table, framed like 2D; eased to while balls run
     //   survey     the whole table from the shooter's side at 58° (Stay 3D while balls run)
     //   ortho      the 2D top-down view, 8 px margin
@@ -5004,17 +5004,41 @@
     // The rail top wide shots fit: the table's own (snooker), else R + 2 (pool's 16).
     const pcRailTop = cfg => (cfg.railZ !== undefined ? cfg.railZ : cfg.ballR + 2);
 
-    // A perspective pose: eye, target, up hint and focal length.
-    function pcChase(cue, aim, lean, W, H, cfg) {
-        const R = cfg ? cfg.ballR : 14;
-        const lt = Math.max(0, Math.min(100, lean)) / 100;
-        const phi = (19.5 + 28.5 * lt) * Math.PI / 180;
-        // Not scaled by R: snooker's small balls are framed from pool's distances.
-        const dist = 110 + 310 * lt;
-        const F = 1.1 * H;
-        const pitch = phi - Math.atan(0.34 / 1.1);
+    // Lean stops Cue / Stand / High: elevation (°), eye distance (ball diameters), cue ball below centre (·H).
+    const PC_LEAN_AT = [0, 45, 100];
+    const PC_CHASE = { phi: [12, 27, 50], dist: [7, 11, 16], drop: [0.08, 0.15, 0.2] };
+    const PC_CHASE_F = 1.25;           // focal length, ·H
+    // Dolly-zoom on far targets: focus (ball diameters) from..to maps zoom 1..max (fading out toward High).
+    const PC_ZOOM = { from: 6, to: 26, max: 1.7, min: 0.5 };
+    const PC_DROP_MAX = 0.27;          // the cue ball may sink this far to keep the target in view
+
+    function pcLeanLerp(v, lean) {
+        const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
+        const i = l <= A[1] ? 0 : 1;
+        return pcLerp(v[i], v[i + 1], (l - A[i]) / (A[i + 1] - A[i]));
+    }
+    const pcZoom = (focus, D) => (focus > 0 ? 1 + (PC_ZOOM.max - 1) * Math.max(0, Math.min(1, (focus / D - PC_ZOOM.from) / (PC_ZOOM.to - PC_ZOOM.from))) : 1);
+
+    // A perspective pose: eye, target, up hint and focal length. Sized in ball diameters, so
+    // snooker frames like pool. focus: cue ball to contact, table units (none: no zoom).
+    function pcChase(cue, aim, lean, W, H, cfg, focus) {
+        const R = cfg ? cfg.ballR : 14, D = 2 * R;
+        const phi = pcLeanLerp(PC_CHASE.phi, lean) * Math.PI / 180, lt = Math.max(0, Math.min(100, lean)) / 100;
+        const dist0 = pcLeanLerp(PC_CHASE.dist, lean) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean);
+        let z = 1 + (pcZoom(focus, D) - 1) * (1 - lt), drop = drop0, F, back, up;
+        // Keep the contact below the top overlays: sink the cue ball, and past PC_DROP_MAX widen the view.
+        for (;;) {
+            F = PC_CHASE_F * H * z; back = dist0 * z * Math.cos(phi); up = dist0 * z * Math.sin(phi); drop = drop0;
+            if (!(focus > 0)) break;
+            const top = PC_SURVEY_MARGIN.top + 1.6 * R * F / (back + focus);
+            const need = phi - Math.atan(up / (back + focus)) - Math.atan((H / 2 - top) / F);
+            const want = need > 0 ? Math.tan(need) * F / H : 0;
+            if (want <= PC_DROP_MAX || z <= PC_ZOOM.min) { drop = Math.max(drop0, Math.min(PC_DROP_MAX, want)); break; }
+            z = Math.max(PC_ZOOM.min, z * 0.92);
+        }
+        const pitch = phi - Math.atan(drop * H / F);
         const d = [Math.cos(aim), Math.sin(aim)];
-        const eye = [cue[0] - d[0] * dist * Math.cos(phi), cue[1] - d[1] * dist * Math.cos(phi), R + dist * Math.sin(phi)];
+        const eye = [cue[0] - d[0] * back, cue[1] - d[1] * back, R + up];
         const f = [d[0] * Math.cos(pitch), d[1] * Math.cos(pitch), -Math.sin(pitch)];
         const k = eye[2] / Math.sin(pitch);       // where the centre ray meets the felt
         return { kind: 'persp', eye, target: [eye[0] + f[0] * k, eye[1] + f[1] * k, 0], up: [0, 0, 1], F, W, H };
@@ -5181,12 +5205,22 @@
     //   moving  ease to broadcast, or stand up into the survey (Stay 3D)
     //   rest    back to chase; from the survey, after a beat
     //   bih     ball in hand always cuts to 2D
-    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean }
+    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus? }
     const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
     const PC_SURVEY_DWELL_MS = 450;
+    const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
     function pcDirector(W, H, cfg) {
-        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null };
+        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0 };
+    }
+
+    // Eases dir.focus toward the input's; snaps when within half a unit so the pose comes to rest.
+    function pcFocus(dir, input, dtMs) {
+        const f = input.focus;
+        if (!(f > 0)) return;
+        if (!(dir.focus > 0) || typeof dtMs !== 'number') { dir.focus = f; return; }
+        dir.focus += (f - dir.focus) * (1 - Math.exp(-dtMs / PC_FOCUS_MS));
+        if (Math.abs(f - dir.focus) < 0.5) dir.focus = f;
     }
 
     function pcTarget(dir, input) {
@@ -5198,12 +5232,13 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
-        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg) };
+        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus) };
     }
 
-    // Advances by dtMs. A chase target is live (follows aim and lean), so the
+    // Advances by dtMs. A chase target is live (follows aim, lean and focus), so the
     // blend heads where the camera should be now, not where it was.
     function pcDirect(dir, input, dtMs) {
+        pcFocus(dir, input, dtMs);
         const tg = pcTarget(dir, input);
         if (dir.key !== tg.key) {
             const cut = !dir.pose || tg.key === 'ortho' || dir.key === 'ortho';
@@ -6207,7 +6242,8 @@
     // call on the canvas. At 2× so foreshortening does not blur it; null without a canvas.
     function pgDigit(sprites, make, id, fs, font) {
         if (!sprites || !make) return null;
-        const px = Math.round(fs * 2) / 2, key = id + '|' + px + '|' + font;
+        // Quarter-octave sizes (drawn scaled), so a turning camera reuses sprites instead of baking new ones.
+        const px = Math.pow(2, Math.ceil(Math.log2(Math.max(fs, 4)) * 4) / 4), key = id + '|' + px + '|' + font;
         let s = sprites.get(key);
         if (!s) {
             const w = Math.ceil(px * 1.5) * 2, h = Math.ceil(px * 1.3) * 2;
@@ -6388,12 +6424,78 @@
         ctx.setLineDash([]);
     }
 
+    // A ball's swept corridor on the felt along pts (x, y), half-width hw, GTA-style: solid edges and a
+    // gradient between them, both fading from alpha a0 at the start to a1 at the end. Drawn a segment at a
+    // time, so a path that bends (off a cushion) fades along its own length.
+    function pgBand(ctx, view, pts, hw, colour, a0, a1, holes) {
+        const z = 0.3, n = pts.length, cum = [0];
+        if (n < 2) return;
+        // Cut out of the rings (even-odd), so a bar ends on its ring's curve; a context without clip() draws it whole.
+        const cut = !!(holes && holes.length && typeof ctx.clip === 'function');
+        if (cut) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, view.W, view.H); holes.forEach(h => pgTrace(ctx, h)); ctx.clip('evenodd'); }
+        for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+        const total = cum[n - 1];
+        if (total < 1e-6) return;
+        const side = pts.map((p, i) => {
+            const q0 = pts[Math.max(0, i - 1)], q1 = pts[Math.min(n - 1, i + 1)], dx = q1[0] - q0[0], dy = q1[1] - q0[1], l = Math.hypot(dx, dy) || 1;
+            return [[p[0] - dy / l * hw, p[1] + dx / l * hw, z], [p[0] + dy / l * hw, p[1] - dx / l * hw, z]];
+        });
+        const alpha = i => a0 + (a1 - a0) * cum[i] / total;
+        ctx.lineCap = 'round';
+        for (let i = 1; i < n; i++) {
+            const axis = pcSeg(view, [pts[i - 1][0], pts[i - 1][1], z], [pts[i][0], pts[i][1], z]);
+            const quad = pcPoly(view, [side[i - 1][0], side[i][0], side[i][1], side[i - 1][1]]);
+            if (!axis || quad.length < 3) continue;
+            const grad = k => {
+                const g = ctx.createLinearGradient(axis[0][0], axis[0][1], axis[1][0], axis[1][1]);
+                const c0 = Math.min(1, alpha(i - 1) * k), c1 = Math.min(1, alpha(i) * k);
+                g.addColorStop(0, pgRgba(colour, c0)); g.addColorStop(0.5, pgRgba(colour, (c0 + c1) / 2)); g.addColorStop(1, pgRgba(colour, c1));
+                return g;
+            };
+            ctx.beginPath(); pgTrace(ctx, quad); ctx.fillStyle = grad(0.32); ctx.fill();
+            ctx.beginPath();
+            [0, 1].forEach(e => { const sg = pcSeg(view, side[i - 1][e], side[i][e]); if (sg) { ctx.moveTo(sg[0][0], sg[0][1]); ctx.lineTo(sg[1][0], sg[1][1]); } });
+            ctx.strokeStyle = grad(1); ctx.lineWidth = 2; ctx.stroke();
+        }
+        if (cut) ctx.restore();
+    }
+    // A path resampled every step units (the followed paths come in 1/120 s steps).
+    function pgResample(pts, step) {
+        const out = [pts[0]];
+        let acc = 0;
+        for (let i = 1; i < pts.length; i++) {
+            acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+            if (acc >= step || i === pts.length - 1) { out.push(pts[i]); acc = 0; }
+        }
+        return out;
+    }
+    // A ball's colour for its guide, lifted toward white when too dark to read on the felt (the 8, the black).
+    function pgGuideColour(hex) {
+        const n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255, t = lum < 0.3 ? (0.3 - lum) / 0.3 * 0.6 : 0;
+        return '#' + c.map(v => Math.round(v + (255 - v) * t).toString(16).padStart(2, '0')).join('');
+    }
+
+    // Felt rings sit inside a ball's footprint: the ghost and its target touch at 2 R, so theirs never meet (GTA's).
+    const PG_RING = 0.84;               // ·R
+    const PG_RING_GAP = 0.3;           // ·R, the least gap between two rings
+    const PG_BAR = 0.62;               // ·R, a guide bar's half-width: narrower than the rings it runs between
+    // A ring on the felt round (x, y): an ellipse in perspective.
+    const pgRingPoly = (view, x, y, r) => pcPoly(view, pgCirc(x, y, r, 0.35, 36));
+    function pgFeltRing(ctx, ring, stroke, width, fill) {
+        if (!ring || ring.length < 3) return;
+        ctx.beginPath(); pgTrace(ctx, ring);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'; ctx.lineWidth = width + 1.5; ctx.stroke();
+        ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke();
+    }
+
     // ── The frame ─────────────────────────────────────────────────────
     // scene = {
     //   view, world, felt, theme, cache,            cache = {} kept by the caller, or null
     //   makeCanvas(w, h),                            offscreen canvas for the table layer
     //   dpr,                                         backing-store scale of ctx
-    //   aim: { angle, power, gap } | null,           null hides the cue and the guides
+    //   aim: { angle, power, gap, dragging, hot } | null, null hides the cue and the guides; dragging shows the power ring
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode, table units (default 4 ball diameters; 0 draws no paths),
@@ -6457,85 +6559,65 @@
             if (s) pgDrawBall(ctx, d.ball, s[0], s[1], R * s[2] * (1 - 0.35 * t), pgViewBasis(view, [x, y, R]), theme, 1 - t);
         });
 
-        // 6. Shadows, then guides.
+        // 6. Shadows, then guides and the rings on the felt.
         const live = w.balls.filter(b => b.state !== 'pocketed' && !(scene.bih && b.id === 0));
         pgFill(ctx, live.map(b => pcPoly(view, pgCirc(b.x + 4 * K, b.y - 5 * K, R * 1.08, 0.3, 20))), '#000000', 0.38);
-        // 'off' (a tournament's) is ⚙️ Guideline None: the aim line and the ghost ball, nothing past the contact.
+        // 'off' (a tournament's) is ⚙️ Guideline None: the corridor and the ghost ball, nothing past the contact.
         const g = scene.aim && scene.guide ? scene.guide : null;
-        const Z = 0.6;
+        let ghost = null;
+        const cue = w.balls.find(b => b.id === 0);
+        const ink = scene.illegal ? theme.hot : PG_GUIDE;
+        // The rings' outlines first: the bars are cut where they pass inside one, then the rings are stroked over them.
+        const holes = [], ringAt = (x, y, r) => { const p = pgRingPoly(view, x, y, r); if (p.length >= 3) holes.push(p); return p; };
+        const ghostOn = !!(g && g.contact && !g.pocketed), hit = g && g.hit > 0 ? w.balls.find(b => b.id === g.hit) : null;
+        let cueRing = null;
+        if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
+            // The cue ball's ring is wider (it shows round the ball), but gives way to the ghost's and the target's when close.
+            const near = Math.min(ghostOn ? Math.hypot(g.contact[0] - cue.x, g.contact[1] - cue.y) : Infinity, hit ? Math.hypot(hit.x - cue.x, hit.y - cue.y) : Infinity);
+            cueRing = ringAt(cue.x, cue.y, R * Math.max(PG_RING, Math.min(1.18, near / R - PG_RING - PG_RING_GAP)));
+        }
+        const hitRing = hit ? ringAt(hit.x, hit.y, R * PG_RING) : null, ghostRing = ghostOn ? ringAt(g.contact[0], g.contact[1], R * PG_RING) : null;
         if (g && g.contact) {
             // Lengths are in ball diameters, so snooker's small balls get as much line as pool's.
             const short = scene.guideMode === 'short', D = 2 * R;
             const L = scene.guideMode === 'off' ? 0 : short ? 2 * D : typeof scene.guideLen === 'number' ? scene.guideLen : 4 * D;
             const dx = g.contact[0] - g.start[0], dy = g.contact[1] - g.start[1], dl = Math.hypot(dx, dy) || 1;
             const ux = dx / dl, uy = dy / dl;
-            if (dl > 2.3 * R) {
-                pgStrokeLine(ctx, view, [[g.start[0] + ux * R * 1.3, g.start[1] + uy * R * 1.3], [g.contact[0] - ux * R, g.contact[1] - uy * R]], Z, pgRgba(PG_GUIDE, 0.85), 1.5, [5, 4]);
-            }
-            // A path from a ball's centre, started at its edge.
-            const fromEdge = path => {
-                let k = 0, acc = 0;
-                while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
-                return path.slice(k);
-            };
-            // Hawkeye's object ball runs its followed path, off the cushions; otherwise a straight line L long.
-            const objTail = g.obj && L > 0 && g.objPath ? fromEdge(g.objPath) : null;
-            if (objTail && objTail.length > 1) pgStrokeLine(ctx, view, objTail, Z, theme.accent, 2, null, true);
-            else if (g.obj && L > 0 && !g.objPath) {
-                pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
-            }
+            // Three bars (GTA's), each narrower than the rings and fading as it goes: the cue ball to the ghost, the
+            // object ball in its own colour, the cue ball's deflection off it.
+            const bar = (pts, colour, a0, a1) => pgBand(ctx, view, pts, R * PG_BAR, colour, a0, a1, holes);
+            if (dl > 2.3 * R) bar([g.start, g.contact], ink, 0.9, 0.45);
+            const objInk = hit ? pgGuideColour(pgBallLook(theme.game, hit.id).colour || PG_GUIDE) : theme.accent;
+            // Hawkeye's object ball runs its followed path, off the cushions; otherwise L past its edge.
+            if (g.obj && L > 0 && g.objPath && g.objPath.length > 1) bar(pgResample(g.objPath, R), objInk, 0.95, 0.15);
+            else if (g.obj && L > 0) bar([[g.obj.x, g.obj.y], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], objInk, 0.95, 0);
             if (g.after.length > 1 && L > 0) {
-                const tail = fromEdge(pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R));
-                if (tail.length > 1) pgStrokeLine(ctx, view, tail, Z, pgRgba(PG_GUIDE, 0.4), 1.2, [2, 4]);
+                const tail = pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R);
+                if (tail.length > 1) bar(pgResample(tail, R), PG_GUIDE, 0.7, 0);
+            }
+            if (hitRing) pgFeltRing(ctx, hitRing, pgRgba(scene.illegal ? theme.hot : objInk, 0.9), 1.5);
+            // The ghost ball is its ring on the felt; the prohibition sign across it when that ball may not be hit first.
+            if (ghostRing) {
+                pgFeltRing(ctx, ghostRing, pgRgba(ink, 0.95), 1.75, pgRgba(ink, 0.14));
+                if (scene.illegal) {
+                    const k = R * 0.8;
+                    pgStrokeLine(ctx, view, [[g.contact[0] - (ux - uy) * k, g.contact[1] - (uy + ux) * k], [g.contact[0] + (ux - uy) * k, g.contact[1] + (uy + ux) * k]], 0.4, theme.hot, 2);
+                }
+                const q = pcProject(view, [g.contact[0], g.contact[1], R]);
+                if (q && q[3] > PC_NEAR + R) ghost = [q[0], q[1], R * q[2]];
             }
         }
+        if (cueRing) pgFeltRing(ctx, cueRing, pgRgba(PG_GUIDE, 0.5), 1.25);
 
         // 7. Balls, far to near.
-        const drawn = live.map(b => {
-            const c = view.toCam([b.x, b.y, R]);
-            return { b, c };
-        }).filter(o => o.c[2] >= PC_NEAR + R).sort((p, q) => q.c[2] - p.c[2]);
+        const drawn = live.map(b => ({ b, c: view.toCam([b.x, b.y, R]) })).filter(o => o.c[2] >= PC_NEAR + R).sort((p, q) => q.c[2] - p.c[2]);
         drawn.forEach(({ b, c }) => {
             const s = view.toScr(c), rad = R * s[2];
             if (rad < 0.8) return;
             pgDrawBall(ctx, b, s[0], s[1], rad, pgViewBasis(view, [b.x, b.y, R]), theme);
         });
 
-        // 8. Ghost ball, cue, called-pocket rings, ball in hand.
-        let ghost = null;
-        if (g && g.contact && !g.pocketed) {
-            const s = pcProject(view, [g.contact[0], g.contact[1], R]);
-            if (s && s[3] > PC_NEAR + R) {
-                const gr = R * s[2];
-                ghost = [s[0], s[1], gr];
-                // A solid rim with a reticle (Cue Club's): ticks square to the aim, one pointing at
-                // the contact, and the centre dot, so the line reads with no guide drawn.
-                const ink = scene.illegal ? theme.hot : pgRgba(PG_GUIDE, 0.95);
-                ctx.beginPath(); ctx.arc(s[0], s[1], gr, 0, Math.PI * 2);
-                ctx.fillStyle = pgRgba(PG_GUIDE, 0.08); ctx.fill();
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)'; ctx.lineWidth = 3; ctx.stroke();
-                ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.stroke();
-                const s0 = pcProject(view, [g.start[0], g.start[1], R]);
-                if (!scene.illegal && gr >= 5) {
-                    const a = s0 && Math.hypot(s[0] - s0[0], s[1] - s0[1]) > 1 ? Math.atan2(s[1] - s0[1], s[0] - s0[0]) : 0;
-                    ctx.beginPath();
-                    for (let i = 0; i < 4; i++) {
-                        const c = Math.cos(a + i * Math.PI / 2), n = Math.sin(a + i * Math.PI / 2);
-                        ctx.moveTo(s[0] + c * gr * 0.45, s[1] + n * gr * 0.45); ctx.lineTo(s[0] + c * gr, s[1] + n * gr);
-                    }
-                    ctx.lineCap = 'round'; ctx.strokeStyle = ink; ctx.lineWidth = 1.25; ctx.stroke();
-                    ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(1, gr * 0.09), 0, Math.PI * 2);
-                    ctx.fillStyle = ink; ctx.fill();
-                }
-                if (scene.illegal) {
-                    // The prohibition sign: this ball may not be hit first.
-                    ctx.beginPath();
-                    ctx.moveTo(s[0] - gr * 0.62, s[1] + gr * 0.62); ctx.lineTo(s[0] + gr * 0.62, s[1] - gr * 0.62);
-                    ctx.strokeStyle = theme.hot; ctx.lineWidth = 2; ctx.stroke();
-                }
-            }
-        }
-        const cue = w.balls.find(b => b.id === 0);
+        // 8. Cue, power ring, called-pocket rings, ball in hand.
         if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
             // The shooter's cue (scene.cue, else Standard) at the game's scale: the tip off the
             // ball by the pull-back, the butt rising a tenth of the length.
@@ -6553,6 +6635,21 @@
                 scr: p => { const q = pcProject(view, p); return q && [q[0], q[1]]; },
                 poly: pts => pcPoly(view, pts), light: [pcDot(lit, e1), pcDot(lit, side(mid))], t: scene.cueT, mk: scene.makeCanvas,
             });
+            // The pull-back ring beside the cue ball while power is dragged (3D; 2D has the gauge alone).
+            const cs = a.dragging && !view.ortho ? pcProject(view, [cue.x, cue.y, R]) : null;
+            if (cs) {
+                const rad = R * cs[2], rr = Math.max(14, 0.55 * rad), p = Math.max(0, Math.min(100, a.power || 0)) / 100;
+                const x = Math.min(view.W - rr - 30, cs[0] + 1.9 * rad), y = Math.max(rr + 8, Math.min(view.H - rr - 8, cs[1] - 0.2 * rad));
+                ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.28)'; ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)'; ctx.lineWidth = 3; ctx.stroke();
+                if (p > 0) {
+                    ctx.beginPath(); ctx.arc(x, y, rr, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+                    ctx.lineCap = 'round'; ctx.strokeStyle = a.hot ? theme.hot : theme.accent; ctx.lineWidth = 3.5; ctx.stroke();
+                }
+                ctx.beginPath(); ctx.arc(x, y, rr * 0.22, 0, Math.PI * 2);
+                ctx.fillStyle = pgRgba(PG_GUIDE, 0.85); ctx.fill();
+            }
         }
         if (scene.ring) {
             // Snooker's nominated ball: a see-through accent ring at r + max(3 px, 0.4 r).
@@ -6694,6 +6791,9 @@
     const PH_SNK_SHORT = { 'YOUR CHOICE': 'CHOICE', 'BALL IN HAND': 'IN HAND', CHOOSING: 'CHOOSING' };
     const PH_CLOCK_HOT = 5;          // seconds left when the clock goes hot
     const PH_POWER_HOT = 85;         // % at which the gauge goes hot
+    // The camera's lean stops (pool-camera.js PC_LEAN_AT): V cycles them, the rail's dots jump to them.
+    const PH_LEAN_STOPS = [0, 45, 100], PH_LEAN_NAMES = ['Cue', 'Stand', 'High'];
+    const phLeanStop = v => { let b = 0; PH_LEAN_STOPS.forEach((s, i) => { if (Math.abs(s - v) < Math.abs(PH_LEAN_STOPS[b] - v)) b = i; }); return b; };
     const PH_BIH_NOTE = { overlap: 'Overlaps a ball', kitchen: 'Behind the head string only', outside: 'Keep it on the felt', D: 'Inside the D only' };
 
     const phWins = (name) => (name === 'You' ? 'You win' : name + ' wins');
@@ -6812,8 +6912,8 @@
             // Inside the dead zone (0%) a release calls the stroke off, and it says so.
             if (g.dragging) hint = { text: pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel', tone: pw >= PH_POWER_HOT ? 'hot' : 'power' };
             else if (callNeeded) hint = { text: 'Tap a pocket', tone: 'call' };
-            else if (st.callRequired && g.called >= 0) hint = { text: PH_POCKETS[g.called] + ' called', tone: '' };
-            else hint = { text: 'Drag for power', tone: '' };
+            else if (st.callRequired && g.called >= 0) hint = { text: PH_POCKETS[g.called] + ' called', tone: '', dots: true };
+            else hint = { text: 'Drag for power', tone: '', dots: true };
         }
 
         // The call card (3D): pocket map and hint in one, bottom right; the lit pocket names the
@@ -6848,8 +6948,8 @@
                 // It stays for a call: the call card sits bottom right, clear of the slider.
                 show: is3d && !over && !moving && !sheetOpen,
                 value: lean,
-                // The pitch the camera actually looks down at, as the design labels it.
-                label: Math.round(19.5 + 28.5 * lean / 100 - Math.atan(0.34 / 1.1) * 180 / Math.PI) + '°',
+                // The nearest stop's name; its dot is lit.
+                label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
             gauge: {
                 show: aiming,
@@ -6861,7 +6961,9 @@
                 open: pickerOpen,
                 preset: PH_SPINS.findIndex(p => Math.abs(p.x - spin.x) < 1e-6 && Math.abs(p.y - spin.y) < 1e-6),
             },
-            hint: { show: !!hint && !over && !toast && !sheetOpen && !card, text: hint ? hint.text : '', tone: hint ? hint.tone : '' },
+            hint: { show: !!hint && !over && !toast && !sheetOpen && !card, text: hint ? hint.text : '', tone: hint ? hint.tone : '',
+                // GTA-style view dots beside the aim hint (3D): the lit one is the lean stop.
+                dots: hint && hint.dots && is3d ? phLeanStop(lean) : -1 },
             bihNote: note ? { show: true, text: note.text, x: note.x, y: note.y } : { show: false },
             // Back to placing: only before the shot, and never mid-stroke.
             replace: { show: !!g.canReplace && g.phase === 'aim' && !g.dragging && !g.handoff && !over },
@@ -7189,11 +7291,11 @@
             '<div class="ph-toast ph-glass" role="status" data-ph="toast" hidden><div class="ph-toast-row"><span class="ph-toast-icon" data-ph="toasti"></span>' +
             '<span class="ph-toast-text"><span class="ph-toast-title" data-ph="toastt"></span><span class="ph-toast-sub" data-ph="toasts"></span></span></div>' +
             '<div class="ph-toast-acts" role="group" data-ph="toastacts" hidden></div></div>' +
-            '<div class="ph-lean ph-glass" data-ph="lean"><label class="ph-lean-l ph-label" for="ph-lean-' + (max ? 'm' : 'c') + '">LEAN</label>' +
-            '<span class="ph-lean-v ph-num" data-ph="leanv"></span><span class="ph-lean-chev">' + PH_ICON.up + '</span>' +
+            '<div class="ph-lean ph-glass" data-ph="lean" title="V cycles the view"><label class="ph-lean-l ph-label" for="ph-lean-' + (max ? 'm' : 'c') + '">VIEW</label>' +
             '<div class="ph-rng"><div class="ph-rng-track"></div><div class="ph-rng-fill" data-ph="leanf"></div><div class="ph-rng-thumb" data-ph="leant"></div>' +
-            '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani"></div>' +
-            '<span class="ph-lean-chev">' + PH_ICON.down + '</span></div>' +
+            '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani">' +
+            PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
+            '</div><span class="ph-lean-v" data-ph="leanv"></span></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -7205,7 +7307,7 @@
             '<span class="ph-spinpop-ring"></span><span class="ph-spin-dot" data-ph="spinbigd"></span></div>' +
             '<div class="ph-spinpop-chips">' + PH_SPINS.map((p, i) => '<button type="button" class="ph-btn" data-ph-tip="' + i + '" aria-pressed="false">' + p.label + '</button>').join('') + '</div></div>' +
             '</div>' +
-            '<div class="ph-hint ph-glass" data-ph="hint"><span data-ph="hintt"></span></div>' +
+            '<div class="ph-hint ph-glass" data-ph="hint"><span class="ph-dots" data-ph="hintd" aria-hidden="true" hidden><i></i><i></i><i></i></span><span data-ph="hintt"></span></div>' +
             '<div class="ph-cuenew ph-glass" role="status" data-ph="cuenew" hidden><span class="ph-cuenew-i">' + PH_ICON.cue + '</span>' +
             '<span class="ph-cuenew-t"><span class="ph-label">NEW CUE</span><span data-ph="cuenewn"></span></span>' +
             '<button type="button" class="ph-btn" data-ph="cuenewgo">Equip</button><button type="button" class="ph-btn is-icon" data-ph="cuenewx" aria-label="Dismiss">' + PH_ICON.close + '</button></div>' +
@@ -7338,8 +7440,8 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
-            'hint', 'hintt', 'bihnote', 'replace',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
             'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2', 'sheetrules', 'sheethelp', 'sheetpop',
@@ -7360,6 +7462,7 @@
         hud.cam2d.addEventListener('click', () => fire('camera', '2d'));
         hud.cam3d.addEventListener('click', () => fire('camera', '3d'));
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
+        PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -7684,7 +7787,10 @@
             hud.leanf.style.height = v + '%';
             hud.leant.style.bottom = v + '%';
         });
-        s('lean.label', vm.lean.label, v => { hud.leanv.textContent = v; hud.leani.setAttribute('aria-valuetext', v + ' camera pitch'); });
+        s('lean.label', vm.lean.label, v => { hud.leanv.textContent = v; hud.leani.setAttribute('aria-valuetext', v + ' view'); });
+        s('lean.stop', vm.lean.stop, v => PH_LEAN_STOPS.forEach((_, i) => {
+            hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
+        }));
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
@@ -7716,6 +7822,7 @@
         s('hint.show', vm.hint.show, v => phShow(hud.hint, v));
         s('hint.text', vm.hint.text, v => { hud.hintt.textContent = v; });
         s('hint.tone', vm.hint.tone, v => { hud.hint.className = 'ph-hint ph-glass' + (v ? ' is-' + v : ''); });
+        s('hint.dots', vm.hint.dots, v => { hud.hintd.hidden = v < 0; hud.hintd.setAttribute('data-on', String(v)); });
 
         s('bih.show', vm.bihNote.show, v => phShow(hud.bihnote, v));
         if (vm.bihNote.show) {
@@ -10386,15 +10493,16 @@
 
     // ── The loop ──────────────────────────────────────────────────────
     function poolCamInput() {
-        const S = poolS, c = poolCueBall();
+        const S = poolS, c = poolCueBall(), g = S.guide && S.guide.contact;
         return {
             camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
             shotCam: userPreferences.poolShotCam === '3d' ? '3d' : 'overhead',
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
+            focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
         };
     }
-    const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 35; };
+    const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
     // The cue strikes: the shot handed in (the CPU's, or online the other tab's exact strike),
     // else yours at the gauge's power, which online goes to the other tab as it is played.
@@ -10548,7 +10656,8 @@
         poolCuePill();
         const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
-        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
+        const dragging = !!(S.drag && S.drag.kind === 'power');
+        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
             // Hawkeye: full paths; never 0, which reads as Guideline None and hides the cue ball's path.
@@ -10556,7 +10665,7 @@
             pgRender(S.ctx, {
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
-                aim: aiming ? { angle: S.aim, power: S.power, gap } : null, cue, cueT,
+                aim: aiming ? { angle: S.aim, power: S.power, gap, dragging, hot: S.power >= PH_POWER_HOT } : null, cue, cueT,
                 guide: aiming ? S.guide : null, guideMode: poolHawk() ? 'full' : S.guideMode, guideLen, pathK: poolHawk() ? 1e3 : poolHumanStats().aim,
                 illegal: !!(S.guide && S.guide.hit > 0 && !poolLegalTarget(S.guide.hit)),
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
@@ -10844,6 +10953,12 @@
             if (e.code === 'KeyC') poolOn.camera(userPreferences.poolCamera === '2d' ? '3d' : '2d'); else poolLockSet(!S.lock);
             e.preventDefault(); return;
         }
+        // V steps the 3D view up its stops (Cue → Stand → High), then back to Cue.
+        if (e.code === 'KeyV' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+            const l = poolLean(), next = PH_LEAN_STOPS.find(v => v > l + 0.5);
+            poolOn.lean(next === undefined ? PH_LEAN_STOPS[0] : next);
+            e.preventDefault(); return;
+        }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
             if (poolTyping(e)) return;
             e.preventDefault();
@@ -10854,6 +10969,12 @@
             S.aim += dir * poolRules().aimKey * POOL_DEG;
             S.aimHold = { dir, key: e.key, t: 0 };
         }
+    }
+    // The wheel leans the 3D view in Max or locked; over the compact table the portal still scrolls.
+    function poolOnWheel(e) {
+        if (userPreferences.poolCamera === '2d' || !(poolMaximized || poolS.lock) || !e.deltaY) return;
+        e.preventDefault();
+        poolOn.lean(Math.max(0, Math.min(100, Math.round(poolLean() - Math.sign(e.deltaY) * 5))));
     }
     function poolOnKeyUp(e) { if (poolS.aimHold && e.key === poolS.aimHold.key) poolS.aimHold = null; }
     // A held ←/→: after a beat, the aim turns at a rate that eases up from a crawl to a sweep,
@@ -11043,6 +11164,7 @@
         c.addEventListener('pointerdown', poolOnDown);
         c.addEventListener('pointerup', poolOnUp);
         c.addEventListener('pointercancel', poolOnCancel);
+        c.addEventListener('wheel', poolOnWheel, { passive: false });
         window.addEventListener('pointermove', poolOnMove);
         window.addEventListener('pointerdown', poolOnWindowDown, true);
         window.addEventListener('keydown', poolOnKey, true);
@@ -11073,6 +11195,7 @@
         c.removeEventListener('pointerdown', poolOnDown);
         c.removeEventListener('pointerup', poolOnUp);
         c.removeEventListener('pointercancel', poolOnCancel);
+        c.removeEventListener('wheel', poolOnWheel);
         window.removeEventListener('pointermove', poolOnMove);
         window.removeEventListener('pointerdown', poolOnWindowDown, true);
         window.removeEventListener('keydown', poolOnKey, true);
@@ -22243,16 +22366,23 @@
             /* Read by screen readers, never seen (snooker's tracker readout). */
             .pool-hud .ph-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
             .pool-hud .ph-lean {
-                left: 10px; top: 60px; width: 40px; height: min(288px, calc(100% - 124px)); box-sizing: border-box; padding: 10px 0;
-                display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 20px; pointer-events: auto;
+                left: 10px; top: 60px; width: 44px; height: min(164px, calc(100% - 124px)); box-sizing: border-box; padding: 10px 0 9px;
+                display: flex; flex-direction: column; align-items: center; gap: 10px; border-radius: 22px; pointer-events: auto;
             }
             .pool-hud .ph-lean-l { font-size: 9px; letter-spacing: 0.14em; color: var(--pool-overlay-muted); }
-            .pool-hud .ph-lean-v { font-size: 12px; font-weight: 600; }
-            .pool-hud .ph-lean-chev { color: var(--pool-overlay-muted); }
-            .pool-hud .ph-rng { position: relative; width: 28px; flex-grow: 1; }
-            .pool-hud .ph-rng-track { position: absolute; left: 12px; top: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--pool-track); }
-            .pool-hud .ph-rng-fill { position: absolute; left: 12px; bottom: 0; width: 4px; border-radius: 2px; background: var(--pool-accent); }
-            .pool-hud .ph-rng-thumb { position: absolute; left: 5px; width: 18px; height: 18px; margin-bottom: -9px; border-radius: 50%; background: var(--pool-overlay-text); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+            .pool-hud .ph-lean-v { font-size: 11px; font-weight: 600; }
+            .pool-hud .ph-rng { position: relative; width: 32px; flex-grow: 1; margin: 4px 0; }
+            .pool-hud .ph-rng-track { position: absolute; left: 10px; top: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--pool-track); }
+            .pool-hud .ph-rng-fill { position: absolute; left: 10px; bottom: 0; width: 4px; border-radius: 2px; background: var(--pool-accent); }
+            .pool-hud .ph-rng-thumb { position: absolute; left: 3px; width: 18px; height: 18px; margin-bottom: -9px; border-radius: 50%; background: var(--pool-overlay-text); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+            /* The Cue / Stand / High stops beside the track: a click jumps there. */
+            .pool-hud .ph-stop {
+                position: absolute; left: 24px; width: 7px; height: 7px; margin: 0 0 -3.5px; padding: 0; z-index: 1; cursor: pointer;
+                border: 1.5px solid var(--pool-overlay-muted); border-radius: 50%; background: transparent; box-sizing: border-box;
+            }
+            .pool-hud .ph-stop::after { content: ''; position: absolute; inset: -7px -6px; }
+            .pool-hud .ph-stop.is-on { border-color: var(--pool-accent); background: var(--pool-accent); }
+            .pool-hud .ph-stop:focus-visible { outline: 2px solid var(--pool-accent); outline-offset: 2px; }
             .pool-hud .ph-rng:focus-within .ph-rng-thumb { box-shadow: 0 0 0 4px rgba(var(--pool-accent-rgb), 0.35), 0 2px 6px rgba(0, 0, 0, 0.5); }
             .pool-hud .ph-rng input {
                 position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0;
@@ -22326,6 +22456,11 @@
                 border-radius: 14px; font-size: 12px; font-weight: 600; white-space: nowrap;
                 font-family: var(--pool-body);
             }
+            /* The view dots (3D aim), GTA-style: the lit one is the lean stop. */
+            .pool-hud .ph-dots { display: inline-flex; gap: 3px; margin-right: 7px; }
+            .pool-hud .ph-dots[hidden] { display: none; }
+            .pool-hud .ph-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--pool-overlay-muted); opacity: 0.6; }
+            .pool-hud .ph-dots[data-on="0"] i:nth-child(1), .pool-hud .ph-dots[data-on="1"] i:nth-child(2), .pool-hud .ph-dots[data-on="2"] i:nth-child(3) { background: var(--pool-overlay-text); opacity: 1; }
             .pool-hud .ph-hint.is-power { color: var(--pool-accent); }
             .pool-hud .ph-hint.is-call { border-color: rgba(var(--pool-accent-rgb), 0.6); color: var(--pool-accent); }
             .pool-hud .ph-hint.is-hot { border-color: rgba(var(--pool-hot-rgb), 0.6); color: var(--pool-hot); background: var(--pool-hot-edge) left top / 3px 100% no-repeat, var(--pool-overlay); }
@@ -22474,9 +22609,9 @@
             .pool-hud[data-layout="max"] .ph-cam button { height: 36px; padding: 0 14px; font-size: 13px; gap: 7px; border-radius: 9px; }
             .pool-hud[data-layout="max"] .ph-pill { right: 16px; top: 16px; height: 34px; padding: 0 14px; border-radius: 17px; font-size: 12px; gap: 8px; }
             .pool-hud[data-layout="max"] .ph-toast { left: 16px; right: auto; top: 16px; width: 420px; }
-            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 48px; height: 360px; border-radius: 24px; }
+            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 50px; height: 210px; border-radius: 25px; }
             .pool-hud[data-layout="max"] .ph-lean-l { font-size: 10px; }
-            .pool-hud[data-layout="max"] .ph-lean-v { font-size: 13px; }
+            .pool-hud[data-layout="max"] .ph-lean-v { font-size: 12px; }
             .pool-hud[data-layout="max"] .ph-gauge { right: 20px; top: 226px; bottom: auto; width: 10px; height: 220px; border-radius: 5px; }
             .pool-hud[data-layout="max"] .ph-lock { right: 15px; top: 202px; bottom: auto; }
             .pool-hud[data-layout="max"] .ph-spin { left: 16px; bottom: 16px; height: 72px; padding: 0 18px 0 6px; gap: 12px; border-radius: 36px; }

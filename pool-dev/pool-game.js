@@ -834,15 +834,16 @@
 
     // ── The loop ──────────────────────────────────────────────────────
     function poolCamInput() {
-        const S = poolS, c = poolCueBall();
+        const S = poolS, c = poolCueBall(), g = S.guide && S.guide.contact;
         return {
             camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
             shotCam: userPreferences.poolShotCam === '3d' ? '3d' : 'overhead',
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
+            focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
         };
     }
-    const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 35; };
+    const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
     // The cue strikes: the shot handed in (the CPU's, or online the other tab's exact strike),
     // else yours at the gauge's power, which online goes to the other tab as it is played.
@@ -996,7 +997,8 @@
         poolCuePill();
         const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
-        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
+        const dragging = !!(S.drag && S.drag.kind === 'power');
+        const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;
             // Hawkeye: full paths; never 0, which reads as Guideline None and hides the cue ball's path.
@@ -1004,7 +1006,7 @@
             pgRender(S.ctx, {
                 view: v, world: S.world, felt, dpr: S.dpr, cache: S.cache, theme,
                 makeCanvas: (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }),
-                aim: aiming ? { angle: S.aim, power: S.power, gap } : null, cue, cueT,
+                aim: aiming ? { angle: S.aim, power: S.power, gap, dragging, hot: S.power >= PH_POWER_HOT } : null, cue, cueT,
                 guide: aiming ? S.guide : null, guideMode: poolHawk() ? 'full' : S.guideMode, guideLen, pathK: poolHawk() ? 1e3 : poolHumanStats().aim,
                 illegal: !!(S.guide && S.guide.hit > 0 && !poolLegalTarget(S.guide.hit)),
                 bih: S.phase === 'bih' ? { x: c.x, y: c.y, valid: !bihBad } : null,
@@ -1292,6 +1294,12 @@
             if (e.code === 'KeyC') poolOn.camera(userPreferences.poolCamera === '2d' ? '3d' : '2d'); else poolLockSet(!S.lock);
             e.preventDefault(); return;
         }
+        // V steps the 3D view up its stops (Cue → Stand → High), then back to Cue.
+        if (e.code === 'KeyV' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+            const l = poolLean(), next = PH_LEAN_STOPS.find(v => v > l + 0.5);
+            poolOn.lean(next === undefined ? PH_LEAN_STOPS[0] : next);
+            e.preventDefault(); return;
+        }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
             if (poolTyping(e)) return;
             e.preventDefault();
@@ -1302,6 +1310,12 @@
             S.aim += dir * poolRules().aimKey * POOL_DEG;
             S.aimHold = { dir, key: e.key, t: 0 };
         }
+    }
+    // The wheel leans the 3D view in Max or locked; over the compact table the portal still scrolls.
+    function poolOnWheel(e) {
+        if (userPreferences.poolCamera === '2d' || !(poolMaximized || poolS.lock) || !e.deltaY) return;
+        e.preventDefault();
+        poolOn.lean(Math.max(0, Math.min(100, Math.round(poolLean() - Math.sign(e.deltaY) * 5))));
     }
     function poolOnKeyUp(e) { if (poolS.aimHold && e.key === poolS.aimHold.key) poolS.aimHold = null; }
     // A held ←/→: after a beat, the aim turns at a rate that eases up from a crawl to a sweep,
@@ -1491,6 +1505,7 @@
         c.addEventListener('pointerdown', poolOnDown);
         c.addEventListener('pointerup', poolOnUp);
         c.addEventListener('pointercancel', poolOnCancel);
+        c.addEventListener('wheel', poolOnWheel, { passive: false });
         window.addEventListener('pointermove', poolOnMove);
         window.addEventListener('pointerdown', poolOnWindowDown, true);
         window.addEventListener('keydown', poolOnKey, true);
@@ -1521,6 +1536,7 @@
         c.removeEventListener('pointerdown', poolOnDown);
         c.removeEventListener('pointerup', poolOnUp);
         c.removeEventListener('pointercancel', poolOnCancel);
+        c.removeEventListener('wheel', poolOnWheel);
         window.removeEventListener('pointermove', poolOnMove);
         window.removeEventListener('pointerdown', poolOnWindowDown, true);
         window.removeEventListener('keydown', poolOnKey, true);

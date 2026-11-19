@@ -56,7 +56,9 @@ const vm = o => P.phModel(game(o));
     ok('main: seat 1 "TO SHOOT", seat 2 shows the CPU tier, frames "0–0"',
         m.cards[0].tag === 'TO SHOOT' && m.cards[0].active && !m.cards[1].active && m.cards[1].rec === 'Adaptive · Normal' && m.frames === '0–0');
     ok('main: pill "Solids", hint "Drag for power", spin "Center"', m.pill.text === 'Solids' && m.hint.text === 'Drag for power' && m.spin.label === 'Center');
-    ok('main: lean shows in 3D, labelled with the camera pitch (12° at 35)', m.lean.show && m.lean.label === '12°', m.lean.label);
+    ok('main: the view rail shows in 3D, named for the nearest stop (Stand at 35)', m.lean.show && m.lean.label === 'Stand' && m.lean.stop === 1, m.lean.label);
+    ok('main: the aim hint carries the view dots, the lit one the stop', m.hint.dots === 1 && vm({ lean: 0 }).hint.dots === 0 && vm({ lean: 90 }).hint.dots === 2);
+    ok('…not in 2D, nor mid-stroke', vm({ camera: '2d' }).hint.dots === -1 && vm({ dragging: true, power: 40 }).hint.dots === -1);
     ok('main: the gauge shows, dim, unlocked; footer reads "Vs CPU"', m.gauge.show && !m.gauge.live && !m.gauge.locked && m.foot.show && m.foot.modeLabel === 'Vs CPU');
     const trk = m.cards[0].group;
     ok('main: the tracker lists the seven solids, potted ones dimmed', trk.length === 7 && trk.filter(d => d.down).map(d => d.id).join() === '2,5', trk.filter(d => d.down).map(d => d.id).join());
@@ -69,8 +71,8 @@ const vm = o => P.phModel(game(o));
     ok('…only while they are down (a ball back on the table leaves the list)', vm(Object.assign({}, open, { down: [3] })).cards[0].potted.join() === '3');
     ok('once groups are decided the tracker takes over', !m.cards[0].potted.length && !vm({ pots: { 1: [2, 5], 2: [] } }).cards[0].potted.length);
     ok('no pots yet: an empty list', !vm({ frame: { groups: { 1: null, 2: null } } }).cards[0].potted.length);
-    const lean0 = vm({ lean: 0 }).lean.label, lean100 = vm({ lean: 100 }).lean.label;
-    ok('lean labels run 2°–31° across the slider', lean0 === '2°' && lean100 === '31°', lean0 + ' … ' + lean100);
+    const names = [0, 20, 30, 70, 80, 100].map(l => vm({ lean: l }).lean.label).join();
+    ok('the rail names its stops Cue / Stand / High, the nearest wins', names === 'Cue,Cue,Stand,Stand,High,High', names);
 
     const d0 = vm({ dragging: true, power: 0 });
     ok('dragging in the dead zone (0%): "Release to cancel"', d0.hint.text === 'Release to cancel');

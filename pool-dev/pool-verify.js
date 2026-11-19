@@ -74,7 +74,7 @@ ok('there is no Play button, and no controls row is shown', /<div id="pool-contr
 ok('Escape no longer resets a pool frame', !/case 'pool': resetPoolGame\(\); break;/.test(src));
 ok('the bridges only the old buttons used are gone', !/window\.(startPoolGameBtn|resetPoolGameBtn|togglePoolModeBtn|togglePoolMaximizeBtn) =/.test(src));
 ok('userPreferences defaults poolCamera, poolLean and poolShotCam',
-   /poolCamera: '3d',/.test(src) && /poolLean: 35,/.test(src) && /poolShotCam: 'overhead',/.test(src));
+   /poolCamera: '3d',/.test(src) && /poolLean: 0,/.test(src) && /poolShotCam: 'overhead',/.test(src));
 ok('⚙️ offers the shot camera: Overhead or Stay 3D', /sel\('poolShotCam', [^\n]*?\['overhead', [^\n]*?\['3d', /.test(src));
 {
     const m = /function createSettingsModal\(\) \{[\s\S]*?\n    \}\n/.exec(src), fn = m ? m[0] : '';

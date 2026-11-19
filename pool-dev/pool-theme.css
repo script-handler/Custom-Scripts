@@ -279,16 +279,23 @@
             /* Read by screen readers, never seen (snooker's tracker readout). */
             .pool-hud .ph-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
             .pool-hud .ph-lean {
-                left: 10px; top: 60px; width: 40px; height: min(288px, calc(100% - 124px)); box-sizing: border-box; padding: 10px 0;
-                display: flex; flex-direction: column; align-items: center; gap: 6px; border-radius: 20px; pointer-events: auto;
+                left: 10px; top: 60px; width: 44px; height: min(164px, calc(100% - 124px)); box-sizing: border-box; padding: 10px 0 9px;
+                display: flex; flex-direction: column; align-items: center; gap: 10px; border-radius: 22px; pointer-events: auto;
             }
             .pool-hud .ph-lean-l { font-size: 9px; letter-spacing: 0.14em; color: var(--pool-overlay-muted); }
-            .pool-hud .ph-lean-v { font-size: 12px; font-weight: 600; }
-            .pool-hud .ph-lean-chev { color: var(--pool-overlay-muted); }
-            .pool-hud .ph-rng { position: relative; width: 28px; flex-grow: 1; }
-            .pool-hud .ph-rng-track { position: absolute; left: 12px; top: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--pool-track); }
-            .pool-hud .ph-rng-fill { position: absolute; left: 12px; bottom: 0; width: 4px; border-radius: 2px; background: var(--pool-accent); }
-            .pool-hud .ph-rng-thumb { position: absolute; left: 5px; width: 18px; height: 18px; margin-bottom: -9px; border-radius: 50%; background: var(--pool-overlay-text); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+            .pool-hud .ph-lean-v { font-size: 11px; font-weight: 600; }
+            .pool-hud .ph-rng { position: relative; width: 32px; flex-grow: 1; margin: 4px 0; }
+            .pool-hud .ph-rng-track { position: absolute; left: 10px; top: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--pool-track); }
+            .pool-hud .ph-rng-fill { position: absolute; left: 10px; bottom: 0; width: 4px; border-radius: 2px; background: var(--pool-accent); }
+            .pool-hud .ph-rng-thumb { position: absolute; left: 3px; width: 18px; height: 18px; margin-bottom: -9px; border-radius: 50%; background: var(--pool-overlay-text); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+            /* The Cue / Stand / High stops beside the track: a click jumps there. */
+            .pool-hud .ph-stop {
+                position: absolute; left: 24px; width: 7px; height: 7px; margin: 0 0 -3.5px; padding: 0; z-index: 1; cursor: pointer;
+                border: 1.5px solid var(--pool-overlay-muted); border-radius: 50%; background: transparent; box-sizing: border-box;
+            }
+            .pool-hud .ph-stop::after { content: ''; position: absolute; inset: -7px -6px; }
+            .pool-hud .ph-stop.is-on { border-color: var(--pool-accent); background: var(--pool-accent); }
+            .pool-hud .ph-stop:focus-visible { outline: 2px solid var(--pool-accent); outline-offset: 2px; }
             .pool-hud .ph-rng:focus-within .ph-rng-thumb { box-shadow: 0 0 0 4px rgba(var(--pool-accent-rgb), 0.35), 0 2px 6px rgba(0, 0, 0, 0.5); }
             .pool-hud .ph-rng input {
                 position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0;
@@ -362,6 +369,11 @@
                 border-radius: 14px; font-size: 12px; font-weight: 600; white-space: nowrap;
                 font-family: var(--pool-body);
             }
+            /* The view dots (3D aim), GTA-style: the lit one is the lean stop. */
+            .pool-hud .ph-dots { display: inline-flex; gap: 3px; margin-right: 7px; }
+            .pool-hud .ph-dots[hidden] { display: none; }
+            .pool-hud .ph-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--pool-overlay-muted); opacity: 0.6; }
+            .pool-hud .ph-dots[data-on="0"] i:nth-child(1), .pool-hud .ph-dots[data-on="1"] i:nth-child(2), .pool-hud .ph-dots[data-on="2"] i:nth-child(3) { background: var(--pool-overlay-text); opacity: 1; }
             .pool-hud .ph-hint.is-power { color: var(--pool-accent); }
             .pool-hud .ph-hint.is-call { border-color: rgba(var(--pool-accent-rgb), 0.6); color: var(--pool-accent); }
             .pool-hud .ph-hint.is-hot { border-color: rgba(var(--pool-hot-rgb), 0.6); color: var(--pool-hot); background: var(--pool-hot-edge) left top / 3px 100% no-repeat, var(--pool-overlay); }
@@ -510,9 +522,9 @@
             .pool-hud[data-layout="max"] .ph-cam button { height: 36px; padding: 0 14px; font-size: 13px; gap: 7px; border-radius: 9px; }
             .pool-hud[data-layout="max"] .ph-pill { right: 16px; top: 16px; height: 34px; padding: 0 14px; border-radius: 17px; font-size: 12px; gap: 8px; }
             .pool-hud[data-layout="max"] .ph-toast { left: 16px; right: auto; top: 16px; width: 420px; }
-            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 48px; height: 360px; border-radius: 24px; }
+            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 50px; height: 210px; border-radius: 25px; }
             .pool-hud[data-layout="max"] .ph-lean-l { font-size: 10px; }
-            .pool-hud[data-layout="max"] .ph-lean-v { font-size: 13px; }
+            .pool-hud[data-layout="max"] .ph-lean-v { font-size: 12px; }
             .pool-hud[data-layout="max"] .ph-gauge { right: 20px; top: 226px; bottom: auto; width: 10px; height: 220px; border-radius: 5px; }
             .pool-hud[data-layout="max"] .ph-lock { right: 15px; top: 202px; bottom: auto; }
             .pool-hud[data-layout="max"] .ph-spin { left: 16px; bottom: 16px; height: 72px; padding: 0 18px 0 6px; gap: 12px; border-radius: 36px; }

@@ -56,14 +56,16 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // Then the cue steps grew (the user, 2026-10-27: level-ups went unnoticed), and with them the CPU's
 // cues: only the match moves; with the old steps it gave 99206f5cc2ca549d. Then the cushions' playing
 // edge drawn in 2D and their shadows tapered at the pockets (the user, 2026-10-27: the side pockets'
-// mouths could not be judged): only the render moves; before it bc97179947f65b1e.
+// mouths could not be judged): only the render moves; before it bc97179947f65b1e. Then the 3D aim
+// camera v3 (the user, 2026-11-19: GTA-style low view, a ball-wide corridor, rings on the felt for the
+// ghost ball): only the render moves; before it 7fc9682570378984.
 const POOL_ON_MAIN = {
     table: '5bd733503d768ea2',
     breaks: 'ffd797cb08eacfc5',
     fuzz: '17590ecc164a4932',
     judge: '3f7cb57ff43b72e2',
     cpu: '545e1b0238ea0a97',
-    render: '7fc9682570378984',
+    render: 'f096dcbff46b601d',
     match: '9a523e40b537abab',
 };
 const WHAT = {

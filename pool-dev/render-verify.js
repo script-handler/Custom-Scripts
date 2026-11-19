@@ -70,10 +70,50 @@ function designCamera(mode, cue, aimDeg, lean) {
         }
     }
     ok('2D is the design\'s projection exactly', worst2 < 1e-9, 'worst ' + worst2.toExponential(1) + ' px');
-    ok('3D chase is the design\'s projection, mirrored left–right', worst3 < 1e-6, n + ' points, worst ' + worst3.toExponential(1) + ' px');
+    // 3D left the design's chase for the GTA-style one (POOL_V2_PLAN.md, 3D aim camera v3); the design's lean 100 is kept as High's ground.
+    ok('3D chase: the design\'s camera is still a valid pose to compare against (sampled ' + n + ' points)', n > 100 && worst3 > 0);
+    const scfg = P.psCreateWorld ? P.psCreateWorld().cfg : null;
+    [0, 45, 100].forEach((lean, i) => {
+        const at = P.pcProject(P.pcView(P.pcChase([0, 0], 0, lean, W, H, cfg)), [0, 0, cfg.ballR]);
+        const want = H / 2 + P.PC_CHASE.drop[i] * H;
+        ok(['Cue', 'Stand', 'High'][i] + ' stop: the cue ball sits on the centre line, ' + P.PC_CHASE.drop[i] + '·H below the centre', Math.abs(at[0] - W / 2) < 1e-9 && Math.abs(at[1] - want) < 0.5, at[1].toFixed(1) + ' vs ' + want.toFixed(1));
+    });
+    {
+        const R = cfg.ballR, cueStop = P.pcChase([0, 0], 0, 0, W, H, cfg), cs = P.pcProject(P.pcView(cueStop), [0, 0, R]);
+        ok('Cue stop: at least a quarter of the height is left below the cue ball for the cue', H - cs[1] >= 0.25 * H, ((H - cs[1]) / H).toFixed(2) + '·H');
+        // The cue's axis at the eye's distance back (pool-render.js: R + 1.5K + 0.1·s past the ball and its 8 K gap).
+        const back = Math.hypot(cueStop.eye[0], cueStop.eye[1]), axisZ = R + 1.5 + 0.1 * (back - R - 8);
+        ok('Cue stop: the eye clears the cue\'s axis, so the cue is seen from above, not cut through', cueStop.eye[2] - axisZ > R, (cueStop.eye[2] - axisZ).toFixed(1) + ' u');
+        const far = 25 * 2 * R, plain = P.pcView(P.pcChase([0, 0], 0, 0, W, H, cfg)), zoom = P.pcView(P.pcChase([0, 0], 0, 0, W, H, cfg, far));
+        const r0 = P.pcProject(plain, [far, 0, R])[2] * R, r1 = P.pcProject(zoom, [far, 0, R])[2] * R;
+        const c0 = P.pcProject(plain, [0, 0, R]), c1 = P.pcProject(zoom, [0, 0, R]);
+        ok('a far target (25 D) is dolly-zoomed: at least 1.4× bigger on screen', r1 >= 1.4 * r0, (r1 / r0).toFixed(2) + '×');
+        ok('…while the cue ball keeps its place and (within 4%) its size', Math.abs(c1[2] / c0[2] - 1) < 0.04 && Math.abs(c0[1] - c1[1]) < 0.5, (c1[2] / c0[2]).toFixed(3));
+        if (scfg) {
+            const sR = scfg.ballR, sp = P.pcProject(P.pcView(P.pcChase([0, 0], 0.3, 0, W, H, scfg)), [0, 0, sR]);
+            ok('snooker frames like pool: the cue ball is the same size on screen', Math.abs(sp[2] * sR - cs[2] * R) < 0.02 * cs[2] * R, (sp[2] * sR).toFixed(1) + ' vs ' + (cs[2] * R).toFixed(1) + ' px');
+        }
+        // The contact stays under the top overlays: the cue ball near a corner, every stop and aim, out to the far cushion, both tables.
+        let worstTop = Infinity;
+        [cfg, scfg].filter(Boolean).forEach(c => [0, 45, 100].forEach(lean => {
+            const cue = [-c.halfLength + 3 * c.ballR, -c.halfWidth + 3 * c.ballR], hx = c.halfLength - c.ballR, hy = c.halfWidth - c.ballR;
+            for (let k = 0; k < 36; k++) {
+                const a = k * 10 * DEG, dx = Math.cos(a), dy = Math.sin(a);
+                const reach = Math.min(dx ? ((dx > 0 ? hx : -hx) - cue[0]) / dx : Infinity, dy ? ((dy > 0 ? hy : -hy) - cue[1]) / dy : Infinity);
+                [0.3, 0.6, 1].forEach(t => {
+                    const focus = Math.max(2 * c.ballR, reach * t);
+                    const v = P.pcView(P.pcChase(cue, a, lean, W, H, c, focus)), p = P.pcProject(v, [cue[0] + dx * focus, cue[1] + dy * focus, c.ballR]);
+                    if (p) worstTop = Math.min(worstTop, p[1] - p[2] * c.ballR);
+                });
+            }
+        }));
+        ok('the target stays in view below the top overlays at every stop and aim', worstTop >= 40, 'highest ghost top ' + worstTop.toFixed(1) + ' px');
+        const d = P.pcDirector(W, H, cfg), inp = f => ({ camera: '3d', shotCam: 'overhead', phase: 'aim', cue: [0, 0], aim: 0, lean: 0, focus: f });
+        P.pcDirect(d, inp(3 * R), 16);
+        const before = P.pcDirect(d, inp(3 * R), 16).F, after = P.pcDirect(d, inp(60 * R), 16).F, settled = (() => { let p; for (let i = 0; i < 200; i++) p = P.pcDirect(d, inp(60 * R), 16); return p.F; })();
+        ok('the zoom eases toward a new target, no jump, and comes to rest', after - before < 0.15 * (settled - before) && Math.abs(settled - P.pcChase([0, 0], 0, 0, W, H, cfg, 60 * R).F) < 1e-9);
+    }
     const v = P.pcView(P.pcChase([0, 0], 0, 35, W, H, cfg));
-    const cue = P.pcProject(v, [0, 0, cfg.ballR]);
-    ok('the chase camera holds the cue ball 0.34·H below the centre', Math.abs(cue[0] - W / 2) < 1e-9 && Math.abs(cue[1] - (H / 2 + 0.34 * H)) < 1, cue[1].toFixed(1));
     const right = P.pcProject(v, [200, -100, 0]), left = P.pcProject(v, [200, 100, 0]);
     ok('aiming along +x, the table\'s −y side is on screen right (not mirrored)', right[0] > W / 2 && left[0] < W / 2);
 }
@@ -102,7 +142,7 @@ head('Unprojection');
         }
         ok(name + ': screen → table → screen round-trips', tried > 20 && worst < 1e-6, tried + ' on-screen points, worst ' + worst.toExponential(1) + ' u');
     });
-    const v = P.pcView(P.pcChase([0, 0], 0, 35, W, H, cfg));
+    const v = P.pcView(P.pcChase([0, 0], 0, 0, W, H, cfg));
     ok('a pixel above the horizon unprojects to nothing', v.unproject(W / 2, 0, cfg.ballR) === null);
 }
 
@@ -322,14 +362,20 @@ function frame(scene, w, h) {
     two.balls = [P.ppMakeBall(0, -300, 0), P.ppMakeBall(1, 0, 0)];
     const g2 = P.pgGuide(two, { angle: 0, speed: 1600 });
     const lit = (img, pts) => pts.some(([x, y]) => { const c = img.px(...at(x, y)); return Math.max(...c) - felt[1] > 25 || c[0] - felt[0] > 40; });
-    const path = [40, 50, 60, 70, 80].map(x => [R + x, 0]), aimLine = [-260, -240, -220, -200, -180, -160, -140, -120, -100].map(x => [x, 0]);
+    // The guides are ball-wide bands with solid edges (no centre line), so their edges are sampled, at ±R.
+    const edges = xs => [].concat(...xs.map(x => [[x, R], [x, -R]]));
+    const path = edges([40, 50, 60, 70, 80].map(x => R + x)), aimLine = edges([-260, -240, -220, -200, -180, -160, -140, -120, -100]);
     const long = frame({ view: ortho, world: two, aim: { angle: 0, power: 0 }, guide: g2, guideMode: 'full', guideLen: 150 });
     const none = frame({ view: ortho, world: two, aim: { angle: 0, power: 0 }, guide: g2, guideMode: 'full', guideLen: 0 });
     ok('Aim Guide Long draws the object ball\'s path', !!g2.obj && lit(long, path));
     ok('Aim Guide None draws no object-ball path', !lit(none, path));
     ok('…but keeps the aim line to the contact', lit(none, aimLine));
-    // The ghost's dashed rim, sampled round its upper and lower halves (clear of the aim line).
-    const rim = Array.from({ length: 16 }, (_, i) => { const t = Math.PI / 4 + i / 15 * Math.PI / 2 * (i < 8 ? 1 : -1) + (i < 8 ? 0 : Math.PI); return [g2.contact[0] + R * Math.cos(t), R * Math.sin(t)]; });
+    // The ghost's ring on the felt (PG_RING · R), sampled round its upper and lower halves (clear of the aim line).
+    const rim = Array.from({ length: 16 }, (_, i) => { const t = Math.PI / 4 + i / 15 * Math.PI / 2 * (i < 8 ? 1 : -1) + (i < 8 ? 0 : Math.PI); return [g2.contact[0] + P.PG_RING * R * Math.cos(t), P.PG_RING * R * Math.sin(t)]; });
+    // The ghost touches its target at 2 R, so their rings keep a gap (GTA's do); the cue ball's gives way on a short shot.
+    ok('the ghost\'s ring and the target\'s never meet: at least 0.3 R apart', 2 - 2 * P.PG_RING >= P.PG_RING_GAP - 1e-9 && P.PG_RING_GAP >= 0.3, (2 - 2 * P.PG_RING).toFixed(2) + ' R');
+    // GTA's bars are narrower than the rings they run between, and end on them (cut out where the context clips).
+    ok('a guide bar is narrower than the ghost ring', P.PG_BAR < P.PG_RING - 0.1, P.PG_BAR + ' R vs ' + P.PG_RING + ' R');
     const ghost = img => rim.some(([x, y]) => Math.min(...img.px(...at(x, y))) > 120);
     ok('…and the ghost ball at the contact', ghost(none) && !ghost(frame({ view: ortho, world: two })));
     const tourOff = frame({ view: ortho, world: two, aim: { angle: 0, power: 0 }, guide: g2, guideMode: 'off', guideLen: 150 });
@@ -405,8 +451,9 @@ head('Snooker table');
     const off = Math.max(...noses.map(n => Math.min(...arcPts.map(q => Math.hypot(q[0] - n.x, q[1] - n.y)))));
     ok('pool\'s cushion ends are drawn rounded (a 9-point arc into a straight jaw), within 2.5 u of each nose collider',
        square.length === 6 && square.every(c => c.ends.length === 18 && c.top.length === 20) && noses.length === 12 && off < 2.5, off.toFixed(2) + ' u');
-    ok('the cue is pool\'s size on the snooker table (as designed); the shadow shrinks with the ball',
-       P.pgK(scfg) < 0.53 && P.pcChase([0, 0], 0, 0, W, H, scfg).eye[2] - scfg.ballR === P.pcChase([0, 0], 0, 0, W, H, cfg).eye[2] - cfg.ballR);
+    // Since the v3 camera the chase is sized in ball diameters, so snooker's eye sits at its own scale.
+    const kE = (P.pcChase([0, 0], 0, 0, W, H, scfg).eye[2] - scfg.ballR) / (P.pcChase([0, 0], 0, 0, W, H, cfg).eye[2] - cfg.ballR);
+    ok('the chase camera is sized by the ball on the snooker table; the shadow shrinks with the ball', P.pgK(scfg) < 0.53 && Math.abs(kE - scfg.ballR / cfg.ballR) < 1e-9, kE.toFixed(3));
 }
 
 head("The nominated ball's ring and the ghost ball");

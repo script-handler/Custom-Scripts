@@ -2,8 +2,8 @@
     // 8-BALL POOL — CAMERA (v2)
     // ═══════════════════════════════════════════════════════════════════
     // Poses, projection and unprojection, plus the director that moves between them.
-    //   chase      behind the cue ball along the aim; lean 0–100 maps pitch 19.5°→48°
-    //              and distance 110→420, focal 1.1·H, cue ball 0.34·H below centre
+    //   chase      over the cue, behind the cue ball; lean 0–100 runs the Cue / Stand / High stops
+    //              (PC_CHASE, in ball diameters), dolly-zoomed toward far targets
     //   broadcast  high over the table, framed like 2D; eased to while balls run
     //   survey     the whole table from the shooter's side at 58° (Stay 3D while balls run)
     //   ortho      the 2D top-down view, 8 px margin
@@ -28,17 +28,41 @@
     // The rail top wide shots fit: the table's own (snooker), else R + 2 (pool's 16).
     const pcRailTop = cfg => (cfg.railZ !== undefined ? cfg.railZ : cfg.ballR + 2);
 
-    // A perspective pose: eye, target, up hint and focal length.
-    function pcChase(cue, aim, lean, W, H, cfg) {
-        const R = cfg ? cfg.ballR : 14;
-        const lt = Math.max(0, Math.min(100, lean)) / 100;
-        const phi = (19.5 + 28.5 * lt) * Math.PI / 180;
-        // Not scaled by R: snooker's small balls are framed from pool's distances.
-        const dist = 110 + 310 * lt;
-        const F = 1.1 * H;
-        const pitch = phi - Math.atan(0.34 / 1.1);
+    // Lean stops Cue / Stand / High: elevation (°), eye distance (ball diameters), cue ball below centre (·H).
+    const PC_LEAN_AT = [0, 45, 100];
+    const PC_CHASE = { phi: [12, 27, 50], dist: [7, 11, 16], drop: [0.08, 0.15, 0.2] };
+    const PC_CHASE_F = 1.25;           // focal length, ·H
+    // Dolly-zoom on far targets: focus (ball diameters) from..to maps zoom 1..max (fading out toward High).
+    const PC_ZOOM = { from: 6, to: 26, max: 1.7, min: 0.5 };
+    const PC_DROP_MAX = 0.27;          // the cue ball may sink this far to keep the target in view
+
+    function pcLeanLerp(v, lean) {
+        const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
+        const i = l <= A[1] ? 0 : 1;
+        return pcLerp(v[i], v[i + 1], (l - A[i]) / (A[i + 1] - A[i]));
+    }
+    const pcZoom = (focus, D) => (focus > 0 ? 1 + (PC_ZOOM.max - 1) * Math.max(0, Math.min(1, (focus / D - PC_ZOOM.from) / (PC_ZOOM.to - PC_ZOOM.from))) : 1);
+
+    // A perspective pose: eye, target, up hint and focal length. Sized in ball diameters, so
+    // snooker frames like pool. focus: cue ball to contact, table units (none: no zoom).
+    function pcChase(cue, aim, lean, W, H, cfg, focus) {
+        const R = cfg ? cfg.ballR : 14, D = 2 * R;
+        const phi = pcLeanLerp(PC_CHASE.phi, lean) * Math.PI / 180, lt = Math.max(0, Math.min(100, lean)) / 100;
+        const dist0 = pcLeanLerp(PC_CHASE.dist, lean) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean);
+        let z = 1 + (pcZoom(focus, D) - 1) * (1 - lt), drop = drop0, F, back, up;
+        // Keep the contact below the top overlays: sink the cue ball, and past PC_DROP_MAX widen the view.
+        for (;;) {
+            F = PC_CHASE_F * H * z; back = dist0 * z * Math.cos(phi); up = dist0 * z * Math.sin(phi); drop = drop0;
+            if (!(focus > 0)) break;
+            const top = PC_SURVEY_MARGIN.top + 1.6 * R * F / (back + focus);
+            const need = phi - Math.atan(up / (back + focus)) - Math.atan((H / 2 - top) / F);
+            const want = need > 0 ? Math.tan(need) * F / H : 0;
+            if (want <= PC_DROP_MAX || z <= PC_ZOOM.min) { drop = Math.max(drop0, Math.min(PC_DROP_MAX, want)); break; }
+            z = Math.max(PC_ZOOM.min, z * 0.92);
+        }
+        const pitch = phi - Math.atan(drop * H / F);
         const d = [Math.cos(aim), Math.sin(aim)];
-        const eye = [cue[0] - d[0] * dist * Math.cos(phi), cue[1] - d[1] * dist * Math.cos(phi), R + dist * Math.sin(phi)];
+        const eye = [cue[0] - d[0] * back, cue[1] - d[1] * back, R + up];
         const f = [d[0] * Math.cos(pitch), d[1] * Math.cos(pitch), -Math.sin(pitch)];
         const k = eye[2] / Math.sin(pitch);       // where the centre ray meets the felt
         return { kind: 'persp', eye, target: [eye[0] + f[0] * k, eye[1] + f[1] * k, 0], up: [0, 0, 1], F, W, H };
@@ -205,12 +229,22 @@
     //   moving  ease to broadcast, or stand up into the survey (Stay 3D)
     //   rest    back to chase; from the survey, after a beat
     //   bih     ball in hand always cuts to 2D
-    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean }
+    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus? }
     const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
     const PC_SURVEY_DWELL_MS = 450;
+    const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
     function pcDirector(W, H, cfg) {
-        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null };
+        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0 };
+    }
+
+    // Eases dir.focus toward the input's; snaps when within half a unit so the pose comes to rest.
+    function pcFocus(dir, input, dtMs) {
+        const f = input.focus;
+        if (!(f > 0)) return;
+        if (!(dir.focus > 0) || typeof dtMs !== 'number') { dir.focus = f; return; }
+        dir.focus += (f - dir.focus) * (1 - Math.exp(-dtMs / PC_FOCUS_MS));
+        if (Math.abs(f - dir.focus) < 0.5) dir.focus = f;
     }
 
     function pcTarget(dir, input) {
@@ -222,12 +256,13 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
-        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg) };
+        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus) };
     }
 
-    // Advances by dtMs. A chase target is live (follows aim and lean), so the
+    // Advances by dtMs. A chase target is live (follows aim, lean and focus), so the
     // blend heads where the camera should be now, not where it was.
     function pcDirect(dir, input, dtMs) {
+        pcFocus(dir, input, dtMs);
         const tg = pcTarget(dir, input);
         if (dir.key !== tg.key) {
             const cut = !dir.pose || tg.key === 'ortho' || dir.key === 'ortho';

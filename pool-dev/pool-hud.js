@@ -65,6 +65,9 @@
     const PH_SNK_SHORT = { 'YOUR CHOICE': 'CHOICE', 'BALL IN HAND': 'IN HAND', CHOOSING: 'CHOOSING' };
     const PH_CLOCK_HOT = 5;          // seconds left when the clock goes hot
     const PH_POWER_HOT = 85;         // % at which the gauge goes hot
+    // The camera's lean stops (pool-camera.js PC_LEAN_AT): V cycles them, the rail's dots jump to them.
+    const PH_LEAN_STOPS = [0, 45, 100], PH_LEAN_NAMES = ['Cue', 'Stand', 'High'];
+    const phLeanStop = v => { let b = 0; PH_LEAN_STOPS.forEach((s, i) => { if (Math.abs(s - v) < Math.abs(PH_LEAN_STOPS[b] - v)) b = i; }); return b; };
     const PH_BIH_NOTE = { overlap: 'Overlaps a ball', kitchen: 'Behind the head string only', outside: 'Keep it on the felt', D: 'Inside the D only' };
 
     const phWins = (name) => (name === 'You' ? 'You win' : name + ' wins');
@@ -183,8 +186,8 @@
             // Inside the dead zone (0%) a release calls the stroke off, and it says so.
             if (g.dragging) hint = { text: pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel', tone: pw >= PH_POWER_HOT ? 'hot' : 'power' };
             else if (callNeeded) hint = { text: 'Tap a pocket', tone: 'call' };
-            else if (st.callRequired && g.called >= 0) hint = { text: PH_POCKETS[g.called] + ' called', tone: '' };
-            else hint = { text: 'Drag for power', tone: '' };
+            else if (st.callRequired && g.called >= 0) hint = { text: PH_POCKETS[g.called] + ' called', tone: '', dots: true };
+            else hint = { text: 'Drag for power', tone: '', dots: true };
         }
 
         // The call card (3D): pocket map and hint in one, bottom right; the lit pocket names the
@@ -219,8 +222,8 @@
                 // It stays for a call: the call card sits bottom right, clear of the slider.
                 show: is3d && !over && !moving && !sheetOpen,
                 value: lean,
-                // The pitch the camera actually looks down at, as the design labels it.
-                label: Math.round(19.5 + 28.5 * lean / 100 - Math.atan(0.34 / 1.1) * 180 / Math.PI) + '°',
+                // The nearest stop's name; its dot is lit.
+                label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
             gauge: {
                 show: aiming,
@@ -232,7 +235,9 @@
                 open: pickerOpen,
                 preset: PH_SPINS.findIndex(p => Math.abs(p.x - spin.x) < 1e-6 && Math.abs(p.y - spin.y) < 1e-6),
             },
-            hint: { show: !!hint && !over && !toast && !sheetOpen && !card, text: hint ? hint.text : '', tone: hint ? hint.tone : '' },
+            hint: { show: !!hint && !over && !toast && !sheetOpen && !card, text: hint ? hint.text : '', tone: hint ? hint.tone : '',
+                // GTA-style view dots beside the aim hint (3D): the lit one is the lean stop.
+                dots: hint && hint.dots && is3d ? phLeanStop(lean) : -1 },
             bihNote: note ? { show: true, text: note.text, x: note.x, y: note.y } : { show: false },
             // Back to placing: only before the shot, and never mid-stroke.
             replace: { show: !!g.canReplace && g.phase === 'aim' && !g.dragging && !g.handoff && !over },
@@ -560,11 +565,11 @@
             '<div class="ph-toast ph-glass" role="status" data-ph="toast" hidden><div class="ph-toast-row"><span class="ph-toast-icon" data-ph="toasti"></span>' +
             '<span class="ph-toast-text"><span class="ph-toast-title" data-ph="toastt"></span><span class="ph-toast-sub" data-ph="toasts"></span></span></div>' +
             '<div class="ph-toast-acts" role="group" data-ph="toastacts" hidden></div></div>' +
-            '<div class="ph-lean ph-glass" data-ph="lean"><label class="ph-lean-l ph-label" for="ph-lean-' + (max ? 'm' : 'c') + '">LEAN</label>' +
-            '<span class="ph-lean-v ph-num" data-ph="leanv"></span><span class="ph-lean-chev">' + PH_ICON.up + '</span>' +
+            '<div class="ph-lean ph-glass" data-ph="lean" title="V cycles the view"><label class="ph-lean-l ph-label" for="ph-lean-' + (max ? 'm' : 'c') + '">VIEW</label>' +
             '<div class="ph-rng"><div class="ph-rng-track"></div><div class="ph-rng-fill" data-ph="leanf"></div><div class="ph-rng-thumb" data-ph="leant"></div>' +
-            '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani"></div>' +
-            '<span class="ph-lean-chev">' + PH_ICON.down + '</span></div>' +
+            '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani">' +
+            PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
+            '</div><span class="ph-lean-v" data-ph="leanv"></span></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -576,7 +581,7 @@
             '<span class="ph-spinpop-ring"></span><span class="ph-spin-dot" data-ph="spinbigd"></span></div>' +
             '<div class="ph-spinpop-chips">' + PH_SPINS.map((p, i) => '<button type="button" class="ph-btn" data-ph-tip="' + i + '" aria-pressed="false">' + p.label + '</button>').join('') + '</div></div>' +
             '</div>' +
-            '<div class="ph-hint ph-glass" data-ph="hint"><span data-ph="hintt"></span></div>' +
+            '<div class="ph-hint ph-glass" data-ph="hint"><span class="ph-dots" data-ph="hintd" aria-hidden="true" hidden><i></i><i></i><i></i></span><span data-ph="hintt"></span></div>' +
             '<div class="ph-cuenew ph-glass" role="status" data-ph="cuenew" hidden><span class="ph-cuenew-i">' + PH_ICON.cue + '</span>' +
             '<span class="ph-cuenew-t"><span class="ph-label">NEW CUE</span><span data-ph="cuenewn"></span></span>' +
             '<button type="button" class="ph-btn" data-ph="cuenewgo">Equip</button><button type="button" class="ph-btn is-icon" data-ph="cuenewx" aria-label="Dismiss">' + PH_ICON.close + '</button></div>' +
@@ -709,8 +714,8 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
-            'hint', 'hintt', 'bihnote', 'replace',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
             'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2', 'sheetrules', 'sheethelp', 'sheetpop',
@@ -731,6 +736,7 @@
         hud.cam2d.addEventListener('click', () => fire('camera', '2d'));
         hud.cam3d.addEventListener('click', () => fire('camera', '3d'));
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
+        PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -1055,7 +1061,10 @@
             hud.leanf.style.height = v + '%';
             hud.leant.style.bottom = v + '%';
         });
-        s('lean.label', vm.lean.label, v => { hud.leanv.textContent = v; hud.leani.setAttribute('aria-valuetext', v + ' camera pitch'); });
+        s('lean.label', vm.lean.label, v => { hud.leanv.textContent = v; hud.leani.setAttribute('aria-valuetext', v + ' view'); });
+        s('lean.stop', vm.lean.stop, v => PH_LEAN_STOPS.forEach((_, i) => {
+            hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
+        }));
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
@@ -1087,6 +1096,7 @@
         s('hint.show', vm.hint.show, v => phShow(hud.hint, v));
         s('hint.text', vm.hint.text, v => { hud.hintt.textContent = v; });
         s('hint.tone', vm.hint.tone, v => { hud.hint.className = 'ph-hint ph-glass' + (v ? ' is-' + v : ''); });
+        s('hint.dots', vm.hint.dots, v => { hud.hintd.hidden = v < 0; hud.hintd.setAttribute('data-on', String(v)); });
 
         s('bih.show', vm.bihNote.show, v => phShow(hud.bihnote, v));
         if (vm.bihNote.show) {

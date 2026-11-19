@@ -557,7 +557,8 @@
     // call on the canvas. At 2× so foreshortening does not blur it; null without a canvas.
     function pgDigit(sprites, make, id, fs, font) {
         if (!sprites || !make) return null;
-        const px = Math.round(fs * 2) / 2, key = id + '|' + px + '|' + font;
+        // Quarter-octave sizes (drawn scaled), so a turning camera reuses sprites instead of baking new ones.
+        const px = Math.pow(2, Math.ceil(Math.log2(Math.max(fs, 4)) * 4) / 4), key = id + '|' + px + '|' + font;
         let s = sprites.get(key);
         if (!s) {
             const w = Math.ceil(px * 1.5) * 2, h = Math.ceil(px * 1.3) * 2;
@@ -738,12 +739,78 @@
         ctx.setLineDash([]);
     }
 
+    // A ball's swept corridor on the felt along pts (x, y), half-width hw, GTA-style: solid edges and a
+    // gradient between them, both fading from alpha a0 at the start to a1 at the end. Drawn a segment at a
+    // time, so a path that bends (off a cushion) fades along its own length.
+    function pgBand(ctx, view, pts, hw, colour, a0, a1, holes) {
+        const z = 0.3, n = pts.length, cum = [0];
+        if (n < 2) return;
+        // Cut out of the rings (even-odd), so a bar ends on its ring's curve; a context without clip() draws it whole.
+        const cut = !!(holes && holes.length && typeof ctx.clip === 'function');
+        if (cut) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, view.W, view.H); holes.forEach(h => pgTrace(ctx, h)); ctx.clip('evenodd'); }
+        for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+        const total = cum[n - 1];
+        if (total < 1e-6) return;
+        const side = pts.map((p, i) => {
+            const q0 = pts[Math.max(0, i - 1)], q1 = pts[Math.min(n - 1, i + 1)], dx = q1[0] - q0[0], dy = q1[1] - q0[1], l = Math.hypot(dx, dy) || 1;
+            return [[p[0] - dy / l * hw, p[1] + dx / l * hw, z], [p[0] + dy / l * hw, p[1] - dx / l * hw, z]];
+        });
+        const alpha = i => a0 + (a1 - a0) * cum[i] / total;
+        ctx.lineCap = 'round';
+        for (let i = 1; i < n; i++) {
+            const axis = pcSeg(view, [pts[i - 1][0], pts[i - 1][1], z], [pts[i][0], pts[i][1], z]);
+            const quad = pcPoly(view, [side[i - 1][0], side[i][0], side[i][1], side[i - 1][1]]);
+            if (!axis || quad.length < 3) continue;
+            const grad = k => {
+                const g = ctx.createLinearGradient(axis[0][0], axis[0][1], axis[1][0], axis[1][1]);
+                const c0 = Math.min(1, alpha(i - 1) * k), c1 = Math.min(1, alpha(i) * k);
+                g.addColorStop(0, pgRgba(colour, c0)); g.addColorStop(0.5, pgRgba(colour, (c0 + c1) / 2)); g.addColorStop(1, pgRgba(colour, c1));
+                return g;
+            };
+            ctx.beginPath(); pgTrace(ctx, quad); ctx.fillStyle = grad(0.32); ctx.fill();
+            ctx.beginPath();
+            [0, 1].forEach(e => { const sg = pcSeg(view, side[i - 1][e], side[i][e]); if (sg) { ctx.moveTo(sg[0][0], sg[0][1]); ctx.lineTo(sg[1][0], sg[1][1]); } });
+            ctx.strokeStyle = grad(1); ctx.lineWidth = 2; ctx.stroke();
+        }
+        if (cut) ctx.restore();
+    }
+    // A path resampled every step units (the followed paths come in 1/120 s steps).
+    function pgResample(pts, step) {
+        const out = [pts[0]];
+        let acc = 0;
+        for (let i = 1; i < pts.length; i++) {
+            acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+            if (acc >= step || i === pts.length - 1) { out.push(pts[i]); acc = 0; }
+        }
+        return out;
+    }
+    // A ball's colour for its guide, lifted toward white when too dark to read on the felt (the 8, the black).
+    function pgGuideColour(hex) {
+        const n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255, t = lum < 0.3 ? (0.3 - lum) / 0.3 * 0.6 : 0;
+        return '#' + c.map(v => Math.round(v + (255 - v) * t).toString(16).padStart(2, '0')).join('');
+    }
+
+    // Felt rings sit inside a ball's footprint: the ghost and its target touch at 2 R, so theirs never meet (GTA's).
+    const PG_RING = 0.84;               // ·R
+    const PG_RING_GAP = 0.3;           // ·R, the least gap between two rings
+    const PG_BAR = 0.62;               // ·R, a guide bar's half-width: narrower than the rings it runs between
+    // A ring on the felt round (x, y): an ellipse in perspective.
+    const pgRingPoly = (view, x, y, r) => pcPoly(view, pgCirc(x, y, r, 0.35, 36));
+    function pgFeltRing(ctx, ring, stroke, width, fill) {
+        if (!ring || ring.length < 3) return;
+        ctx.beginPath(); pgTrace(ctx, ring);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'; ctx.lineWidth = width + 1.5; ctx.stroke();
+        ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke();
+    }
+
     // ── The frame ─────────────────────────────────────────────────────
     // scene = {
     //   view, world, felt, theme, cache,            cache = {} kept by the caller, or null
     //   makeCanvas(w, h),                            offscreen canvas for the table layer
     //   dpr,                                         backing-store scale of ctx
-    //   aim: { angle, power, gap } | null,           null hides the cue and the guides
+    //   aim: { angle, power, gap, dragging, hot } | null, null hides the cue and the guides; dragging shows the power ring
     //   cue: a PQ_SET cue (Standard if absent), cueT: ms for its sheen,
     //   guide: pgGuide(…) | null, guideMode: 'full' | 'short' | 'off' (aim line and ghost ball only), illegal,
     //   guideLen: the object ball's line in full mode, table units (default 4 ball diameters; 0 draws no paths),
@@ -807,85 +874,65 @@
             if (s) pgDrawBall(ctx, d.ball, s[0], s[1], R * s[2] * (1 - 0.35 * t), pgViewBasis(view, [x, y, R]), theme, 1 - t);
         });
 
-        // 6. Shadows, then guides.
+        // 6. Shadows, then guides and the rings on the felt.
         const live = w.balls.filter(b => b.state !== 'pocketed' && !(scene.bih && b.id === 0));
         pgFill(ctx, live.map(b => pcPoly(view, pgCirc(b.x + 4 * K, b.y - 5 * K, R * 1.08, 0.3, 20))), '#000000', 0.38);
-        // 'off' (a tournament's) is ⚙️ Guideline None: the aim line and the ghost ball, nothing past the contact.
+        // 'off' (a tournament's) is ⚙️ Guideline None: the corridor and the ghost ball, nothing past the contact.
         const g = scene.aim && scene.guide ? scene.guide : null;
-        const Z = 0.6;
+        let ghost = null;
+        const cue = w.balls.find(b => b.id === 0);
+        const ink = scene.illegal ? theme.hot : PG_GUIDE;
+        // The rings' outlines first: the bars are cut where they pass inside one, then the rings are stroked over them.
+        const holes = [], ringAt = (x, y, r) => { const p = pgRingPoly(view, x, y, r); if (p.length >= 3) holes.push(p); return p; };
+        const ghostOn = !!(g && g.contact && !g.pocketed), hit = g && g.hit > 0 ? w.balls.find(b => b.id === g.hit) : null;
+        let cueRing = null;
+        if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
+            // The cue ball's ring is wider (it shows round the ball), but gives way to the ghost's and the target's when close.
+            const near = Math.min(ghostOn ? Math.hypot(g.contact[0] - cue.x, g.contact[1] - cue.y) : Infinity, hit ? Math.hypot(hit.x - cue.x, hit.y - cue.y) : Infinity);
+            cueRing = ringAt(cue.x, cue.y, R * Math.max(PG_RING, Math.min(1.18, near / R - PG_RING - PG_RING_GAP)));
+        }
+        const hitRing = hit ? ringAt(hit.x, hit.y, R * PG_RING) : null, ghostRing = ghostOn ? ringAt(g.contact[0], g.contact[1], R * PG_RING) : null;
         if (g && g.contact) {
             // Lengths are in ball diameters, so snooker's small balls get as much line as pool's.
             const short = scene.guideMode === 'short', D = 2 * R;
             const L = scene.guideMode === 'off' ? 0 : short ? 2 * D : typeof scene.guideLen === 'number' ? scene.guideLen : 4 * D;
             const dx = g.contact[0] - g.start[0], dy = g.contact[1] - g.start[1], dl = Math.hypot(dx, dy) || 1;
             const ux = dx / dl, uy = dy / dl;
-            if (dl > 2.3 * R) {
-                pgStrokeLine(ctx, view, [[g.start[0] + ux * R * 1.3, g.start[1] + uy * R * 1.3], [g.contact[0] - ux * R, g.contact[1] - uy * R]], Z, pgRgba(PG_GUIDE, 0.85), 1.5, [5, 4]);
-            }
-            // A path from a ball's centre, started at its edge.
-            const fromEdge = path => {
-                let k = 0, acc = 0;
-                while (k < path.length - 1 && acc < R) { acc += Math.hypot(path[k + 1][0] - path[k][0], path[k + 1][1] - path[k][1]); k++; }
-                return path.slice(k);
-            };
-            // Hawkeye's object ball runs its followed path, off the cushions; otherwise a straight line L long.
-            const objTail = g.obj && L > 0 && g.objPath ? fromEdge(g.objPath) : null;
-            if (objTail && objTail.length > 1) pgStrokeLine(ctx, view, objTail, Z, theme.accent, 2, null, true);
-            else if (g.obj && L > 0 && !g.objPath) {
-                pgStrokeLine(ctx, view, [[g.obj.x + g.obj.dx * R, g.obj.y + g.obj.dy * R], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], Z, theme.accent, 2, null, true);
-            }
+            // Three bars (GTA's), each narrower than the rings and fading as it goes: the cue ball to the ghost, the
+            // object ball in its own colour, the cue ball's deflection off it.
+            const bar = (pts, colour, a0, a1) => pgBand(ctx, view, pts, R * PG_BAR, colour, a0, a1, holes);
+            if (dl > 2.3 * R) bar([g.start, g.contact], ink, 0.9, 0.45);
+            const objInk = hit ? pgGuideColour(pgBallLook(theme.game, hit.id).colour || PG_GUIDE) : theme.accent;
+            // Hawkeye's object ball runs its followed path, off the cushions; otherwise L past its edge.
+            if (g.obj && L > 0 && g.objPath && g.objPath.length > 1) bar(pgResample(g.objPath, R), objInk, 0.95, 0.15);
+            else if (g.obj && L > 0) bar([[g.obj.x, g.obj.y], [g.obj.x + g.obj.dx * (R + L), g.obj.y + g.obj.dy * (R + L)]], objInk, 0.95, 0);
             if (g.after.length > 1 && L > 0) {
-                const tail = fromEdge(pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R));
-                if (tail.length > 1) pgStrokeLine(ctx, view, tail, Z, pgRgba(PG_GUIDE, 0.4), 1.2, [2, 4]);
+                const tail = pgTrim(g.after, (short ? 1.5 : (g.cushion ? 3.5 : 2.5) * (scene.pathK || 1)) * D + R);
+                if (tail.length > 1) bar(pgResample(tail, R), PG_GUIDE, 0.7, 0);
+            }
+            if (hitRing) pgFeltRing(ctx, hitRing, pgRgba(scene.illegal ? theme.hot : objInk, 0.9), 1.5);
+            // The ghost ball is its ring on the felt; the prohibition sign across it when that ball may not be hit first.
+            if (ghostRing) {
+                pgFeltRing(ctx, ghostRing, pgRgba(ink, 0.95), 1.75, pgRgba(ink, 0.14));
+                if (scene.illegal) {
+                    const k = R * 0.8;
+                    pgStrokeLine(ctx, view, [[g.contact[0] - (ux - uy) * k, g.contact[1] - (uy + ux) * k], [g.contact[0] + (ux - uy) * k, g.contact[1] + (uy + ux) * k]], 0.4, theme.hot, 2);
+                }
+                const q = pcProject(view, [g.contact[0], g.contact[1], R]);
+                if (q && q[3] > PC_NEAR + R) ghost = [q[0], q[1], R * q[2]];
             }
         }
+        if (cueRing) pgFeltRing(ctx, cueRing, pgRgba(PG_GUIDE, 0.5), 1.25);
 
         // 7. Balls, far to near.
-        const drawn = live.map(b => {
-            const c = view.toCam([b.x, b.y, R]);
-            return { b, c };
-        }).filter(o => o.c[2] >= PC_NEAR + R).sort((p, q) => q.c[2] - p.c[2]);
+        const drawn = live.map(b => ({ b, c: view.toCam([b.x, b.y, R]) })).filter(o => o.c[2] >= PC_NEAR + R).sort((p, q) => q.c[2] - p.c[2]);
         drawn.forEach(({ b, c }) => {
             const s = view.toScr(c), rad = R * s[2];
             if (rad < 0.8) return;
             pgDrawBall(ctx, b, s[0], s[1], rad, pgViewBasis(view, [b.x, b.y, R]), theme);
         });
 
-        // 8. Ghost ball, cue, called-pocket rings, ball in hand.
-        let ghost = null;
-        if (g && g.contact && !g.pocketed) {
-            const s = pcProject(view, [g.contact[0], g.contact[1], R]);
-            if (s && s[3] > PC_NEAR + R) {
-                const gr = R * s[2];
-                ghost = [s[0], s[1], gr];
-                // A solid rim with a reticle (Cue Club's): ticks square to the aim, one pointing at
-                // the contact, and the centre dot, so the line reads with no guide drawn.
-                const ink = scene.illegal ? theme.hot : pgRgba(PG_GUIDE, 0.95);
-                ctx.beginPath(); ctx.arc(s[0], s[1], gr, 0, Math.PI * 2);
-                ctx.fillStyle = pgRgba(PG_GUIDE, 0.08); ctx.fill();
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)'; ctx.lineWidth = 3; ctx.stroke();
-                ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.stroke();
-                const s0 = pcProject(view, [g.start[0], g.start[1], R]);
-                if (!scene.illegal && gr >= 5) {
-                    const a = s0 && Math.hypot(s[0] - s0[0], s[1] - s0[1]) > 1 ? Math.atan2(s[1] - s0[1], s[0] - s0[0]) : 0;
-                    ctx.beginPath();
-                    for (let i = 0; i < 4; i++) {
-                        const c = Math.cos(a + i * Math.PI / 2), n = Math.sin(a + i * Math.PI / 2);
-                        ctx.moveTo(s[0] + c * gr * 0.45, s[1] + n * gr * 0.45); ctx.lineTo(s[0] + c * gr, s[1] + n * gr);
-                    }
-                    ctx.lineCap = 'round'; ctx.strokeStyle = ink; ctx.lineWidth = 1.25; ctx.stroke();
-                    ctx.beginPath(); ctx.arc(s[0], s[1], Math.max(1, gr * 0.09), 0, Math.PI * 2);
-                    ctx.fillStyle = ink; ctx.fill();
-                }
-                if (scene.illegal) {
-                    // The prohibition sign: this ball may not be hit first.
-                    ctx.beginPath();
-                    ctx.moveTo(s[0] - gr * 0.62, s[1] + gr * 0.62); ctx.lineTo(s[0] + gr * 0.62, s[1] - gr * 0.62);
-                    ctx.strokeStyle = theme.hot; ctx.lineWidth = 2; ctx.stroke();
-                }
-            }
-        }
-        const cue = w.balls.find(b => b.id === 0);
+        // 8. Cue, power ring, called-pocket rings, ball in hand.
         if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
             // The shooter's cue (scene.cue, else Standard) at the game's scale: the tip off the
             // ball by the pull-back, the butt rising a tenth of the length.
@@ -903,6 +950,21 @@
                 scr: p => { const q = pcProject(view, p); return q && [q[0], q[1]]; },
                 poly: pts => pcPoly(view, pts), light: [pcDot(lit, e1), pcDot(lit, side(mid))], t: scene.cueT, mk: scene.makeCanvas,
             });
+            // The pull-back ring beside the cue ball while power is dragged (3D; 2D has the gauge alone).
+            const cs = a.dragging && !view.ortho ? pcProject(view, [cue.x, cue.y, R]) : null;
+            if (cs) {
+                const rad = R * cs[2], rr = Math.max(14, 0.55 * rad), p = Math.max(0, Math.min(100, a.power || 0)) / 100;
+                const x = Math.min(view.W - rr - 30, cs[0] + 1.9 * rad), y = Math.max(rr + 8, Math.min(view.H - rr - 8, cs[1] - 0.2 * rad));
+                ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.28)'; ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)'; ctx.lineWidth = 3; ctx.stroke();
+                if (p > 0) {
+                    ctx.beginPath(); ctx.arc(x, y, rr, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+                    ctx.lineCap = 'round'; ctx.strokeStyle = a.hot ? theme.hot : theme.accent; ctx.lineWidth = 3.5; ctx.stroke();
+                }
+                ctx.beginPath(); ctx.arc(x, y, rr * 0.22, 0, Math.PI * 2);
+                ctx.fillStyle = pgRgba(PG_GUIDE, 0.85); ctx.fill();
+            }
         }
         if (scene.ring) {
             // Snooker's nominated ball: a see-through accent ring at r + max(3 px, 0.4 r).
