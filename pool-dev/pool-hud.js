@@ -225,8 +225,9 @@
                 // The nearest stop's name; its dot is lit.
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
+            // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
-                show: aiming,
+                show: aiming && !is3d,
                 power: Math.max(0, Math.min(100, g.power || 0)),
                 live: !!g.dragging || (!!g.cpuTurn && (g.power || 0) > 0), hot: (g.power || 0) >= PH_POWER_HOT, locked: callNeeded,
             },
@@ -1070,7 +1071,7 @@
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
         s('gauge.live', vm.gauge.live, v => hud.gauge.classList.toggle('is-live', v));
         s('gauge.hot', vm.gauge.hot, v => hud.gauge.classList.toggle('is-hot', v));
-        s('gauge.locked', vm.gauge.locked, v => { hud.gauge.classList.toggle('is-locked', v); phShow(hud.lock, v); });
+        s('gauge.locked', vm.gauge.locked && vm.gauge.show, v => { hud.gauge.classList.toggle('is-locked', v); phShow(hud.lock, v); });
 
         s('spin.show', vm.spin.show, v => phShow(hud.spin, v));
         s('spin.label', vm.spin.label, v => {

@@ -59,7 +59,9 @@ const vm = o => P.phModel(game(o));
     ok('main: the view rail shows in 3D, named for the nearest stop (Stand at 35)', m.lean.show && m.lean.label === 'Stand' && m.lean.stop === 1, m.lean.label);
     ok('main: the aim hint carries the view dots, the lit one the stop', m.hint.dots === 1 && vm({ lean: 0 }).hint.dots === 0 && vm({ lean: 90 }).hint.dots === 2);
     ok('…not in 2D, nor mid-stroke', vm({ camera: '2d' }).hint.dots === -1 && vm({ dragging: true, power: 40 }).hint.dots === -1);
-    ok('main: the gauge shows, dim, unlocked; footer reads "Vs CPU"', m.gauge.show && !m.gauge.live && !m.gauge.locked && m.foot.show && m.foot.modeLabel === 'Vs CPU');
+    const m2 = vm({ camera: '2d' });
+    ok('main: the gauge shows in 2D, dim, unlocked; footer reads "Vs CPU"', m2.gauge.show && !m2.gauge.live && !m2.gauge.locked && m.foot.show && m.foot.modeLabel === 'Vs CPU');
+    ok('main: no gauge in 3D (the cue-ball ring shows the power)', !m.gauge.show && !vm({ dragging: true, power: 40 }).gauge.show);
     const trk = m.cards[0].group;
     ok('main: the tracker lists the seven solids, potted ones dimmed', trk.length === 7 && trk.filter(d => d.down).map(d => d.id).join() === '2,5', trk.filter(d => d.down).map(d => d.id).join());
     ok('main: seat 2 tracks the stripes', m.cards[1].group.map(d => d.id).join() === '9,10,11,12,13,14,15');
@@ -95,7 +97,7 @@ const vm = o => P.phModel(game(o));
     const bp = vm({ phase: 'bih', frame: { ballInHand: 'anywhere' }, bih: { valid: true, placed: true } });
     ok('placed: "Placed · aim"', bp.hint.text === 'Placed · aim');
     const rp = { frame: { ballInHand: 'anywhere' }, canReplace: true };
-    ok('placed, aiming: "Move cue ball" shows beside the aim controls', vm(rp).replace.show && vm(rp).gauge.show && vm(rp).hint.text === 'Drag for power');
+    ok('placed, aiming: "Move cue ball" shows beside the aim controls', vm(rp).replace.show && vm(Object.assign({ camera: '2d' }, rp)).gauge.show && vm(rp).hint.text === 'Drag for power');
     ok('"Move cue ball" hides mid-stroke, in the hand-off, while placing and once balls run',
         !vm(Object.assign({ dragging: true, power: 40 }, rp)).replace.show && !vm(Object.assign({ handoff: 2 }, rp)).replace.show &&
         !vm(Object.assign({ phase: 'bih' }, rp)).replace.show && !vm(Object.assign({ phase: 'moving' }, rp)).replace.show);

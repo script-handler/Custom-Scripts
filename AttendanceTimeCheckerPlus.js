@@ -5039,8 +5039,13 @@
     const PC_CHASE = { phi: [12, 27, 50], dist: [7, 11, 16], drop: [0.08, 0.15, 0.2] };
     const PC_CHASE_F = 1.25;           // focal length, ·H
     // Dolly-zoom on far targets: focus (ball diameters) from..to maps zoom 1..max (fading out toward High).
-    const PC_ZOOM = { from: 6, to: 26, max: 1.7, min: 0.5 };
+    // Framing may undo it but never goes wider than 1 (the user: widening sends the pockets far away).
+    const PC_ZOOM = { from: 6, to: 26, max: 1.7 };
     const PC_DROP_MAX = 0.27;          // the cue ball may sink this far to keep the target in view
+    const PC_FAR_TOP = 0.16;           // the shot's far end (rail, pocket) sits at least this far down, ·H
+    // Far points count inside a cone round the aim (|across| ≤ CONE·along), fading out over its outer FADE,
+    // so a pocket drifting in or out never makes the view jump.
+    const PC_FAR_CONE = 0.5, PC_FAR_FADE = 0.7;
 
     function pcLeanLerp(v, lean) {
         const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
@@ -5051,21 +5056,47 @@
 
     // A perspective pose: eye, target, up hint and focal length. Sized in ball diameters, so
     // snooker frames like pool. focus: cue ball to contact, table units (none: no zoom).
-    function pcChase(cue, aim, lean, W, H, cfg, focus) {
-        const R = cfg ? cfg.ballR : 14, D = 2 * R;
-        const phi = pcLeanLerp(PC_CHASE.phi, lean) * Math.PI / 180, lt = Math.max(0, Math.min(100, lean)) / 100;
-        const dist0 = pcLeanLerp(PC_CHASE.dist, lean) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean);
-        let z = 1 + (pcZoom(focus, D) - 1) * (1 - lt), drop = drop0, F, back, up;
-        // Keep the contact below the top overlays: sink the cue ball, and past PC_DROP_MAX widen the view.
-        for (;;) {
-            F = PC_CHASE_F * H * z; back = dist0 * z * Math.cos(phi); up = dist0 * z * Math.sin(phi); drop = drop0;
-            if (!(focus > 0)) break;
-            const top = PC_SURVEY_MARGIN.top + 1.6 * R * F / (back + focus);
-            const need = phi - Math.atan(up / (back + focus)) - Math.atan((H / 2 - top) / F);
-            const want = need > 0 ? Math.tan(need) * F / H : 0;
-            if (want <= PC_DROP_MAX || z <= PC_ZOOM.min) { drop = Math.max(drop0, Math.min(PC_DROP_MAX, want)); break; }
-            z = Math.max(PC_ZOOM.min, z * 0.92);
+    // far: [[along, across], …] aim-frame points (the far rail, the object ball's pocket) kept in view.
+    function pcChase(cue, aim, lean, W, H, cfg, focus, far) {
+        const R = cfg ? cfg.ballR : 14, D = 2 * R, lean0 = Math.max(0, Math.min(100, lean));
+        const z0 = 1 + (pcZoom(focus, D) - 1) * (1 - lean0 / 100);
+        let z = z0, L = lean0, phi, drop, F, back, up;
+        // [along, across, pad, top, side room]; a far point's demands ease in with its cone weight.
+        const m = PC_SURVEY_MARGIN, pts = [];
+        if (focus > 0) pts.push([focus, 0, 1.6 * R, m.top, W / 2 - m.side]);
+        (far || []).forEach(([a, s]) => {
+            const t = Math.max(0, Math.min(1, (PC_FAR_CONE * a - Math.abs(s)) / (PC_FAR_FADE * PC_FAR_CONE * a))), k = t * t * (3 - 2 * t);
+            if (a > 0 && k > 0) pts.push([a, s, 2 * R, Math.max(m.top, PC_FAR_TOP * H) - (1 - k) * H / 2, W / 2 - m.side + (1 - k) * W / 2]);
+        });
+        // Keep the contact below the top overlays and the far end in the middle, never wider than the
+        // stop's own lens: sink the cue ball, then lean down the stops' curve, then undo the far-target zoom.
+        // Solved, not stepped, so the view moves smoothly as the aim sweeps.
+        const vert = (l, zz) => {
+            phi = pcLeanLerp(PC_CHASE.phi, l) * Math.PI / 180;
+            const dist = pcLeanLerp(PC_CHASE.dist, l) * D * zz, drop0 = pcLeanLerp(PC_CHASE.drop, l);
+            F = PC_CHASE_F * H * zz; back = dist * Math.cos(phi); up = dist * Math.sin(phi);
+            let lim = Infinity;
+            for (const [a, , pad, top] of pts) lim = Math.min(lim, Math.atan(up / (back + a)) + Math.atan((H / 2 - top - pad * F / (back + a)) / F));
+            const want = lim < phi ? Math.tan(phi - lim) * F / H : 0;
+            drop = Math.max(drop0, Math.min(PC_DROP_MAX, want));
+            return want <= PC_DROP_MAX;
+        };
+        const side = () => {
+            const p0 = phi - Math.atan(drop * H / F);
+            return pts.every(([a, s, pad, , room]) => Math.abs(s) + pad <= room * ((back + a) * Math.cos(p0) + up * Math.sin(p0)) / F);
+        };
+        // The highest value in [lo, hi] that passes, hi first; lo when nothing does.
+        const best = (lo, hi, pass) => {
+            if (pass(hi)) return hi;
+            if (!pass(lo)) return lo;
+            for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (pass(mid)) lo = mid; else hi = mid; }
+            return lo;
+        };
+        if (pts.length) {
+            L = best(0, lean0, l => vert(l, z0));
+            z = best(1, z0, zz => vert(L, zz) && side());
         }
+        vert(L, z);
         const pitch = phi - Math.atan(drop * H / F);
         const d = [Math.cos(aim), Math.sin(aim)];
         const eye = [cue[0] - d[0] * back, cue[1] - d[1] * back, R + up];
@@ -5235,22 +5266,25 @@
     //   moving  ease to broadcast, or stand up into the survey (Stay 3D)
     //   rest    back to chase; from the survey, after a beat
     //   bih     ball in hand always cuts to 2D
-    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus? }
+    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far? }
     const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
     const PC_SURVEY_DWELL_MS = 450;
     const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
     function pcDirector(W, H, cfg) {
-        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0 };
+        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0, far: null };
     }
 
-    // Eases dir.focus toward the input's; snaps when within half a unit so the pose comes to rest.
+    // Eases dir.focus and dir.far toward the input's; snaps within half a unit so the pose comes to rest.
     function pcFocus(dir, input, dtMs) {
+        const k = typeof dtMs === 'number' ? 1 - Math.exp(-dtMs / PC_FOCUS_MS) : 1;
+        const ease = (v, to, fresh) => { if (fresh) return to; const n = v + (to - v) * k; return Math.abs(to - n) < 0.5 ? to : n; };
         const f = input.focus;
-        if (!(f > 0)) return;
-        if (!(dir.focus > 0) || typeof dtMs !== 'number') { dir.focus = f; return; }
-        dir.focus += (f - dir.focus) * (1 - Math.exp(-dtMs / PC_FOCUS_MS));
-        if (Math.abs(f - dir.focus) < 0.5) dir.focus = f;
+        if (f > 0) dir.focus = ease(dir.focus, f, !(dir.focus > 0));
+        const far = input.far;
+        if (!far || !far.length) { dir.far = null; return; }
+        const fresh = !dir.far || dir.far.length !== far.length;
+        dir.far = far.map((p, i) => p.map((v, j) => ease(fresh ? v : dir.far[i][j], v, fresh)));
     }
 
     function pcTarget(dir, input) {
@@ -5262,7 +5296,7 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
-        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus) };
+        return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
     }
 
     // Advances by dtMs. A chase target is live (follows aim, lean and focus), so the
@@ -7144,8 +7178,9 @@
                 // The nearest stop's name; its dot is lit.
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
+            // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
-                show: aiming,
+                show: aiming && !is3d,
                 power: Math.max(0, Math.min(100, g.power || 0)),
                 live: !!g.dragging || (!!g.cpuTurn && (g.power || 0) > 0), hot: (g.power || 0) >= PH_POWER_HOT, locked: callNeeded,
             },
@@ -7989,7 +8024,7 @@
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
         s('gauge.live', vm.gauge.live, v => hud.gauge.classList.toggle('is-live', v));
         s('gauge.hot', vm.gauge.hot, v => hud.gauge.classList.toggle('is-hot', v));
-        s('gauge.locked', vm.gauge.locked, v => { hud.gauge.classList.toggle('is-locked', v); phShow(hud.lock, v); });
+        s('gauge.locked', vm.gauge.locked && vm.gauge.show, v => { hud.gauge.classList.toggle('is-locked', v); phShow(hud.lock, v); });
 
         s('spin.show', vm.spin.show, v => phShow(hud.spin, v));
         s('spin.label', vm.spin.label, v => {
@@ -10693,7 +10728,21 @@
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
             focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
+            far: poolShotFar(c),
         };
+    }
+    // What the chase camera keeps in view past the contact, aim frame [along, across]: the rail the aim
+    // runs into, every pocket, and the object ball's pocket or cushion when its line shows. The camera
+    // counts only those near the line of the shot (PC_FAR_CONE), so the list never switches.
+    function poolShotFar(c) {
+        const S = poolS, cfg = S.cfg, g = S.guide, dx = Math.cos(S.aim), dy = Math.sin(S.aim);
+        const lim = (s, d, h) => (d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity);
+        const t = Math.max(0, Math.min(lim(c.x, dx, cfg.halfLength), lim(c.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
+        const frame = p => [(p[0] - c.x) * dx + (p[1] - c.y) * dy, (p[1] - c.y) * dx - (p[0] - c.x) * dy];
+        const rail = [c.x + dx * t, c.y + dy * t];
+        const shown = poolHawk() || !(S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full'));
+        const obj = g && g.obj && shown ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
+        return [rail, obj || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
     }
     const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
@@ -10849,7 +10898,8 @@
         poolCuePill();
         const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
-        const dragging = !!(S.drag && S.drag.kind === 'power');
+        // The 3D power ring: your drag, or the CPU drawing back.
+        const dragging = !!(S.drag && S.drag.kind === 'power') || (poolCpuTurn() && S.power > 0);
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT, pgSignVersion()]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;

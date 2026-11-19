@@ -841,7 +841,21 @@
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
             focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
+            far: poolShotFar(c),
         };
+    }
+    // What the chase camera keeps in view past the contact, aim frame [along, across]: the rail the aim
+    // runs into, every pocket, and the object ball's pocket or cushion when its line shows. The camera
+    // counts only those near the line of the shot (PC_FAR_CONE), so the list never switches.
+    function poolShotFar(c) {
+        const S = poolS, cfg = S.cfg, g = S.guide, dx = Math.cos(S.aim), dy = Math.sin(S.aim);
+        const lim = (s, d, h) => (d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity);
+        const t = Math.max(0, Math.min(lim(c.x, dx, cfg.halfLength), lim(c.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
+        const frame = p => [(p[0] - c.x) * dx + (p[1] - c.y) * dy, (p[1] - c.y) * dx - (p[0] - c.x) * dy];
+        const rail = [c.x + dx * t, c.y + dy * t];
+        const shown = poolHawk() || !(S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full'));
+        const obj = g && g.obj && shown ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
+        return [rail, obj || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
     }
     const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
@@ -997,7 +1011,8 @@
         poolCuePill();
         const cueT = cue.sheen && aiming ? Math.floor(Date.now() / 40) * 40 : null;
         // Nothing on the table moved and the camera is still: keep last frame's pixels.
-        const dragging = !!(S.drag && S.drag.kind === 'power');
+        // The 3D power ring: your drag, or the CPU drawing back.
+        const dragging = !!(S.drag && S.drag.kind === 'power') || (poolCpuTurn() && S.power > 0);
         const key = JSON.stringify([pose, S.world.t, c.x, c.y, S.aim, S.power, gap, dragging, S.phase, S.called, S.handoff, felt, theme, S.drops.length, S.guideKey, S.guideMode, S.W, S.H, S.nom, userPreferences.poolGuideLen, userPreferences[R.ringPref], cue.id, cueT, pgSignVersion()]);
         if (key !== S.drawKey || S.drops.length) {
             S.drawKey = key;

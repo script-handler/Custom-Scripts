@@ -3031,6 +3031,24 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
   `prCanPlace` still refuses an overlap, for the AI and the rules. Only the player's drag goes through the clamp.
   rules-verify: 600 drags over the rack all land free, within 10 R (the full rack's middle is 9 R from its edge).
   snooker-verify: a drag onto the brown rests against it, inside the D.
+- **The far end stays in view** (the user, from snooker's High stop: the far corner pockets were off the top).
+  The chase camera fitted only the contact. Now `poolShotFar` also hands it the rail the aim runs into, every
+  pocket, and the object ball's pocket or cushion (only when its line is drawn, so Guide None leaks nothing). They
+  are given in the aim frame and eased like the focus. A point counts only inside a cone round the aim
+  (`PC_FAR_CONE`, |across| ≤ 0.5·along), fading in by smoothstep. Counted points sit at least `PC_FAR_TOP`
+  (0.16 H) down and clear of the sides. To make them fit, the camera first sinks the cue ball (up to
+  `PC_DROP_MAX`). Then it leans down the stops' own curve, toward Cue. Last, it undoes the far-target zoom, never
+  past z = 1. Each step is solved by bisection, not stepped.
+  - The first cut widened the lens instead (z down to 0.5, in 8% steps), and picked "the rail's two nearest
+    pockets". The user found two views flicking in turn as the aim swept: z jumped 1 ↔ 0.5 within 2°, because a
+    pocket beside the cue ball can never fit sideways. The user also noted that widening sends the pockets far
+    away. Both are gone. The worst step is now about 1° of elevation per 0.25° of aim.
+  - render-verify:
+    - from the baulk end, every stop on both tables: both far corners in view aiming straight, and the corner the
+      aim turns toward at ±8°;
+    - a full aim sweep from three spots, both tables, all stops: F never under 1.25 H, and no step over 1.5°.
+- **No power bar in 3D** (the user). The right-edge gauge and its padlock are 2D only. In 3D the ring by the
+  cue ball shows the power, now also while the CPU draws back.
 
 ## Decision log
 

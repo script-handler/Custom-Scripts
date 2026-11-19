@@ -108,6 +108,40 @@ function designCamera(mode, cue, aimDeg, lean) {
             }
         }));
         ok('the target stays in view below the top overlays at every stop and aim', worstTop >= 40, 'highest ghost top ' + worstTop.toFixed(1) + ' px');
+        // Aimed up the table from the baulk end, the far corner pockets sit in view, clear of the top overlays
+        // (turned 8°, the one it turns toward; the other is off the shot's line and may leave the side).
+        let worstFar = Infinity, worstSide = Infinity;
+        [cfg, scfg].filter(Boolean).forEach(c => [0, 45, 100].forEach(lean => [-8, 0, 8].forEach(deg => {
+            const cue = [-c.halfLength + 4 * c.ballR, 0], a = deg * DEG, dx = Math.cos(a), dy = Math.sin(a);
+            const rail = Math.min((c.halfLength - cue[0]) / dx, c.halfWidth / Math.abs(dy || 1e-9)) + c.railWidth / 2;
+            const fr = p => [(p[0] - cue[0]) * dx + (p[1] - cue[1]) * dy, (p[1] - cue[1]) * dx - (p[0] - cue[0]) * dy];
+            const v = P.pcView(P.pcChase(cue, a, lean, W, H, c, 40 * c.ballR, [[rail, 0], fr([c.halfLength, c.halfWidth]), fr([c.halfLength, -c.halfWidth])]));
+            [1, -1].filter(s => deg * s >= 0).forEach(s => {
+                const p = P.pcProject(v, [c.halfLength, s * c.halfWidth, 0]);
+                worstFar = Math.min(worstFar, p ? p[1] : -Infinity); worstSide = Math.min(worstSide, p ? Math.min(p[0], W - p[0]) : -Infinity);
+            });
+        })));
+        // Sweeping the aim round, with every pocket handed in as the game does: the lens never goes wider than
+        // the stop's own and the pose never jumps (the user: two views flicked in turn as the aim swept).
+        let minF = Infinity, worstStep = 0;
+        [cfg, scfg].filter(Boolean).forEach(c => [[300, -150], [-380, 200], [-c.halfLength + 4 * c.ballR, 0]].forEach(cue => [0, 45, 100].forEach(lean => {
+            let prev = null;
+            for (let d = 0; d <= 360; d += 0.25) {
+                const a = d * DEG, dx = Math.cos(a), dy = Math.sin(a);
+                const lim = (s, e, h) => (e > 1e-9 ? (h - s) / e : e < -1e-9 ? (-h - s) / e : Infinity);
+                const t = Math.min(lim(cue[0], dx, c.halfLength), lim(cue[1], dy, c.halfWidth)) + c.railWidth / 2;
+                const fr = p => [(p[0] - cue[0]) * dx + (p[1] - cue[1]) * dy, (p[1] - cue[1]) * dx - (p[0] - cue[0]) * dy];
+                const pk = (c === cfg ? P.ppCreateWorld() : P.psCreateWorld()).table.pockets.map(p => fr([p.x, p.y]));
+                const pose = P.pcChase(cue, a, lean, W, H, c, 10 * c.ballR, [[t, 0], [t, 0]].concat(pk));
+                const el = Math.atan2(pose.eye[2] - c.ballR, Math.hypot(pose.eye[0] - cue[0], pose.eye[1] - cue[1])) / DEG;
+                minF = Math.min(minF, pose.F / H);
+                if (prev) worstStep = Math.max(worstStep, Math.abs(el - prev.el), 20 * Math.abs(pose.F / H - prev.F));
+                prev = { el, F: pose.F / H };
+            }
+        })));
+        ok('sweeping the aim: never wider than the stop\'s lens, and no jumps', minF >= 1.25 - 1e-9 && worstStep < 1.5,
+            'narrowest F ' + minF.toFixed(3) + ' H, largest step per 0.25° ' + worstStep.toFixed(2) + '°');
+        ok('aimed up the table, the far corner pockets are in view below the overlays', worstFar >= 0.14 * H && worstSide >= 10, 'top ' + worstFar.toFixed(1) + ' px, side ' + worstSide.toFixed(1) + ' px');
         const d = P.pcDirector(W, H, cfg), inp = f => ({ camera: '3d', shotCam: 'overhead', phase: 'aim', cue: [0, 0], aim: 0, lean: 0, focus: f });
         P.pcDirect(d, inp(3 * R), 16);
         const before = P.pcDirect(d, inp(3 * R), 16).F, after = P.pcDirect(d, inp(60 * R), 16).F, settled = (() => { let p; for (let i = 0; i < 200; i++) p = P.pcDirect(d, inp(60 * R), 16); return p.F; })();
