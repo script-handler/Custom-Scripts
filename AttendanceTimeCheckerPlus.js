@@ -5046,6 +5046,7 @@
     // Far points count inside a cone round the aim (|across| ≤ CONE·along), fading out over its outer FADE,
     // so a pocket drifting in or out never makes the view jump.
     const PC_FAR_CONE = 0.5, PC_FAR_FADE = 0.7;
+    const PC_PULL_MAX = 4;             // the eye may pull back to this many times the stop's distance
 
     function pcLeanLerp(v, lean) {
         const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
@@ -5060,7 +5061,8 @@
     function pcChase(cue, aim, lean, W, H, cfg, focus, far) {
         const R = cfg ? cfg.ballR : 14, D = 2 * R, lean0 = Math.max(0, Math.min(100, lean));
         const z0 = 1 + (pcZoom(focus, D) - 1) * (1 - lean0 / 100);
-        let z = z0, L = lean0, phi, drop, F, back, up;
+        const phi = pcLeanLerp(PC_CHASE.phi, lean0) * Math.PI / 180, dist0 = pcLeanLerp(PC_CHASE.dist, lean0) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean0);
+        let z = z0, u = 1, drop, F, back, up;
         // [along, across, pad, top, side room]; a far point's demands ease in with its cone weight.
         const m = PC_SURVEY_MARGIN, pts = [];
         if (focus > 0) pts.push([focus, 0, 1.6 * R, m.top, W / 2 - m.side]);
@@ -5068,35 +5070,30 @@
             const t = Math.max(0, Math.min(1, (PC_FAR_CONE * a - Math.abs(s)) / (PC_FAR_FADE * PC_FAR_CONE * a))), k = t * t * (3 - 2 * t);
             if (a > 0 && k > 0) pts.push([a, s, 2 * R, Math.max(m.top, PC_FAR_TOP * H) - (1 - k) * H / 2, W / 2 - m.side + (1 - k) * W / 2]);
         });
-        // Keep the contact below the top overlays and the far end in the middle, never wider than the
-        // stop's own lens: sink the cue ball, then lean down the stops' curve, then undo the far-target zoom.
-        // Solved, not stepped, so the view moves smoothly as the aim sweeps.
-        const vert = (l, zz) => {
-            phi = pcLeanLerp(PC_CHASE.phi, l) * Math.PI / 180;
-            const dist = pcLeanLerp(PC_CHASE.dist, l) * D * zz, drop0 = pcLeanLerp(PC_CHASE.drop, l);
-            F = PC_CHASE_F * H * zz; back = dist * Math.cos(phi); up = dist * Math.sin(phi);
+        // Keep the contact below the top overlays and the far end in the middle, at the stop's own angle and
+        // never wider than its lens: sink the cue ball, then pull back along the shot (up to PC_PULL_MAX),
+        // then undo the far-target zoom. Solved, not stepped, so the view moves smoothly as the aim sweeps.
+        const fits = (uu, zz) => {
+            F = PC_CHASE_F * H * zz; back = dist0 * zz * uu * Math.cos(phi); up = dist0 * zz * uu * Math.sin(phi);
             let lim = Infinity;
             for (const [a, , pad, top] of pts) lim = Math.min(lim, Math.atan(up / (back + a)) + Math.atan((H / 2 - top - pad * F / (back + a)) / F));
             const want = lim < phi ? Math.tan(phi - lim) * F / H : 0;
             drop = Math.max(drop0, Math.min(PC_DROP_MAX, want));
-            return want <= PC_DROP_MAX;
-        };
-        const side = () => {
             const p0 = phi - Math.atan(drop * H / F);
-            return pts.every(([a, s, pad, , room]) => Math.abs(s) + pad <= room * ((back + a) * Math.cos(p0) + up * Math.sin(p0)) / F);
+            return want <= PC_DROP_MAX && pts.every(([a, s, pad, , room]) => Math.abs(s) + pad <= room * ((back + a) * Math.cos(p0) + up * Math.sin(p0)) / F);
         };
-        // The highest value in [lo, hi] that passes, hi first; lo when nothing does.
-        const best = (lo, hi, pass) => {
-            if (pass(hi)) return hi;
-            if (!pass(lo)) return lo;
-            for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (pass(mid)) lo = mid; else hi = mid; }
-            return lo;
+        // The value in [lo, hi] nearest `from` that passes; the far end when nothing does.
+        const seek = (from, to, pass) => {
+            if (pass(from)) return from;
+            if (!pass(to)) return to;
+            for (let i = 0; i < 24; i++) { const mid = (from + to) / 2; if (pass(mid)) to = mid; else from = mid; }
+            return to;
         };
         if (pts.length) {
-            L = best(0, lean0, l => vert(l, z0));
-            z = best(1, z0, zz => vert(L, zz) && side());
+            u = seek(1, PC_PULL_MAX, uu => fits(uu, z0));
+            if (u === PC_PULL_MAX) z = seek(z0, 1, zz => fits(u, zz));
         }
-        vert(L, z);
+        fits(u, z);
         const pitch = phi - Math.atan(drop * H / F);
         const d = [Math.cos(aim), Math.sin(aim)];
         const eye = [cue[0] - d[0] * back, cue[1] - d[1] * back, R + up];

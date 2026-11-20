@@ -3024,7 +3024,7 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
   part; the ratios are what matter.
 - **Disk.** snapshot.js and host-run.js made a ~55 MB Chrome profile in %TEMP% per run and never removed it.
   56 of them (3 GB) filled C: on 2026-11-19 and were deleted with the user's OK. Both scripts now remove their
-  profile on exit.
+  profile on exit. On 2026-11-20 perf-check.js and theme-verify.js got the same exit cleanup.
 - **Ball in hand rests against balls** (`prClampPlace`, the user: a note that the ball overlaps is no use). A drag onto a
   ball slides the cue ball out to touching it, on the side it came from, then back into the zone. Wedged in a
   cluster or against a line, it takes the nearest free spot touching a ball nearby. Other balls are never pushed.
@@ -3036,9 +3036,13 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
   pocket, and the object ball's pocket or cushion (only when its line is drawn, so Guide None leaks nothing). They
   are given in the aim frame and eased like the focus. A point counts only inside a cone round the aim
   (`PC_FAR_CONE`, |across| ≤ 0.5·along), fading in by smoothstep. Counted points sit at least `PC_FAR_TOP`
-  (0.16 H) down and clear of the sides. To make them fit, the camera first sinks the cue ball (up to
-  `PC_DROP_MAX`). Then it leans down the stops' own curve, toward Cue. Last, it undoes the far-target zoom, never
-  past z = 1. Each step is solved by bisection, not stepped.
+  (0.16 H) down and clear of the sides. To make them fit, the camera keeps the stop's own angle and lens. It
+  first sinks the cue ball (up to `PC_DROP_MAX`). Then it pulls the eye back along the shot (up to
+  `PC_PULL_MAX`, 4× the stop's distance). Last, it undoes the far-target zoom, never past z = 1. Each step is
+  solved by bisection, not stepped. In practice only High pulls back: up to 2× on pool and 3.8× on snooker. Cue and
+  Stand already fit, so High now reads as an overview of the whole shot.
+  - A second cut leaned down toward Cue instead. The user found High had turned into Stand on long shots, with the
+    far guideline lost at the horizon, so that was dropped.
   - The first cut widened the lens instead (z down to 0.5, in 8% steps), and picked "the rail's two nearest
     pockets". The user found two views flicking in turn as the aim swept: z jumped 1 ↔ 0.5 within 2°, because a
     pocket beside the cue ball can never fit sideways. The user also noted that widening sends the pockets far
@@ -3046,7 +3050,8 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
   - render-verify:
     - from the baulk end, every stop on both tables: both far corners in view aiming straight, and the corner the
       aim turns toward at ±8°;
-    - a full aim sweep from three spots, both tables, all stops: F never under 1.25 H, and no step over 1.5°.
+    - a full aim sweep from three spots, both tables, all stops: F never under 1.25 H, the stop's angle kept
+      exactly, and no step in eye distance over 6% per 0.25° of aim.
 - **No power bar in 3D** (the user). The right-edge gauge and its padlock are 2D only. In 3D the ring by the
   cue ball shows the power, now also while the CPU draws back.
 

@@ -123,7 +123,7 @@ function designCamera(mode, cue, aimDeg, lean) {
         })));
         // Sweeping the aim round, with every pocket handed in as the game does: the lens never goes wider than
         // the stop's own and the pose never jumps (the user: two views flicked in turn as the aim swept).
-        let minF = Infinity, worstStep = 0;
+        let minF = Infinity, worstStep = 0, worstEl = 0;
         [cfg, scfg].filter(Boolean).forEach(c => [[300, -150], [-380, 200], [-c.halfLength + 4 * c.ballR, 0]].forEach(cue => [0, 45, 100].forEach(lean => {
             let prev = null;
             for (let d = 0; d <= 360; d += 0.25) {
@@ -133,14 +133,17 @@ function designCamera(mode, cue, aimDeg, lean) {
                 const fr = p => [(p[0] - cue[0]) * dx + (p[1] - cue[1]) * dy, (p[1] - cue[1]) * dx - (p[0] - cue[0]) * dy];
                 const pk = (c === cfg ? P.ppCreateWorld() : P.psCreateWorld()).table.pockets.map(p => fr([p.x, p.y]));
                 const pose = P.pcChase(cue, a, lean, W, H, c, 10 * c.ballR, [[t, 0], [t, 0]].concat(pk));
-                const el = Math.atan2(pose.eye[2] - c.ballR, Math.hypot(pose.eye[0] - cue[0], pose.eye[1] - cue[1])) / DEG;
+                const back = Math.hypot(pose.eye[0] - cue[0], pose.eye[1] - cue[1]), el = Math.atan2(pose.eye[2] - c.ballR, back) / DEG;
                 minF = Math.min(minF, pose.F / H);
-                if (prev) worstStep = Math.max(worstStep, Math.abs(el - prev.el), 20 * Math.abs(pose.F / H - prev.F));
-                prev = { el, F: pose.F / H };
+                const want = P.pcChase(cue, a, lean, W, H, c), elWant = Math.atan2(want.eye[2] - c.ballR, Math.hypot(want.eye[0] - cue[0], want.eye[1] - cue[1])) / DEG;
+                worstEl = Math.max(worstEl, Math.abs(el - elWant));
+                if (prev) worstStep = Math.max(worstStep, 100 * Math.abs(Math.log(back / prev.back)), 2000 * Math.abs(pose.F / H - prev.F));
+                prev = { back, F: pose.F / H };
             }
         })));
-        ok('sweeping the aim: never wider than the stop\'s lens, and no jumps', minF >= 1.25 - 1e-9 && worstStep < 1.5,
-            'narrowest F ' + minF.toFixed(3) + ' H, largest step per 0.25° ' + worstStep.toFixed(2) + '°');
+        // (the user: High had turned into Stand; the stop's angle is kept, the eye pulls back instead)
+        ok('sweeping the aim: the stop\'s angle and lens kept, and no jumps', minF >= 1.25 - 1e-9 && worstEl < 0.01 && worstStep < 6,
+            'narrowest F ' + minF.toFixed(3) + ' H, angle off by ' + worstEl.toFixed(3) + '°, largest step per 0.25° ' + worstStep.toFixed(1) + '%');
         ok('aimed up the table, the far corner pockets are in view below the overlays', worstFar >= 0.14 * H && worstSide >= 10, 'top ' + worstFar.toFixed(1) + ' px, side ' + worstSide.toFixed(1) + ' px');
         const d = P.pcDirector(W, H, cfg), inp = f => ({ camera: '3d', shotCam: 'overhead', phase: 'aim', cue: [0, 0], aim: 0, lean: 0, focus: f });
         P.pcDirect(d, inp(3 * R), 16);

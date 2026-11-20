@@ -69,6 +69,8 @@ const SNK_CPU = `(() => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pool-chrome-'));
     const port = 9300 + Math.floor(Math.random() * 400);
     const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--remote-debugging-port=' + port, '--allow-file-access-from-files', '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' });
+    // Each run's profile is ~55 MB; left behind they filled the disk.
+    process.on('exit', () => { try { proc.kill(); } catch (_) {} try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch (_) {} });
     let target;
     for (let i = 0; i < 60 && !target; i++) { await sleep(200); try { target = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).find(t => t.type === 'page'); } catch (_) {} }
     if (!target) { console.log('chrome did not start'); proc.kill(); process.exit(1); }
