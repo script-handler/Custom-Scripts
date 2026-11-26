@@ -257,24 +257,37 @@
     //   moving  ease to broadcast, or stand up into the survey (Stay 3D)
     //   rest    back to chase; from the survey, after a beat
     //   bih     ball in hand always cuts to 2D
-    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far? }
+    //   peek    the Eye view: chase from behind the object ball along its line (input.peek)
+    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far?,
+    //           peek?: { at, angle, focus, far } }
     const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
     const PC_SURVEY_DWELL_MS = 450;
     const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
     function pcDirector(W, H, cfg) {
-        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0, far: null };
+        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0, far: null, farKey: 'chase', peekAngle: 0 };
     }
 
-    // Eases dir.focus and dir.far toward the input's; snaps within half a unit so the pose comes to rest.
+    // The Eye view applies: aiming in 3D with a peek handed in.
+    const pcPeekOn = input => !!input.peek && input.phase === 'aim' && input.camera !== '2d';
+
+    // Eases dir.focus, dir.far (and the Eye view's angle) toward the input's; snaps within half a unit
+    // so the pose comes to rest, and on a switch between the cue and Eye views.
     function pcFocus(dir, input, dtMs) {
         const k = typeof dtMs === 'number' ? 1 - Math.exp(-dtMs / PC_FOCUS_MS) : 1;
         const ease = (v, to, fresh) => { if (fresh) return to; const n = v + (to - v) * k; return Math.abs(to - n) < 0.5 ? to : n; };
-        const f = input.focus;
-        if (f > 0) dir.focus = ease(dir.focus, f, !(dir.focus > 0));
-        const far = input.far;
+        const pk = pcPeekOn(input) ? input.peek : null, mode = pk ? 'peek' : 'chase', snap = dir.farKey !== mode, src = pk || input;
+        dir.farKey = mode;
+        const f = src.focus;
+        if (f > 0) dir.focus = ease(dir.focus, f, snap || !(dir.focus > 0));
+        if (pk) {
+            let d = pk.angle - dir.peekAngle;
+            d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+            dir.peekAngle = snap || Math.abs(d * (1 - k)) < 1e-3 ? pk.angle : dir.peekAngle + d * k;
+        }
+        const far = src.far;
         if (!far || !far.length) { dir.far = null; return; }
-        const fresh = !dir.far || dir.far.length !== far.length;
+        const fresh = snap || !dir.far || dir.far.length !== far.length;
         dir.far = far.map((p, i) => p.map((v, j) => ease(fresh ? v : dir.far[i][j], v, fresh)));
     }
 
@@ -287,6 +300,7 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
+        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
     }
 

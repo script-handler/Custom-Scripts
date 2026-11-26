@@ -62,6 +62,12 @@ const vm = o => P.phModel(game(o));
     const m2 = vm({ camera: '2d' });
     ok('main: the gauge shows in 2D, dim, unlocked; footer reads "Vs CPU"', m2.gauge.show && !m2.gauge.live && !m2.gauge.locked && m.foot.show && m.foot.modeLabel === 'Vs CPU');
     ok('main: no gauge in 3D (the cue-ball ring shows the power)', !m.gauge.show && !vm({ dragging: true, power: 40 }).gauge.show);
+    // The Eye view under the slider: lit while on, greyed with no target or no peeks (a paid shot toggles free).
+    const ev = e => vm({ eye: e }).eye;
+    ok('eye: a target and peeks left is pressable, its badge and label count them', ev({ can: true, left: 3 }).enabled && ev({ can: true, left: 3 }).left === 3 && ev({ can: true, left: 3 }).label === 'Target view (X) · 3 peeks left' && ev({ can: true, left: 1 }).label.endsWith('1 peek left'));
+    ok('eye: greyed with no peeks, or no target; a paid shot or a lit button stays pressable',
+        !ev({ can: true, left: 0 }).enabled && !ev({ can: false, left: 3 }).enabled && ev({ can: true, left: 0, paid: true }).enabled && ev({ on: true, left: 0 }).on && ev({ on: true, left: 0 }).enabled);
+    ok('eye: the button sits in the View rail, under its label', [false, true].every(mx => /data-ph="leanv"><\/span><button[^>]*data-ph="eye"[^>]*>[\s\S]*?data-ph="eyen"[\s\S]*?<\/button><\/div>/.test(P.phViewHTML(mx))));
     const trk = m.cards[0].group;
     ok('main: the tracker lists the seven solids, potted ones dimmed', trk.length === 7 && trk.filter(d => d.down).map(d => d.id).join() === '2,5', trk.filter(d => d.down).map(d => d.id).join());
     ok('main: seat 2 tracks the stripes', m.cards[1].group.map(d => d.id).join() === '9,10,11,12,13,14,15');

@@ -1498,5 +1498,112 @@ head('Sound');
     ok('a replayed table plays nothing', C.log.sfx.length === n0);
 }
 
+head('The Eye view and peeks');
+{
+    // A frame's peeks: Easy 4 · Normal 3 · Hard 2 · Pro 1 (else 3), plus the cue's rarity (0–3); the CPU none.
+    const G = L.game({ seed: 81 }), S = G.poolS, U = G.host.userPreferences;
+    G.host.userXP.achievements.push('streak7', 'snookerMaximum');
+    const start = (tier, cue) => { U.poolDifficulty = tier; U.poolCue = cue; G.poolNewFrame(1); return [S.peeks[1], S.peeks[2]].join(); };
+    ok('peeks at the break: Easy + Legendary 7, Normal + Rare 4, Pro + Common 1; the CPU 0',
+        start('easy', 'crown') === '7,0' && start('normal', 'ember') === '4,0' && start('pro', 'standard') === '1,0', [start('easy', 'crown'), start('normal', 'ember'), start('pro', 'standard')]);
+    U.poolCue = 'ember'; G.poolSetMode('pvp'); G.poolNewFrame(1);
+    ok('2 Players: Normal\'s 3 for each seat, plus each one\'s cue', S.peeks[1] === 4 && S.peeks[2] === 4, [S.peeks[1], S.peeks[2]]);
+    G.poolSetMode('cpu'); U.poolDifficulty = 'normal'; U.poolCue = 'standard';
+
+    // Aiming at the rack from behind the head string, in 3D.
+    const aimAt = (game, angle) => {
+        const T = game.poolS;
+        game.poolNewFrame(1); T.awaitStart = null; T.handoff = 0;
+        game.prPlaceCue(T.world, T.world.table.headX - 60, 0); T.placed = true; T.phase = 'aim'; T.aim = angle;
+        game.host.userPreferences.poolCamera = '3d';
+        game.poolRefreshGuide();
+    };
+    aimAt(G, 0);
+    ok('aimed at the apex, the Eye view can be bought', G.poolEyeCan() && S.peeks[1] === 3);
+    G.poolEyeToggle();
+    ok('on spends a peek', S.eye && S.eyePaid && S.peeks[1] === 2);
+    G.poolEyeToggle(); G.poolEyeToggle();
+    ok('off and on again in the same shot is free', S.eye && S.peeks[1] === 2);
+    const inp = G.poolCamInput(), o = S.guide.obj;
+    ok('the camera is handed the target ball, along its line', inp.peek && inp.peek.at[0] === o.x && Math.abs(inp.peek.angle - Math.atan2(o.dy, o.dx)) < 1e-12 && inp.peek.far.length === inp.far.length);
+    const d = G.pcDirector(368, 412, S.cfg);
+    G.pcDirect(d, inp, 0);
+    ok('…which the director plays as the Eye view', d.key === 'peek');
+    ok('the mouse and arrows turn inverted in the Eye view', G.poolAimSign() === -1);
+    S.drag = { kind: 'power', x: 0, y: 0, ax: [0, -1], reach: 100 };
+    G.pcDirect(d, G.poolCamInput(), 16);
+    ok('drawing power goes back behind the cue ball', d.key === 'chase' && !G.poolCamInput().peek && G.poolAimSign() === 1);
+    S.drag = null;
+    G.pcDirect(d, G.poolCamInput(), 16);
+    ok('…and cancelling returns to the Eye view', d.key === 'peek');
+    // X toggles it.
+    const x = () => G.poolOnKey({ code: 'KeyX', key: 'x', target: {}, preventDefault() {}, stopImmediatePropagation() {} });
+    S.attached = true;                          // keys only count while the panel is up
+    x();
+    ok('X turns it off', !S.eye);
+    x();
+    ok('…and on again (already paid)', S.eye && S.peeks[1] === 2);
+
+    // A pot refunds the peek; a miss or a foul does not; every shot starts behind the cue ball.
+    const after = (turn, foul) => G.poolAfterTurn({ shooter: 1, foul: foul || null, frameOver: false, next: Object.assign({}, S.frame, { turn, pending: null }) });
+    after(1);
+    ok('a pot on a peeked shot gives the peek back, and the next shot starts behind the cue ball', S.peeks[1] === 3 && !S.eye && !S.eyePaid);
+    aimAt(G, 0); G.poolEyeToggle(); after(2);
+    ok('a miss gives nothing back', S.peeks[1] === 2 && !S.eye);
+    aimAt(G, 0); G.poolEyeToggle(); after(2, 'scratch');
+    ok('a foul gives nothing back', S.peeks[1] === 2);
+    aimAt(G, 0); after(1);
+    ok('a pot without a peek earns nothing', S.peeks[1] === 3);
+
+    // Blocked: 2D, ball in hand, the CPU's turn, no target, no peeks.
+    aimAt(G, 0); U.poolCamera = '2d'; G.poolEyeToggle();
+    ok('not in 2D', !S.eye && S.peeks[1] === 3);
+    aimAt(G, 0); S.phase = 'bih'; G.poolEyeToggle();
+    ok('not with the ball in hand', !S.eye);
+    aimAt(G, 0); S.frame.turn = 2; G.poolEyeToggle();
+    ok('not on the CPU\'s turn', !S.eye);
+    aimAt(G, Math.PI);
+    ok('aimed at no ball, it cannot be bought', !(S.guide && S.guide.obj) && !G.poolEyeCan());
+    aimAt(G, 0); S.peeks[1] = 0; G.poolEyeToggle();
+    ok('none left, none to spend', !S.eye && S.peeks[1] === 0);
+    // Bought, then swung off every ball: back behind the cue ball until a ball is on the line again.
+    aimAt(G, 0); S.peeks[1] = 2; G.poolEyeToggle(); S.aim = Math.PI; G.poolRefreshGuide();
+    ok('swung off every ball it eases back behind the cue ball, still on', S.eye && !G.poolCamInput().peek);
+    S.aim = 0; G.poolRefreshGuide();
+    ok('…and returns on a ball, at no cost', !!G.poolCamInput().peek && S.peeks[1] === 1);
+
+    // A reload keeps the peeks.
+    S.eye = false; S.peeks = { 1: 5, 2: 2 };
+    const snap = G.poolSnapshotTable();
+    S.peeks = { 1: 0, 2: 0 };
+    ok('a saved frame keeps the peeks left', G.poolRestoreTable(snap) && S.peeks[1] === 5 && S.peeks[2] === 2, [S.peeks[1], S.peeks[2]]);
+
+    // Played for real on snooker's rules: a red potted on a peek comes back; a missed one does not.
+    const K = L.game({ seed: 82 }), Z = K.poolS;
+    K.poolSetVariant('snooker');
+    // One red at (x, y), the cue ball 120 u behind it on the line `dir`; struck with a peek bought.
+    const play = (x, y, dir) => {
+        K.poolNewFrame(1); Z.awaitStart = null; Z.handoff = 0; Z.attached = true;
+        const red = Z.world.balls.find(b => b.id >= 8);
+        Z.world.balls.forEach(b => { if (b.id >= 8 && b !== red) b.state = 'pocketed'; });
+        Z.down = K.poolDownSet(); Z.frame.isBreak = false; Z.frame.ballInHand = null;
+        red.x = x; red.y = y;
+        const cue = Z.world.balls[0]; cue.x = x - Math.cos(dir) * 120; cue.y = y - Math.sin(dir) * 120;
+        Z.phase = 'aim'; Z.placed = true; Z.aim = dir; K.host.userPreferences.poolCamera = '3d';
+        K.poolRefreshGuide(); K.poolEyeToggle();
+        const bought = Z.eyePaid && Z.peeks[1] === K.poolPeekStart(1) - 1;
+        Z.power = 40; Z.phase = 'strike'; Z.strikeT = 999; K.poolTick(16);
+        for (let i = 0; i < 4000 && (Z.phase === 'moving' || Z.phase === 'strike'); i++) K.poolStepMoving();
+        return { bought, red };
+    };
+    K.poolNewFrame(1);
+    const pk = Z.world.table.pockets[5], at =[pk.x - 120, pk.y + 60], line = Math.atan2(pk.y - at[1], pk.x - at[0]);
+    const pot = play(at[0], at[1], line);
+    ok('snooker: a red potted on a peek gives it back', pot.bought && pot.red.state === 'pocketed' && Z.frame.turn === 1 && Z.peeks[1] === K.poolPeekStart(1) && !Z.eye,
+        [pot.bought, pot.red.state, Z.frame.turn, Z.peeks[1]]);
+    const miss = play(0, 0, Math.atan2(0.3, 1));
+    ok('snooker: a red missed on a peek does not', miss.bought && miss.red.state !== 'pocketed' && Z.peeks[1] === K.poolPeekStart(1) - 1, [miss.red.state, Z.peeks[1]]);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

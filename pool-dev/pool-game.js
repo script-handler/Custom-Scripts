@@ -302,6 +302,8 @@
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
         // The object balls each seat has potted this frame (cards show them on an open table).
         pots: { 1: [], 2: [] },
+        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent.
+        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false,
         toast: null, toastMs: 0, fouled: 0, handoff: 0, result: null, placed: false, clockLeft: POOL_CLOCK_S,
         cpu: null, wins: 0,
         // Cues: the picker open, the wins per cue (cached), a cue just unlocked or equipped, the frame card's line.
@@ -539,6 +541,7 @@
         const home = R.cueHome(S.world);
         S.world.balls[0].x = home[0]; S.world.balls[0].y = home[1];
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
+        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
         S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
@@ -625,6 +628,9 @@
     function poolAfterTurn(v) {
         const S = poolS, R = poolRules(), shooter = v.shooter;
         S.netStep++;
+        // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
+        if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
+        S.eye = false; S.eyePaid = false;
         S.frame = v.next; S.called = -1; S.nom = -1; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
             const w = v.winner, t = R.text(v, poolNames());
@@ -841,21 +847,60 @@
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
             focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
-            far: poolShotFar(c),
+            far: poolShotFar(c, S.aim, poolObjShown() ? poolObjTail() : null),
+            peek: poolPeekInput(),
         };
     }
-    // What the chase camera keeps in view past the contact, aim frame [along, across]: the rail the aim
-    // runs into, every pocket, and the object ball's pocket or cushion when its line shows. The camera
-    // counts only those near the line of the shot (PC_FAR_CONE), so the list never switches.
-    function poolShotFar(c) {
-        const S = poolS, cfg = S.cfg, g = S.guide, dx = Math.cos(S.aim), dy = Math.sin(S.aim);
+    const poolObjShown = () => poolHawk() || !(poolS.guideMode === 'off' || (!poolGuideLen() && poolS.guideMode === 'full'));
+    // Where the object ball's line ends: Hawkeye's followed path, else its pocket or cushion.
+    function poolObjTail() {
+        const g = poolS.guide;
+        return g && g.obj ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
+    }
+    // What the chase camera keeps in view past the contact, in the frame of a line from `o` at `angle`
+    // ([along, across]): the rail it runs into, every pocket, and `end`. The camera counts only those
+    // near the line (PC_FAR_CONE), so the list never switches.
+    function poolShotFar(o, angle, end) {
+        const S = poolS, cfg = S.cfg, dx = Math.cos(angle), dy = Math.sin(angle);
         const lim = (s, d, h) => (d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity);
-        const t = Math.max(0, Math.min(lim(c.x, dx, cfg.halfLength), lim(c.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
-        const frame = p => [(p[0] - c.x) * dx + (p[1] - c.y) * dy, (p[1] - c.y) * dx - (p[0] - c.x) * dy];
-        const rail = [c.x + dx * t, c.y + dy * t];
-        const shown = poolHawk() || !(S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full'));
-        const obj = g && g.obj && shown ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
-        return [rail, obj || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
+        const t = Math.max(0, Math.min(lim(o.x, dx, cfg.halfLength), lim(o.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
+        const frame = p => [(p[0] - o.x) * dx + (p[1] - o.y) * dy, (p[1] - o.y) * dx - (p[0] - o.x) * dy];
+        const rail = [o.x + dx * t, o.y + dy * t];
+        return [rail, end || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
+    }
+
+    // ── The Eye view (peeks) ──────────────────────────────────────────
+    // Behind the target ball along its line, bought with a peek and refunded by a pot.
+    // A frame's peeks: by the CPU's tier (else Normal's 3), plus the seat's cue rarity.
+    const POOL_PEEK_BASE = { easy: 4, normal: 3, hard: 2, pro: 1 };
+    function poolPeekStart(seat) {
+        if (poolMode === 'cpu' && seat === 2) return 0;
+        const base = poolMode === 'cpu' ? (POOL_PEEK_BASE[poolCpuTier] || 3) : 3;
+        return base + (PQ_PEEK[pqById(poolSeatCueId(seat)).rarity] || 0);
+    }
+    // Can the shooter look now: 3D, aiming, theirs to play, a target ball on the line.
+    function poolEyeCan() {
+        const S = poolS;
+        return userPreferences.poolCamera !== '2d' && S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
+    }
+    // The Eye view is on screen: on, a target on the line, no power being drawn.
+    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && userPreferences.poolCamera !== '2d' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
+    function poolPeekInput() {
+        const S = poolS;
+        if (!poolEyeLive()) return null;
+        const o = S.guide.obj, angle = Math.atan2(o.dy, o.dx), end = poolObjTail();
+        return { at: [o.x, o.y], angle, focus: end ? Math.hypot(end[0] - o.x, end[1] - o.y) : 0, far: poolShotFar(o, angle, end) };
+    }
+    // The button and X: off is free; on spends a peek, once per shot.
+    function poolEyeToggle() {
+        const S = poolS, seat = S.frame.turn;
+        if (S.eye) { S.eye = false; return; }
+        if (!poolEyeCan()) return;
+        if (!S.eyePaid) {
+            if (!(S.peeks[seat] > 0)) return;
+            S.peeks[seat]--; S.eyePaid = true;
+        }
+        S.eye = true;
     }
     const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
@@ -1051,7 +1096,8 @@
             layout: S.hud.layout, game: S.game, title: R.title, status: st, rails, diffs: R.diffs, mode: poolMode, names: poolNames(), records: { 1: poolRecordText(1), 2: poolRecordText(2) },
             frames: S.frames, trophies: S.wins,
             frame: S.frame, world: S.world, phase: S.phase, camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
-            lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip, spinOpen: S.spinOpen, called: S.called,
+            lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip,
+            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid }, spinOpen: S.spinOpen, called: S.called,
             clock: !cpuTurn && S.clockTotal ? { left: Math.max(0, S.clockLeft), total: poolTurnClock() } : null,
             toast: S.toast, fouled: S.fouled, handoff: S.handoff,
             bih: S.phase === 'bih' ? { valid: !bihBad, reason: bihBad, placed: S.placed, sx: gs && gs[0], sy: gs && gs[1], sr: gs ? S.cfg.ballR * gs[2] : 0 } : null,
@@ -1252,7 +1298,7 @@
         if (S.phase !== 'aim' || !poolCanAct()) return;
         // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -1315,6 +1361,10 @@
             poolOn.lean(next === undefined ? PH_LEAN_STOPS[0] : next);
             e.preventDefault(); return;
         }
+        // X: the Eye view, behind the target ball (spends a peek).
+        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+            poolEyeToggle(); e.preventDefault(); return;
+        }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
             if (poolTyping(e)) return;
             e.preventDefault();
@@ -1322,7 +1372,7 @@
             // repeat is ignored.
             const dir = e.key === 'ArrowLeft' ? 1 : -1;
             if (e.repeat || (S.aimHold && S.aimHold.dir === dir)) return;
-            S.aim += dir * poolRules().aimKey * POOL_DEG;
+            S.aim += poolAimSign() * dir * poolRules().aimKey * POOL_DEG;
             S.aimHold = { dir, key: e.key, t: 0 };
         }
     }
@@ -1347,8 +1397,10 @@
         // The rate at the middle of this slice: quadratic ease from the slowest to the fastest.
         const k = Math.min(1, ((from + to) / 2 - POOL_HOLD_DELAY) / POOL_HOLD_RAMP);
         const rate = POOL_HOLD_RATE[0] + (POOL_HOLD_RATE[1] - POOL_HOLD_RATE[0]) * k * k;
-        S.aim += h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
+        S.aim += poolAimSign() * h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
     }
+    // Turning the cue one way swings the target ball's line the other, so the Eye view turns inverted.
+    const poolAimSign = () => (poolEyeLive() ? -1 : 1);
 
     // ── HUD wiring ────────────────────────────────────────────────────
     const poolOn = {
@@ -1359,6 +1411,7 @@
             clearTimeout(poolS.leanSave);
             poolS.leanSave = setTimeout(savePreferences, 400);
         },
+        eye: () => poolEyeToggle(),
         // Spin: anywhere inside the miscue ring. The tip resets to the centre after every shot.
         tip: t => { if (poolCanAct()) poolS.tip = phClampTip(t.x, t.y); },
         tipStep: d => { if (poolCanAct()) poolS.tip = phClampTip(poolS.tip.x + d.x, poolS.tip.y + d.y); },
@@ -1583,7 +1636,7 @@
         return {
             breaker: S.breaker, frame: JSON.parse(JSON.stringify(S.frame)),
             balls: S.world.balls.map(b => ({ id: b.id, x: b.x, y: b.y, q: b.q.slice(), state: b.state, pocket: b.pocket })),
-            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() },
+            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] },
         };
     }
     function poolApplySnap(snap, world) {
@@ -1593,6 +1646,8 @@
         S.fouled = snap.fouled === 1 || snap.fouled === 2 ? snap.fouled : 0;
         const potsOf = a => (Array.isArray(a) ? a.filter(id => Number.isInteger(id) && R.tracksPot(id)) : []);
         S.pots = { 1: potsOf(snap.pots && snap.pots[1]), 2: potsOf(snap.pots && snap.pots[2]) };
+        const pk = n => (Number.isInteger(n) && n >= 0 && n <= 20 ? n : null);
+        if (snap.peeks) [1, 2].forEach(s => { const n = pk(snap.peeks[s]); if (n !== null) S.peeks[s] = n; });
     }
     // The clock it was left on, within today's limit: ⚙️ may have lowered it since.
     const poolSnapClock = snap => { const full = poolTurnClock() || POOL_CLOCK_S; return snap.clockLeft > 0 ? Math.min(snap.clockLeft, full) : full; };

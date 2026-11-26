@@ -225,6 +225,12 @@
                 // The nearest stop's name; its dot is lit.
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
+            // The Eye view under the slider: lit while on, greyed with no target or no peeks left.
+            eye: (() => {
+                const e = g.eye || {}, left = Math.max(0, e.left || 0), on = !!e.on;
+                const enabled = on || (!!e.can && (!!e.paid || left > 0));
+                return { on, left, enabled, label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left' };
+            })(),
             // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
                 show: aiming && !is3d,
@@ -440,6 +446,7 @@
         up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>',
         down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>',
         lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>',
+        eye: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
         trophy: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"></path></svg>',
         cross: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>',
         chip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"></path></svg>',
@@ -570,7 +577,9 @@
             '<div class="ph-rng"><div class="ph-rng-track"></div><div class="ph-rng-fill" data-ph="leanf"></div><div class="ph-rng-thumb" data-ph="leant"></div>' +
             '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani">' +
             PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
-            '</div><span class="ph-lean-v" data-ph="leanv"></span></div>' +
+            '</div><span class="ph-lean-v" data-ph="leanv"></span>' +
+            // The Eye view: behind the target ball, X; the badge is the peeks left.
+            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -715,7 +724,7 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
             'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
@@ -738,6 +747,7 @@
         hud.cam3d.addEventListener('click', () => fire('camera', '3d'));
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
         PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
+        hud.eye.addEventListener('click', () => fire('eye'));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -1066,6 +1076,11 @@
         s('lean.stop', vm.lean.stop, v => PH_LEAN_STOPS.forEach((_, i) => {
             hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
         }));
+
+        s('eye.on', vm.eye.on, v => { hud.eye.classList.toggle('is-on', v); hud.eye.setAttribute('aria-pressed', v ? 'true' : 'false'); });
+        s('eye.enabled', vm.eye.enabled, v => { hud.eye.classList.toggle('is-off', !v); hud.eye.setAttribute('aria-disabled', v ? 'false' : 'true'); });
+        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = String(v); });
+        s('eye.label', vm.eye.label, v => hud.eye.setAttribute('aria-label', v));
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });

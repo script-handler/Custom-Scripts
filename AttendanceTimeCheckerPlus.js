@@ -5263,24 +5263,37 @@
     //   moving  ease to broadcast, or stand up into the survey (Stay 3D)
     //   rest    back to chase; from the survey, after a beat
     //   bih     ball in hand always cuts to 2D
-    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far? }
+    //   peek    the Eye view: chase from behind the object ball along its line (input.peek)
+    // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far?,
+    //           peek?: { at, angle, focus, far } }
     const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
     const PC_SURVEY_DWELL_MS = 450;
     const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
     function pcDirector(W, H, cfg) {
-        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0, far: null };
+        return { W, H, cfg, key: null, from: null, t: 1, ms: 1, pose: null, survey: null, focus: 0, far: null, farKey: 'chase', peekAngle: 0 };
     }
 
-    // Eases dir.focus and dir.far toward the input's; snaps within half a unit so the pose comes to rest.
+    // The Eye view applies: aiming in 3D with a peek handed in.
+    const pcPeekOn = input => !!input.peek && input.phase === 'aim' && input.camera !== '2d';
+
+    // Eases dir.focus, dir.far (and the Eye view's angle) toward the input's; snaps within half a unit
+    // so the pose comes to rest, and on a switch between the cue and Eye views.
     function pcFocus(dir, input, dtMs) {
         const k = typeof dtMs === 'number' ? 1 - Math.exp(-dtMs / PC_FOCUS_MS) : 1;
         const ease = (v, to, fresh) => { if (fresh) return to; const n = v + (to - v) * k; return Math.abs(to - n) < 0.5 ? to : n; };
-        const f = input.focus;
-        if (f > 0) dir.focus = ease(dir.focus, f, !(dir.focus > 0));
-        const far = input.far;
+        const pk = pcPeekOn(input) ? input.peek : null, mode = pk ? 'peek' : 'chase', snap = dir.farKey !== mode, src = pk || input;
+        dir.farKey = mode;
+        const f = src.focus;
+        if (f > 0) dir.focus = ease(dir.focus, f, snap || !(dir.focus > 0));
+        if (pk) {
+            let d = pk.angle - dir.peekAngle;
+            d -= 2 * Math.PI * Math.round(d / (2 * Math.PI));
+            dir.peekAngle = snap || Math.abs(d * (1 - k)) < 1e-3 ? pk.angle : dir.peekAngle + d * k;
+        }
+        const far = src.far;
         if (!far || !far.length) { dir.far = null; return; }
-        const fresh = !dir.far || dir.far.length !== far.length;
+        const fresh = snap || !dir.far || dir.far.length !== far.length;
         dir.far = far.map((p, i) => p.map((v, j) => ease(fresh ? v : dir.far[i][j], v, fresh)));
     }
 
@@ -5293,6 +5306,7 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
+        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
     }
 
@@ -5424,6 +5438,7 @@
     // mastered cue totals, the lowest bar it keeps]. Its Legendary cues max at 37–40 of 40 (Inferno
     // 10/10/9/8, Excalibur 10/10/10/10), Epic at about 34 (Gengis Khan 9/8/9/8), Rare at about 30.
     const PQ_RARITY = { common: ['Common', 20, 24, 5], rare: ['Rare', 28, 30, 6], epic: ['Epic', 32, 34, 7], legendary: ['Legendary', 36, 40, 8] };
+    const PQ_PEEK = { common: 0, rare: 1, epic: 2, legendary: 3 };    // extra Eye-view peeks a frame
     const pqById = id => PQ_SET.find(q => q.id === id) || PQ_SET[0];
     // [length, tip, butt] in ball diameters, and the ball in mm.
     const PQ_GAME = { pool: [25.7, 0.23, 0.52, 57], snooker: [27.6, 0.19, 0.55, 52.5] };
@@ -7175,6 +7190,12 @@
                 // The nearest stop's name; its dot is lit.
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
+            // The Eye view under the slider: lit while on, greyed with no target or no peeks left.
+            eye: (() => {
+                const e = g.eye || {}, left = Math.max(0, e.left || 0), on = !!e.on;
+                const enabled = on || (!!e.can && (!!e.paid || left > 0));
+                return { on, left, enabled, label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left' };
+            })(),
             // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
                 show: aiming && !is3d,
@@ -7390,6 +7411,7 @@
         up: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg>',
         down: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>',
         lock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>',
+        eye: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
         trophy: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"></path></svg>',
         cross: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>',
         chip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"></path></svg>',
@@ -7520,7 +7542,9 @@
             '<div class="ph-rng"><div class="ph-rng-track"></div><div class="ph-rng-fill" data-ph="leanf"></div><div class="ph-rng-thumb" data-ph="leant"></div>' +
             '<input id="ph-lean-' + (max ? 'm' : 'c') + '" type="range" min="0" max="100" step="1" data-ph="leani">' +
             PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
-            '</div><span class="ph-lean-v" data-ph="leanv"></span></div>' +
+            '</div><span class="ph-lean-v" data-ph="leanv"></span>' +
+            // The Eye view: behind the target ball, X; the badge is the peeks left.
+            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -7665,7 +7689,7 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
             'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
@@ -7688,6 +7712,7 @@
         hud.cam3d.addEventListener('click', () => fire('camera', '3d'));
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
         PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
+        hud.eye.addEventListener('click', () => fire('eye'));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -8016,6 +8041,11 @@
         s('lean.stop', vm.lean.stop, v => PH_LEAN_STOPS.forEach((_, i) => {
             hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
         }));
+
+        s('eye.on', vm.eye.on, v => { hud.eye.classList.toggle('is-on', v); hud.eye.setAttribute('aria-pressed', v ? 'true' : 'false'); });
+        s('eye.enabled', vm.eye.enabled, v => { hud.eye.classList.toggle('is-off', !v); hud.eye.setAttribute('aria-disabled', v ? 'false' : 'true'); });
+        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = String(v); });
+        s('eye.label', vm.eye.label, v => hud.eye.setAttribute('aria-label', v));
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
@@ -10186,6 +10216,8 @@
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
         // The object balls each seat has potted this frame (cards show them on an open table).
         pots: { 1: [], 2: [] },
+        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent.
+        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false,
         toast: null, toastMs: 0, fouled: 0, handoff: 0, result: null, placed: false, clockLeft: POOL_CLOCK_S,
         cpu: null, wins: 0,
         // Cues: the picker open, the wins per cue (cached), a cue just unlocked or equipped, the frame card's line.
@@ -10423,6 +10455,7 @@
         const home = R.cueHome(S.world);
         S.world.balls[0].x = home[0]; S.world.balls[0].y = home[1];
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
+        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
         S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
@@ -10509,6 +10542,9 @@
     function poolAfterTurn(v) {
         const S = poolS, R = poolRules(), shooter = v.shooter;
         S.netStep++;
+        // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
+        if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
+        S.eye = false; S.eyePaid = false;
         S.frame = v.next; S.called = -1; S.nom = -1; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
             const w = v.winner, t = R.text(v, poolNames());
@@ -10725,21 +10761,60 @@
             phase: S.phase === 'moving' ? 'moving' : S.phase === 'bih' ? 'bih' : 'aim',
             cue: [c.x, c.y], aim: S.aim, lean: poolLean(),
             focus: g ? Math.hypot(g[0] - c.x, g[1] - c.y) : 0,
-            far: poolShotFar(c),
+            far: poolShotFar(c, S.aim, poolObjShown() ? poolObjTail() : null),
+            peek: poolPeekInput(),
         };
     }
-    // What the chase camera keeps in view past the contact, aim frame [along, across]: the rail the aim
-    // runs into, every pocket, and the object ball's pocket or cushion when its line shows. The camera
-    // counts only those near the line of the shot (PC_FAR_CONE), so the list never switches.
-    function poolShotFar(c) {
-        const S = poolS, cfg = S.cfg, g = S.guide, dx = Math.cos(S.aim), dy = Math.sin(S.aim);
+    const poolObjShown = () => poolHawk() || !(poolS.guideMode === 'off' || (!poolGuideLen() && poolS.guideMode === 'full'));
+    // Where the object ball's line ends: Hawkeye's followed path, else its pocket or cushion.
+    function poolObjTail() {
+        const g = poolS.guide;
+        return g && g.obj ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
+    }
+    // What the chase camera keeps in view past the contact, in the frame of a line from `o` at `angle`
+    // ([along, across]): the rail it runs into, every pocket, and `end`. The camera counts only those
+    // near the line (PC_FAR_CONE), so the list never switches.
+    function poolShotFar(o, angle, end) {
+        const S = poolS, cfg = S.cfg, dx = Math.cos(angle), dy = Math.sin(angle);
         const lim = (s, d, h) => (d > 1e-9 ? (h - s) / d : d < -1e-9 ? (-h - s) / d : Infinity);
-        const t = Math.max(0, Math.min(lim(c.x, dx, cfg.halfLength), lim(c.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
-        const frame = p => [(p[0] - c.x) * dx + (p[1] - c.y) * dy, (p[1] - c.y) * dx - (p[0] - c.x) * dy];
-        const rail = [c.x + dx * t, c.y + dy * t];
-        const shown = poolHawk() || !(S.guideMode === 'off' || (!poolGuideLen() && S.guideMode === 'full'));
-        const obj = g && g.obj && shown ? (g.objPath ? g.objPath[g.objPath.length - 1] : poolObjEnd(g.obj).end) : null;
-        return [rail, obj || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
+        const t = Math.max(0, Math.min(lim(o.x, dx, cfg.halfLength), lim(o.y, dy, cfg.halfWidth))) + cfg.railWidth / 2;
+        const frame = p => [(p[0] - o.x) * dx + (p[1] - o.y) * dy, (p[1] - o.y) * dx - (p[0] - o.x) * dy];
+        const rail = [o.x + dx * t, o.y + dy * t];
+        return [rail, end || rail].concat(S.world.table.pockets.map(p => [p.x, p.y])).map(frame);
+    }
+
+    // ── The Eye view (peeks) ──────────────────────────────────────────
+    // Behind the target ball along its line, bought with a peek and refunded by a pot.
+    // A frame's peeks: by the CPU's tier (else Normal's 3), plus the seat's cue rarity.
+    const POOL_PEEK_BASE = { easy: 4, normal: 3, hard: 2, pro: 1 };
+    function poolPeekStart(seat) {
+        if (poolMode === 'cpu' && seat === 2) return 0;
+        const base = poolMode === 'cpu' ? (POOL_PEEK_BASE[poolCpuTier] || 3) : 3;
+        return base + (PQ_PEEK[pqById(poolSeatCueId(seat)).rarity] || 0);
+    }
+    // Can the shooter look now: 3D, aiming, theirs to play, a target ball on the line.
+    function poolEyeCan() {
+        const S = poolS;
+        return userPreferences.poolCamera !== '2d' && S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
+    }
+    // The Eye view is on screen: on, a target on the line, no power being drawn.
+    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && userPreferences.poolCamera !== '2d' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
+    function poolPeekInput() {
+        const S = poolS;
+        if (!poolEyeLive()) return null;
+        const o = S.guide.obj, angle = Math.atan2(o.dy, o.dx), end = poolObjTail();
+        return { at: [o.x, o.y], angle, focus: end ? Math.hypot(end[0] - o.x, end[1] - o.y) : 0, far: poolShotFar(o, angle, end) };
+    }
+    // The button and X: off is free; on spends a peek, once per shot.
+    function poolEyeToggle() {
+        const S = poolS, seat = S.frame.turn;
+        if (S.eye) { S.eye = false; return; }
+        if (!poolEyeCan()) return;
+        if (!S.eyePaid) {
+            if (!(S.peeks[seat] > 0)) return;
+            S.peeks[seat]--; S.eyePaid = true;
+        }
+        S.eye = true;
     }
     const poolLean = () => { const v = Number(userPreferences.poolLean); return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0; };
 
@@ -10935,7 +11010,8 @@
             layout: S.hud.layout, game: S.game, title: R.title, status: st, rails, diffs: R.diffs, mode: poolMode, names: poolNames(), records: { 1: poolRecordText(1), 2: poolRecordText(2) },
             frames: S.frames, trophies: S.wins,
             frame: S.frame, world: S.world, phase: S.phase, camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
-            lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip, spinOpen: S.spinOpen, called: S.called,
+            lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip,
+            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid }, spinOpen: S.spinOpen, called: S.called,
             clock: !cpuTurn && S.clockTotal ? { left: Math.max(0, S.clockLeft), total: poolTurnClock() } : null,
             toast: S.toast, fouled: S.fouled, handoff: S.handoff,
             bih: S.phase === 'bih' ? { valid: !bihBad, reason: bihBad, placed: S.placed, sx: gs && gs[0], sy: gs && gs[1], sr: gs ? S.cfg.ballR * gs[2] : 0 } : null,
@@ -11136,7 +11212,7 @@
         if (S.phase !== 'aim' || !poolCanAct()) return;
         // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -11199,6 +11275,10 @@
             poolOn.lean(next === undefined ? PH_LEAN_STOPS[0] : next);
             e.preventDefault(); return;
         }
+        // X: the Eye view, behind the target ball (spends a peek).
+        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+            poolEyeToggle(); e.preventDefault(); return;
+        }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
             if (poolTyping(e)) return;
             e.preventDefault();
@@ -11206,7 +11286,7 @@
             // repeat is ignored.
             const dir = e.key === 'ArrowLeft' ? 1 : -1;
             if (e.repeat || (S.aimHold && S.aimHold.dir === dir)) return;
-            S.aim += dir * poolRules().aimKey * POOL_DEG;
+            S.aim += poolAimSign() * dir * poolRules().aimKey * POOL_DEG;
             S.aimHold = { dir, key: e.key, t: 0 };
         }
     }
@@ -11231,8 +11311,10 @@
         // The rate at the middle of this slice: quadratic ease from the slowest to the fastest.
         const k = Math.min(1, ((from + to) / 2 - POOL_HOLD_DELAY) / POOL_HOLD_RAMP);
         const rate = POOL_HOLD_RATE[0] + (POOL_HOLD_RATE[1] - POOL_HOLD_RATE[0]) * k * k;
-        S.aim += h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
+        S.aim += poolAimSign() * h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
     }
+    // Turning the cue one way swings the target ball's line the other, so the Eye view turns inverted.
+    const poolAimSign = () => (poolEyeLive() ? -1 : 1);
 
     // ── HUD wiring ────────────────────────────────────────────────────
     const poolOn = {
@@ -11243,6 +11325,7 @@
             clearTimeout(poolS.leanSave);
             poolS.leanSave = setTimeout(savePreferences, 400);
         },
+        eye: () => poolEyeToggle(),
         // Spin: anywhere inside the miscue ring. The tip resets to the centre after every shot.
         tip: t => { if (poolCanAct()) poolS.tip = phClampTip(t.x, t.y); },
         tipStep: d => { if (poolCanAct()) poolS.tip = phClampTip(poolS.tip.x + d.x, poolS.tip.y + d.y); },
@@ -11467,7 +11550,7 @@
         return {
             breaker: S.breaker, frame: JSON.parse(JSON.stringify(S.frame)),
             balls: S.world.balls.map(b => ({ id: b.id, x: b.x, y: b.y, q: b.q.slice(), state: b.state, pocket: b.pocket })),
-            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() },
+            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] },
         };
     }
     function poolApplySnap(snap, world) {
@@ -11477,6 +11560,8 @@
         S.fouled = snap.fouled === 1 || snap.fouled === 2 ? snap.fouled : 0;
         const potsOf = a => (Array.isArray(a) ? a.filter(id => Number.isInteger(id) && R.tracksPot(id)) : []);
         S.pots = { 1: potsOf(snap.pots && snap.pots[1]), 2: potsOf(snap.pots && snap.pots[2]) };
+        const pk = n => (Number.isInteger(n) && n >= 0 && n <= 20 ? n : null);
+        if (snap.peeks) [1, 2].forEach(s => { const n = pk(snap.peeks[s]); if (n !== null) S.peeks[s] = n; });
     }
     // The clock it was left on, within today's limit: ⚙️ may have lowered it since.
     const poolSnapClock = snap => { const full = poolTurnClock() || POOL_CLOCK_S; return snap.clockLeft > 0 ? Math.min(snap.clockLeft, full) : full; };
@@ -22606,11 +22691,23 @@
             /* Read by screen readers, never seen (snooker's tracker readout). */
             .pool-hud .ph-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
             .pool-hud .ph-lean {
-                left: 10px; top: 60px; width: 44px; height: min(164px, calc(100% - 124px)); box-sizing: border-box; padding: 10px 0 9px;
+                left: 10px; top: 60px; width: 44px; height: min(204px, calc(100% - 84px)); box-sizing: border-box; padding: 10px 0 7px;
                 display: flex; flex-direction: column; align-items: center; gap: 10px; border-radius: 22px; pointer-events: auto;
             }
             .pool-hud .ph-lean-l { font-size: 9px; letter-spacing: 0.14em; color: var(--pool-overlay-muted); }
             .pool-hud .ph-lean-v { font-size: 11px; font-weight: 600; }
+            /* The Eye view under the slider; the badge counts the peeks left. */
+            .pool-hud .ph-eye {
+                position: relative; flex: none; width: 30px; height: 30px; padding: 0; margin-top: -2px; display: flex; align-items: center; justify-content: center;
+                border: 1px solid var(--pool-overlay-muted); border-radius: 50%; background: transparent; color: var(--pool-overlay-text); cursor: pointer;
+            }
+            .pool-hud .ph-eye.is-on { background: var(--pool-accent); border-color: var(--pool-accent); color: var(--pool-primary-text); }
+            .pool-hud .ph-eye.is-off { opacity: 0.38; cursor: default; }
+            .pool-hud .ph-eye:focus-visible { outline: 2px solid var(--pool-accent); outline-offset: 2px; }
+            .pool-hud .ph-eye-n {
+                position: absolute; top: -5px; right: -6px; min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box; border-radius: 8px;
+                font-size: 9px; font-weight: 700; line-height: 15px; text-align: center; background: var(--pool-primary); color: var(--pool-primary-text);
+            }
             .pool-hud .ph-rng { position: relative; width: 32px; flex-grow: 1; margin: 4px 0; }
             .pool-hud .ph-rng-track { position: absolute; left: 10px; top: 0; width: 4px; height: 100%; border-radius: 2px; background: var(--pool-track); }
             .pool-hud .ph-rng-fill { position: absolute; left: 10px; bottom: 0; width: 4px; border-radius: 2px; background: var(--pool-accent); }
@@ -22849,7 +22946,8 @@
             .pool-hud[data-layout="max"] .ph-cam button { height: 36px; padding: 0 14px; font-size: 13px; gap: 7px; border-radius: 9px; }
             .pool-hud[data-layout="max"] .ph-pill { right: 16px; top: 16px; height: 34px; padding: 0 14px; border-radius: 17px; font-size: 12px; gap: 8px; }
             .pool-hud[data-layout="max"] .ph-toast { left: 16px; right: auto; top: 16px; width: 420px; }
-            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 50px; height: 210px; border-radius: 25px; }
+            .pool-hud[data-layout="max"] .ph-lean { left: 16px; top: 150px; width: 50px; height: 252px; border-radius: 25px; }
+            .pool-hud[data-layout="max"] .ph-eye { width: 36px; height: 36px; }
             .pool-hud[data-layout="max"] .ph-lean-l { font-size: 10px; }
             .pool-hud[data-layout="max"] .ph-lean-v { font-size: 12px; }
             .pool-hud[data-layout="max"] .ph-gauge { right: 20px; top: 226px; bottom: auto; width: 10px; height: 220px; border-radius: 5px; }

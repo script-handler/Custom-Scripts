@@ -612,6 +612,8 @@ function toggleGameMaxModal(cfg) {
         for (let i = 0; i < (+Q.get('t') || 15); i++) ppStep(S.world, 1 / 60);
         pcDirect(S.director, poolCamInput(), 0); pcDirect(S.director, poolCamInput(), 5000);
     }
+    // eye=1: the Eye view on (a peek spent), as if X were pressed.
+    if (Q.has('eye')) { S.awaitStart = null; S.handoff = 0; poolRefreshGuide(); poolEyeToggle(); }
     if (still) {
         requestAnimationFrame(() => {
             const settle = () => { S.drawKey = ''; poolDraw(0); poolDraw(5000); };

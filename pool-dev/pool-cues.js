@@ -99,6 +99,7 @@
     // mastered cue totals, the lowest bar it keeps]. Its Legendary cues max at 37–40 of 40 (Inferno
     // 10/10/9/8, Excalibur 10/10/10/10), Epic at about 34 (Gengis Khan 9/8/9/8), Rare at about 30.
     const PQ_RARITY = { common: ['Common', 20, 24, 5], rare: ['Rare', 28, 30, 6], epic: ['Epic', 32, 34, 7], legendary: ['Legendary', 36, 40, 8] };
+    const PQ_PEEK = { common: 0, rare: 1, epic: 2, legendary: 3 };    // extra Eye-view peeks a frame
     const pqById = id => PQ_SET.find(q => q.id === id) || PQ_SET[0];
     // [length, tip, butt] in ball diameters, and the ball in mm.
     const PQ_GAME = { pool: [25.7, 0.23, 0.52, 57], snooker: [27.6, 0.19, 0.55, 52.5] };

@@ -3055,6 +3055,54 @@ floating over the object ball. This replaces the design's chase camera (Table.dc
 - **No power bar in 3D** (the user). The right-edge gauge and its padlock are 2D only. In 3D the ring by the
   cue ball shows the power, now also while the CPU draws back.
 
+## Eye view and peeks (built 2026-11-26)
+
+The user's request, from a reference game's "eye" camera: in 3D, swing the camera from behind the cue ball to
+behind the target ball, looking down its guideline.
+
+### The view
+- The Eye view is the chase pose (`pcChase`) with the object ball in the cue ball's place, on its anchor, along
+  the object's line. `poolShotFar` takes an origin and an angle, so the far-end fit and the pull-back work there
+  too.
+- The director's key `'peek'` blends to and from `'chase'` over the aim tween. `pcFocus` snaps focus and far
+  points on a switch, and eases the peek angle, because the object line swings fast on thin cuts.
+- Live: the view follows the object ball's line as the aim moves.
+- Turning is inverted while the Eye view is on screen (`poolAimSign`), for the mouse, arrow taps and holds. The
+  object line turns against the cue's, so mouse-right swings the line right, as the normal view turns.
+- Drawing power cuts back behind the cue ball. Cancelling (power 0 or Esc) returns to the Eye view if it is still
+  on.
+- With no ball on the line, the button greys out. If it is already on, the camera eases back behind the cue ball
+  until the aim finds a ball again, at no extra cost.
+- 3D only. Never on the CPU's turn, the other player's online turn, or with the ball in hand.
+- The Eye view shows the target's line even under Guide None. That is what the peek buys.
+
+### Peeks
+- A frame starts with the CPU tier's base, Easy 4 / Normal 3 / Hard 2 / Pro 1, plus the seat's cue rarity
+  (`PQ_PEEK`: Common 0, Rare 1, Epic 2, Legendary 3).
+- 2 Players, online and tournaments use 3 per seat plus that seat's cue. The CPU's seat gets none.
+- Turning the Eye view on spends one, once per shot: off and on again in the same shot is free. It switches off
+  after every shot.
+- A peeked shot that pots gets the peek back: no foul, and the shooter keeps the table (no pending choice) or
+  wins the frame. A miss or a foul gets nothing back.
+- Peeks ride in the table snapshot: reload, game switch and tournament.
+- Online they are local to each tab and not in the server's log, so a reload there starts the count over.
+
+### Controls
+- The button sits under the View slider, inside the rail pill. The rail grew to fit: compact
+  `min(204px, 100% − 84px)`, Max 252 px. The badge counts the peeks left, and the button is lit while on.
+- The X key does the same.
+- pool-table.html takes `eye=1` for snapshots.
+
+### Tests
+- pool-verify (24):
+  - frame-start counts by tier and cue;
+  - spending, free re-toggles, refunds on a pot, none on a miss or foul;
+  - every block above;
+  - X, the inverted turn, the power drag and cancel, the snapshot;
+  - a real snooker red potted and one missed on a peek.
+- render-verify (3): the pose, the swing, the return.
+- hud-verify (3): states, label, markup.
+
 ## Decision log
 
 | Date | Decision | Reason |

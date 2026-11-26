@@ -144,6 +144,24 @@ function designCamera(mode, cue, aimDeg, lean) {
         // (the user: High had turned into Stand; the stop's angle is kept, the eye pulls back instead)
         ok('sweeping the aim: the stop\'s angle and lens kept, and no jumps', minF >= 1.25 - 1e-9 && worstEl < 0.01 && worstStep < 6,
             'narrowest F ' + minF.toFixed(3) + ' H, angle off by ' + worstEl.toFixed(3) + '°, largest step per 0.25° ' + worstStep.toFixed(1) + '%');
+        // The Eye view: the chase pose from behind the target ball along its line, swung to and from.
+        {
+            const d = P.pcDirector(W, H, cfg), at = [100, 40], ang = 0.6;
+            const base = { camera: '3d', shotCam: 'overhead', phase: 'aim', cue: [-200, -60], aim: 0.3, lean: 45, focus: 300 };
+            const peek = Object.assign({}, base, { peek: { at, angle: ang, focus: 250, far: [] } });
+            P.pcDirect(d, base, 16); P.pcDirect(d, base, 1000);
+            const chase = d.pose;
+            const first = P.pcDirect(d, peek, 16);
+            for (let i = 0; i < 60; i++) P.pcDirect(d, peek, 16);
+            const p = d.pose, v = P.pcView(p), s = P.pcProject(v, [at[0], at[1], cfg.ballR]);
+            const behind = Math.atan2(at[1] - p.eye[1], at[0] - p.eye[0]);
+            const jump = Math.hypot(first.eye[0] - chase.eye[0], first.eye[1] - chase.eye[1]);
+            ok('Eye view: from behind the target ball, looking along its line, the ball bottom centre', d.key === 'peek' && Math.abs(behind - ang) < 1e-6 && Math.abs(s[0] - W / 2) < 0.5 && s[1] > H / 2,
+                'heading off ' + Math.abs(behind - ang).toExponential(1) + ', ball at ' + s[0].toFixed(1) + ',' + s[1].toFixed(1));
+            ok('…swung to over the tween, not cut', jump < 0.1 * Math.hypot(p.eye[0] - chase.eye[0], p.eye[1] - chase.eye[1]), jump.toFixed(1) + ' u in the first frame');
+            P.pcDirect(d, base, 16);
+            ok('…and back behind the cue ball when it ends', d.key === 'chase');
+        }
         ok('aimed up the table, the far corner pockets are in view below the overlays', worstFar >= 0.14 * H && worstSide >= 10, 'top ' + worstFar.toFixed(1) + ' px, side ' + worstSide.toFixed(1) + ' px');
         const d = P.pcDirector(W, H, cfg), inp = f => ({ camera: '3d', shotCam: 'overhead', phase: 'aim', cue: [0, 0], aim: 0, lean: 0, focus: f });
         P.pcDirect(d, inp(3 * R), 16);
