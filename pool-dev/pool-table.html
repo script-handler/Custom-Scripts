@@ -614,6 +614,8 @@ function toggleGameMaxModal(cfg) {
     }
     // eye=1: the Eye view on (a peek spent), as if X were pressed.
     if (Q.has('eye')) { S.awaitStart = null; S.handoff = 0; poolRefreshGuide(); poolEyeToggle(); }
+    // chips=1: snooker's colour selector open; aim=… with no colour on the line shows the folded "?".
+    if (Q.has('chips')) S.chipsOpen = true;
     if (still) {
         requestAnimationFrame(() => {
             const settle = () => { S.drawKey = ''; poolDraw(0); poolDraw(5000); };

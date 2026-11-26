@@ -3067,12 +3067,19 @@ behind the target ball, looking down its guideline.
 - The director's key `'peek'` blends to and from `'chase'` over the aim tween. `pcFocus` snaps focus and far
   points on a switch, and eases the peek angle, because the object line swings fast on thin cuts.
 - Live: the view follows the object ball's line as the aim moves.
-- Turning is inverted while the Eye view is on screen (`poolAimSign`), for the mouse, arrow taps and holds. The
-  object line turns against the cue's, so mouse-right swings the line right, as the normal view turns.
+- In the Eye view the input turns the target ball's line, not the cue (`poolAimSign` = −1/k), for the mouse,
+  arrow taps and holds.
+  - The line swings against the cue's turn, and k = dφ/dθ of the cut times as far (`poolEyeTurn`, L·cosθ /
+    (2R·cosφ), cosφ floored at 0.1). That is 10–30 near the ball's edge.
+  - So mouse-right swings the line right, at the normal rate: 0.94× the input, measured.
+- Bug fixed (the user): with a plain inversion, the view resisted at the ball's edge and the guide flashed.
+  - Slipping off the ball swapped back to the cue view with normal turning, and the same mouse motion carried the
+    aim back on, so it flicked between the two.
+  - Now aiming off the target switches the Eye view **off** (still paid, so on again is free this shot), once.
+  - pool-verify sweeps one way to the edge: one switch, the line at about 1× the input.
 - Drawing power cuts back behind the cue ball. Cancelling (power 0 or Esc) returns to the Eye view if it is still
   on.
-- With no ball on the line, the button greys out. If it is already on, the camera eases back behind the cue ball
-  until the aim finds a ball again, at no extra cost.
+- With no ball on the line, the button greys out.
 - 3D only. Never on the CPU's turn, the other player's online turn, or with the ball in hand.
 - The Eye view shows the target's line even under Guide None. That is what the peek buys.
 
@@ -3102,6 +3109,38 @@ behind the target ball, looking down its guideline.
   - a real snooker red potted and one missed on a peek.
 - render-verify (3): the pose, the swing, the return.
 - hud-verify (3): states, label, markup.
+
+## Snooker: nominating by aim (built 2026-11-26)
+
+The user's request: the colour chips opened as a full grid ("Tap a colour") whenever a colour was due. Now the
+nomination follows the aim, and the full selector is only for a snookered colour.
+
+### The rule (`poolAutoNom`)
+- It runs on every guide refresh, for a human acting locally, while snooker's raw status needs a nomination
+  (on a colour, or a free ball).
+- The nomination is the colour the aim meets first (`guide.hit`, if nominable), else none.
+- A hand pick (`S.nomPin`) wins over the aim for the rest of the shot, even when the aim meets another colour
+  first. The guide's prohibition marker warns of that foul.
+- Picks and the open selector reset after every shot, and at turn and frame start.
+- The CPU's and the remote player's nominations are never touched. Pool has none.
+
+### The chips
+- They are folded to one chip: the nominated colour, or a grey "?" (nothing nominated, cue padlocked, caption
+  "Aim at a colour").
+- Pressing the folded chip opens the selector (caption "Tap a colour"): the "?" first, then the six colours.
+- A colour there is a hand pick, and folds the selector.
+- The "?" there goes back to following the aim.
+- Pressing the picked colour again folds the selector, keeping the pick.
+- Esc folds it.
+- A press on a colour on the table is a hand pick too.
+- The grids widen for the seventh chip: compact 4 columns, Max 7. The in-view row is flex already.
+- pool-table.html takes `chips=1` to open the selector.
+
+### Tests
+- pool-verify (12): follow, swing, nothing, open, pick, pick holds, reopen, "?" back to auto, Esc, the reset,
+  the CPU, pool.
+- hud-verify: folded "?" and its caption, opened, the markup ("?" first).
+- The old "before a colour, never folded" assertion is reversed.
 
 ## Decision log
 

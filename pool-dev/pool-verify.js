@@ -1529,7 +1529,7 @@ head('The Eye view and peeks');
     const d = G.pcDirector(368, 412, S.cfg);
     G.pcDirect(d, inp, 0);
     ok('…which the director plays as the Eye view', d.key === 'peek');
-    ok('the mouse and arrows turn inverted in the Eye view', G.poolAimSign() === -1);
+    ok('the mouse and arrows turn inverted in the Eye view, scaled to the target\'s line', G.poolAimSign() < 0 && G.poolAimSign() > -1);
     S.drag = { kind: 'power', x: 0, y: 0, ax: [0, -1], reach: 100 };
     G.pcDirect(d, G.poolCamInput(), 16);
     ok('drawing power goes back behind the cue ball', d.key === 'chase' && !G.poolCamInput().peek && G.poolAimSign() === 1);
@@ -1566,11 +1566,32 @@ head('The Eye view and peeks');
     ok('aimed at no ball, it cannot be bought', !(S.guide && S.guide.obj) && !G.poolEyeCan());
     aimAt(G, 0); S.peeks[1] = 0; G.poolEyeToggle();
     ok('none left, none to spend', !S.eye && S.peeks[1] === 0);
-    // Bought, then swung off every ball: back behind the cue ball until a ball is on the line again.
+    // Bought, then swung off the ball: the Eye view switches off (no flicking back and forth), and on again is free.
     aimAt(G, 0); S.peeks[1] = 2; G.poolEyeToggle(); S.aim = Math.PI; G.poolRefreshGuide();
-    ok('swung off every ball it eases back behind the cue ball, still on', S.eye && !G.poolCamInput().peek);
-    S.aim = 0; G.poolRefreshGuide();
-    ok('…and returns on a ball, at no cost', !!G.poolCamInput().peek && S.peeks[1] === 1);
+    ok('swung off the ball, the Eye view switches off, behind the cue ball', !S.eye && S.eyePaid && !G.poolCamInput().peek);
+    S.aim = 0; G.poolRefreshGuide(); G.poolEyeToggle();
+    ok('…and back on a ball, on again at no cost', S.eye && !!G.poolCamInput().peek && S.peeks[1] === 1);
+    // The user's bug: turning in the Eye view flicked between the two views at the ball's edge, and the line
+    // whipped round. Now the input turns the target's line at the normal rate, one way, till it leaves the ball.
+    {
+        const keep = S.world.balls;
+        S.world.balls = keep.filter(b => b.id === 0 || b.id === 1);
+        const one = S.world.balls.find(b => b.id === 1), cue = G.poolCueBall();
+        one.x = cue.x + 400; one.y = cue.y; one.state = 'onTable';
+        S.aim = 0.01; S.eye = false; S.eyePaid = true; G.poolRefreshGuide(); G.poolEyeToggle();
+        const step = 0.05 * Math.PI / 180, rates = [];
+        let flips = 0, was = S.eye, prev = Math.atan2(S.guide.obj.dy, S.guide.obj.dx);
+        for (let i = 0; i < 4000 && S.eye; i++) {
+            S.aim -= G.poolAimSign() * step; G.poolRefreshGuide();
+            if (S.eye !== was) { flips++; was = S.eye; }
+            if (S.eye) { const a = Math.atan2(S.guide.obj.dy, S.guide.obj.dx); rates.push(Math.abs(a - prev) / step); prev = a; }
+        }
+        rates.sort((a, b) => a - b);
+        const med = rates[rates.length >> 1];
+        ok('turning in the Eye view: the line turns about as the input does, and the view never flicks back on',
+            flips === 1 && !S.eye && med > 0.6 && med < 1.6, 'line ' + med.toFixed(2) + '× the input (median), ' + rates.length + ' steps to the edge, ' + flips + ' switch');
+        S.world.balls = keep; S.aim = 0; G.poolRefreshGuide();
+    }
 
     // A reload keeps the peeks.
     S.eye = false; S.peeks = { 1: 5, 2: 2 };
@@ -1603,6 +1624,47 @@ head('The Eye view and peeks');
         [pot.bought, pot.red.state, Z.frame.turn, Z.peeks[1]]);
     const miss = play(0, 0, Math.atan2(0.3, 1));
     ok('snooker: a red missed on a peek does not', miss.bought && miss.red.state !== 'pocketed' && Z.peeks[1] === K.poolPeekStart(1) - 1, [miss.red.state, Z.peeks[1]]);
+}
+
+head('Snooker: nominating by aim (the user, 2026-11-26)');
+{
+    const K = L.game({ seed: 83 }), S = K.poolS;
+    K.poolSetVariant('snooker'); K.poolNewFrame(1);
+    S.awaitStart = null; S.handoff = 0; S.attached = true;
+    S.world.balls.forEach(b => { if (b.id >= 8) b.state = 'pocketed'; });
+    S.down = K.poolDownSet(); Object.assign(S.frame, { isBreak: false, ballInHand: null, phase: 'colour' });
+    const cue = S.world.balls[0]; cue.x = -150; cue.y = 150; S.phase = 'aim'; S.placed = true;
+    const ball = id => S.world.balls.find(b => b.id === id);
+    const aimAt = p => { S.aim = Math.atan2(p[1] - cue.y, p[0] - cue.x); K.poolRefreshGuide(); };
+    aimAt([ball(5).x, ball(5).y]);
+    ok('aimed straight at the blue, the blue is nominated', S.guide.hit === 5 && S.nom === 5 && S.nomPin === -1);
+    aimAt([ball(6).x, ball(6).y]);
+    ok('…swung onto the pink, the pink', S.guide.hit === 6 && S.nom === 6, [S.guide.hit, S.nom]);
+    aimAt([-150, 600]);
+    ok('…onto no colour, nothing nominated (the "?", the cue padlocked)', S.guide.hit < 0 && S.nom === -1);
+    K.poolOn.nominate(-1);
+    ok('the folded "?" opens the selector', S.chipsOpen && S.nom === -1);
+    K.poolOn.nominate(7);
+    ok('a colour picked there is nominated by hand, and the selector folds', S.nomPin === 7 && S.nom === 7 && !S.chipsOpen);
+    aimAt([ball(5).x, ball(5).y]);
+    ok('…and holds while the aim meets another colour first (the foul marker warns)', S.guide.hit === 5 && S.nom === 7);
+    K.poolOn.nominate(7);
+    ok('the folded chip opens the selector again', S.chipsOpen && S.nom === 7);
+    K.poolOn.nominate(-1);
+    ok('…whose "?" goes back to following the aim', S.nomPin === -1 && !S.chipsOpen && S.nom === 5);
+    K.poolOn.nominate(-1);
+    K.poolOnKey({ key: 'Escape', target: {}, preventDefault() {}, stopImmediatePropagation() {} });
+    ok('Esc folds an open selector', !S.chipsOpen && S.nom === 5);
+    K.poolOn.nominate(-1); K.poolOn.nominate(3);
+    K.poolAfterTurn({ shooter: 1, foul: null, frameOver: false, next: Object.assign({}, S.frame, { turn: 1, pending: null }) });
+    ok('a hand pick and an open selector reset after every shot', S.nomPin === -1 && !S.chipsOpen);
+    // Not on the CPU's turn: its own nomination stands.
+    S.phase = 'aim'; S.frame.turn = 2; S.nom = 3; aimAt([ball(5).x, ball(5).y]);
+    ok('the CPU\'s nomination is never touched', S.nom === 3);
+    // Pool has no nomination: the aim never sets one.
+    const Pq = L.game({ seed: 84 }), Q = Pq.poolS;
+    Pq.poolNewFrame(1); Q.awaitStart = null; Pq.prPlaceCue(Q.world, Q.world.table.headX - 60, 0); Q.placed = true; Q.phase = 'aim'; Q.aim = 0; Pq.poolRefreshGuide();
+    ok('pool is untouched', Q.nom === -1 && Q.guide.hit > 0);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

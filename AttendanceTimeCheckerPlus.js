@@ -7370,13 +7370,15 @@
         // The chips: while a colour is to be nominated (the gauge padlocks until one is).
         const chips = aiming && !!on.needsNomination && !g.cpuTurn && !g.handoff && !toast && !sheetOpen && !vm.spin.open && !g.confirm;
         const pw = Math.round(g.power || 0);
-        // Once a colour is nominated they fold to that chip and the caption; the chip reopens them.
-        const folded = nom >= 0 && !g.chipsOpen, callNeeded = aiming && !!st.callRequired && !(g.called >= 0);
+        // Folded to one chip: the colour the aim (or a hand pick) nominates, else the grey "?"; it opens the selector.
+        const folded = !g.chipsOpen, callNeeded = aiming && !!st.callRequired && !(g.called >= 0);
         vm.chips = chips ? {
-            show: true, folded,
-            label: folded ? (st.freeBall ? 'Free ball: the ' : 'Nominated: the ') + phSnkName(nom) + '. Press it to change' : st.freeBall ? 'Nominate the free ball' : 'Nominate a colour',
+            show: true, folded, auto: nom < 0,
+            label: !folded ? (st.freeBall ? 'Nominate the free ball' : 'Nominate a colour')
+                : nom < 0 ? 'No colour nominated. Aim at one, or press to pick'
+                : (st.freeBall ? 'Free ball: the ' : 'Nominated: the ') + phSnkName(nom) + '. Press it to change',
             items: PH_SNK.map(b => ({ id: b.id, name: b.name, live: (on.nominable || []).indexOf(b.id) >= 0, checked: nom === b.id })),
-            caption: nom < 0 ? 'Tap a colour' : g.dragging ? (pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel') : callNeeded ? 'Tap a pocket' : 'Drag to shoot',
+            caption: !folded ? 'Tap a colour' : nom < 0 ? 'Aim at a colour' : g.dragging ? (pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel') : callNeeded ? 'Tap a pocket' : 'Drag to shoot',
             tone: nom < 0 ? '' : g.dragging ? (pw >= PH_POWER_HOT ? 'hot' : 'power') : callNeeded ? 'call' : 'set',
             // With a call to make, the folded chips carry the pocket map in 3D (2D taps the table).
             pad: folded && !!st.callRequired && g.camera === '3d', called: g.called >= 0 ? g.called : -1,
@@ -7580,6 +7582,8 @@
             '<div class="ph-mini-pad"><div class="ph-mini-table"></div>' + mini + '</div></div>' +
             // Snooker's colour chips: a 3 × 2 grid, each ball carrying its value.
             '<div class="ph-chips ph-glass" role="group" data-ph="chips" hidden><div class="ph-chips-grid" role="radiogroup" data-ph="chipgrid">' +
+            // The grey "?": nothing nominated (folded), or back to following the aim (open).
+            '<button type="button" role="radio" class="ph-chip ph-chip-q" data-ph="chipQ" aria-checked="false" aria-label="Follow my aim"><span>?</span></button>' +
             PH_SNK.map(b => '<button type="button" role="radio" class="ph-chip" data-ph-nom="' + b.id + '" aria-checked="false" aria-label="' + phCap(b.name) + ', ' + b.id + ' points"><span>' + b.id + '</span></button>').join('') +
             '</div><span class="ph-chips-cap" data-ph="chipcap"></span>' +
             '<div class="ph-mini-pad ph-chips-pad" data-ph="chippad" hidden><div class="ph-mini-table"></div>' + pad('data-ph-ccall') + '</div></div>' +
@@ -7695,7 +7699,7 @@
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
             'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2', 'sheetrules', 'sheethelp', 'sheetpop',
             'sheettour', 'sheettourgo', 'sheettourcta', 'sheettoursub', 'sheetcab', 'sheetabandon', 'bracket', 'pause', 'tourhead', 'tourk', 'tourn', 'tourf', 'title', 'trophy',
-            'toastacts', 'track', 'trred', 'trreds', 'trdots', 'trsnk', 'trconcede', 'trrem', 'trlive', 'chips', 'chipgrid', 'chipcap', 'chippad', 'dlgstats', 'cscrim', 'cdlg', 'cdlgt', 'cdlgy', 'cdlgn',
+            'toastacts', 'track', 'trred', 'trreds', 'trdots', 'trsnk', 'trconcede', 'trrem', 'trlive', 'chips', 'chipgrid', 'chipQ', 'chipcap', 'chippad', 'dlgstats', 'cscrim', 'cdlg', 'cdlgt', 'cdlgy', 'cdlgn',
             'cue', 'cues', 'cuenew', 'cuenewn', 'cuenewgo', 'cuenewx',
             'sheetnet', 'sheetnetsrv', 'sheetnetgo', 'sheetnetst', 'sheetnetbody', 'invite', 'invitek', 'invitet', 'invitego', 'invitex',
             'bubble1', 'bubble2', 'react', 'reactform', 'reacti', 'reactbtn', 'start', 'startgo', 'startl', 'startsub'].forEach(n => { hud[n] = ref(n); });
@@ -7781,6 +7785,7 @@
             s.style.color = phInkOn(pgBallLook('snooker', id).colour);
             b.addEventListener('click', () => fire('nominate', id));
         });
+        hud.chipQ.addEventListener('click', () => fire('nominate', -1));
         hud.chipCallButtons = Array.prototype.slice.call(el.querySelectorAll('[data-ph-ccall]'));
         hud.chipCallButtons.forEach(b => b.addEventListener('click', () => fire('call', +b.getAttribute('data-ph-ccall'))));
         hud.toastacts.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ph-choose]'); if (b) fire('choose', b.getAttribute('data-ph-choose')); });
@@ -8023,6 +8028,7 @@
                 b.disabled = !it.live;
                 b.setAttribute('aria-checked', it.checked ? 'true' : 'false');
             }));
+            s('chips.auto', !!ch.auto, v => hud.chipQ.setAttribute('aria-checked', v ? 'true' : 'false'));
             s('chips.cap', ch.caption, v => { hud.chipcap.textContent = v; });
             s('chips.called', ch.called === undefined ? -1 : ch.called, v => hud.chipCallButtons.forEach((b, i) => b.setAttribute('aria-pressed', i === v ? 'true' : 'false')));
             s('chips.tone', ch.tone || '', v => { hud.chips.className = 'ph-chips ph-glass' + (v ? ' is-' + v : ''); });
@@ -10209,8 +10215,8 @@
         phase: 'aim', aim: 0, power: 0, tip: { x: 0, y: 0 }, spinOpen: false, called: -1, guide: null, guideKey: '',
         // Snooker: the nominated colour (-1: none), the concede question; each game's parked frame.
         nom: -1, confirm: false, parked: {}, tours: {},
-        // Snooker: the chips opened again after a colour was nominated (they fold to that one).
-        chipsOpen: false,
+        // Snooker: the colour selector open (else folded to one chip); a colour picked by hand (-1: follow the aim).
+        chipsOpen: false, nomPin: -1,
         // The CPU's safeties in a row this frame (snooker's CPU attacks after three).
         cpuSafeRun: 0,
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
@@ -10457,7 +10463,7 @@
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
         S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
-        S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.confirm = false;
+        S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
         const tm = poolTourMatch();
         S.handoff = tm && tm.frames.length > 0 ? S.breaker : 0; S.clockLeft = poolTurnClock() || POOL_CLOCK_S;
@@ -10545,7 +10551,7 @@
         // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
         if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
         S.eye = false; S.eyePaid = false;
-        S.frame = v.next; S.called = -1; S.nom = -1; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
+        S.frame = v.next; S.called = -1; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
             const w = v.winner, t = R.text(v, poolNames());
             const you = poolMode === 'cpu' ? w === 1 : null;
@@ -10595,7 +10601,7 @@
         const before = S.frame.turn;
         S.frame = R.choose(S.frame, id);
         S.netStep++;
-        S.fouled = 0; S.nom = -1;
+        S.fouled = 0; S.nom = -1; S.nomPin = -1; S.chipsOpen = false;
         poolShowToast(byCpu ? { kind: 'notice', title: R.choiceNotice(p, id, poolNames()), sub: R.choiceSub ? R.choiceSub(S.frame, id) : '' } : null);
         // The CPU's free ball stays up until it strikes: its colour is off the order on purpose.
         if (byCpu && id === 'free') S.toastMs = 0;
@@ -10646,9 +10652,26 @@
         const p = S.drag ? Math.max(S.power, 5) : 50, t = poolTip();
         const hawk = poolHawk();
         const key = [S.aim.toFixed(5), Math.round(p), t.x, t.y, S.world.t, poolSeatCueId(poolPickSeat()), hawk].join();
-        if (key === S.guideKey) return;
-        S.guideKey = key;
-        S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined, hawk);
+        if (key !== S.guideKey) {
+            S.guideKey = key;
+            S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined, hawk);
+            // Aimed off the target, the Eye view switches off (still paid: on again is free), not back and forth.
+            if (S.eye && S.phase === 'aim' && !S.guide.obj) S.eye = false;
+        }
+        poolAutoNom();
+    }
+    // Snooker: the colour to nominate follows the aim (the first ball it meets), unless one was picked by hand.
+    function poolAutoNom() {
+        const S = poolS;
+        if (S.game !== 'snooker' || S.phase !== 'aim' || !poolCanAct()) return;
+        // Only when the aim, the pick or the turn changed: the status is not free every frame.
+        const key = [S.guideKey, S.nomPin, S.frame.turn, S.frame.phase, S.frame.freeBall, S.nom].join();
+        if (key === S.autoNomKey) return;
+        S.autoNomKey = key;
+        const on = poolRules().status(S.frame, S.world).on;
+        if (!on || !on.needsNomination) return;
+        const hit = S.guide ? S.guide.hit : -1;
+        S.nom = S.nomPin >= 0 ? S.nomPin : on.nominable.indexOf(hit) >= 0 ? hit : -1;
     }
     // The shot on screen, for the HUD to keep its overlays off (phShy): the aim line to the
     // contact, the object ball's path to its pocket (else the cushion), and those points as
@@ -11155,10 +11178,10 @@
         if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; if (!S.lock) poolPlace(sx, sy); return; }
         if (S.phase !== 'aim') return;
         const st = poolRules().status(S.frame, S.world);
-        // Snooker: a press on a colour that may be nominated nominates it (before any call).
+        // Snooker: a press on a colour that may be nominated picks it by hand (before any call).
         if (st.needsNomination) {
             const id = poolBallAt(sx, sy, st.nominable);
-            if (id >= 0) { S.nom = id; S.chipsOpen = false; return; }
+            if (id >= 0) { S.nom = S.nomPin = id; S.chipsOpen = false; return; }
         }
         if (st.callRequired) {
             const hit = pgPocketMarks(poolView(), S.world.table, S.cfg).find(m => m.inView && Math.hypot(m.x - sx, m.y - sy) < Math.max(22, m.r));
@@ -11258,6 +11281,8 @@
         if (e.key === 'Escape' && (S.tour.dialog === 'pause' || S.tour.dialog === 'abandon')) {
             poolTourOn[S.tour.dialog === 'pause' ? 'unpause' : 'keep'](); e.preventDefault(); e.stopImmediatePropagation(); return;
         }
+        // Esc folds snooker's open colour selector.
+        if (e.key === 'Escape' && S.chipsOpen) { S.chipsOpen = false; e.preventDefault(); e.stopImmediatePropagation(); return; }
         if (e.key === 'Escape' && S.drag && S.drag.kind === 'power') {
             // Cancel the stroke, and nothing else: not the Max modal, not a reset.
             S.drag = null; S.power = 0;
@@ -11313,8 +11338,16 @@
         const rate = POOL_HOLD_RATE[0] + (POOL_HOLD_RATE[1] - POOL_HOLD_RATE[0]) * k * k;
         S.aim += poolAimSign() * h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
     }
-    // Turning the cue one way swings the target ball's line the other, so the Eye view turns inverted.
-    const poolAimSign = () => (poolEyeLive() ? -1 : 1);
+    // In the Eye view the input turns the target ball's line, not the cue: the line swings the other
+    // way and k times as far (k = dφ/dθ of the cut, 10–30 near the edge), so the cue turns −1/k.
+    const poolAimSign = () => (poolEyeLive() ? -1 / poolEyeTurn() : 1);
+    function poolEyeTurn() {
+        const S = poolS, b = S.world.balls.find(x => x.id === S.guide.hit), c = poolCueBall(), D = 2 * S.cfg.ballR;
+        if (!b) return 1;
+        const dx = b.x - c.x, dy = b.y - c.y, L = Math.hypot(dx, dy), th = S.aim - Math.atan2(dy, dx);
+        const s = Math.max(-1, Math.min(1, L * Math.sin(th) / D));
+        return Math.max(1, L * Math.cos(th) / (D * Math.max(0.1, Math.sqrt(1 - s * s))));
+    }
 
     // ── HUD wiring ────────────────────────────────────────────────────
     const poolOn = {
@@ -11392,15 +11425,18 @@
             if (!(S.frame && S.frame.pending)) { S.toast = null; S.fouled = 0; }
             S.clockLeft = poolTurnClock() || POOL_CLOCK_S;
         },
-        // Snooker: a colour chip, before the stroke.
+        // Snooker: a colour chip, or the "?" (-1), before the stroke.
         nominate: id => {
             const S = poolS;
             if (!poolCanAct() || S.phase !== 'aim' || S.drag) return;
             const st = poolRules().status(S.frame, S.world);
-            if (!st.on || st.on.nominable.indexOf(id) < 0) return;
-            // The folded chip (the nominated colour) reopens the chips; picking it again folds them.
-            if (id === S.nom) { S.chipsOpen = !S.chipsOpen; return; }
-            S.nom = id; S.chipsOpen = false; poolAimAtNearest();
+            if (!st.on) return;
+            // The folded "?" opens the selector; the open one goes back to following the aim.
+            if (id === -1) { if (S.chipsOpen) { S.nomPin = -1; S.chipsOpen = false; poolAutoNom(); } else S.chipsOpen = true; return; }
+            if (st.on.nominable.indexOf(id) < 0) return;
+            // The folded chip opens the selector; the colour picked again closes it.
+            if (id === S.nom && (!S.chipsOpen || id === S.nomPin)) { S.chipsOpen = !S.chipsOpen; return; }
+            S.nomPin = id; S.nom = id; S.chipsOpen = false; poolAimAtNearest(); poolAutoNom();
         },
         choose: id => {
             const S = poolS;
@@ -23666,7 +23702,7 @@
             }
             .pool-hud .ph-chips.is-set, .pool-hud .ph-chips.is-power { border-color: rgba(var(--pool-accent-rgb), 0.55); }
             .pool-hud .ph-chips.is-hot { border-color: rgba(var(--pool-hot-rgb), 0.6); }
-            .pool-hud .ph-chips-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 44px; }
+            .pool-hud .ph-chips-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 44px; }
             .pool-hud .ph-chip { height: 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
             .pool-hud .ph-chip span {
                 width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -23675,6 +23711,8 @@
             .pool-hud .ph-chip[aria-checked="true"] span { box-shadow: 0 0 0 2px var(--pool-overlay-strong), 0 0 0 4px var(--pool-accent); }
             .pool-hud .ph-chip:disabled { cursor: default; }
             .pool-hud .ph-chip:disabled span { opacity: 0.22; }
+            /* The grey "?": no colour nominated yet (folded), or follow the aim (open). */
+            .pool-hud .ph-chip-q span { background: var(--pool-track); color: var(--pool-overlay-muted); box-shadow: inset 0 0 0 1px var(--pool-overlay-muted); }
             .pool-hud .ph-chips-cap { text-align: center; font-size: 12px; font-weight: 600; color: var(--pool-overlay-text); white-space: nowrap; }
             .pool-hud .ph-chips.is-set .ph-chips-cap, .pool-hud .ph-chips.is-power .ph-chips-cap { color: var(--pool-accent-lite); }
             .pool-hud .ph-chips.is-hot .ph-chips-cap { color: var(--pool-hot-lite); }
@@ -23749,7 +23787,7 @@
             .pool-hud[data-layout="max"] .ph-chips, .pool-hud[data-layout="max"] .ph-chips[data-fold] {
                 width: max-content; flex-direction: row; align-items: center; gap: 10px; padding: 3px 18px 3px 3px; border-radius: 28px;
             }
-            .pool-hud[data-layout="max"] .ph-chips-grid { display: grid; grid-template-columns: repeat(6, 50px); grid-auto-rows: 50px; }
+            .pool-hud[data-layout="max"] .ph-chips-grid { display: grid; grid-template-columns: repeat(7, 50px); grid-auto-rows: 50px; }
             .pool-hud[data-layout="max"] .ph-chips[data-fold] .ph-chips-grid { display: flex; }
             .pool-hud[data-layout="max"] .ph-chip, .pool-hud[data-layout="max"] .ph-chips[data-fold] .ph-chip { width: 50px; height: 50px; }
             /* Full table: each on a long cushion a quarter of the way in; Move cue ball and the picker above spin. */

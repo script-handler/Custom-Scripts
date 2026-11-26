@@ -295,8 +295,8 @@
         phase: 'aim', aim: 0, power: 0, tip: { x: 0, y: 0 }, spinOpen: false, called: -1, guide: null, guideKey: '',
         // Snooker: the nominated colour (-1: none), the concede question; each game's parked frame.
         nom: -1, confirm: false, parked: {}, tours: {},
-        // Snooker: the chips opened again after a colour was nominated (they fold to that one).
-        chipsOpen: false,
+        // Snooker: the colour selector open (else folded to one chip); a colour picked by hand (-1: follow the aim).
+        chipsOpen: false, nomPin: -1,
         // The CPU's safeties in a row this frame (snooker's CPU attacks after three).
         cpuSafeRun: 0,
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
@@ -543,7 +543,7 @@
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
         S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
-        S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.confirm = false;
+        S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
         const tm = poolTourMatch();
         S.handoff = tm && tm.frames.length > 0 ? S.breaker : 0; S.clockLeft = poolTurnClock() || POOL_CLOCK_S;
@@ -631,7 +631,7 @@
         // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
         if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
         S.eye = false; S.eyePaid = false;
-        S.frame = v.next; S.called = -1; S.nom = -1; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
+        S.frame = v.next; S.called = -1; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
             const w = v.winner, t = R.text(v, poolNames());
             const you = poolMode === 'cpu' ? w === 1 : null;
@@ -681,7 +681,7 @@
         const before = S.frame.turn;
         S.frame = R.choose(S.frame, id);
         S.netStep++;
-        S.fouled = 0; S.nom = -1;
+        S.fouled = 0; S.nom = -1; S.nomPin = -1; S.chipsOpen = false;
         poolShowToast(byCpu ? { kind: 'notice', title: R.choiceNotice(p, id, poolNames()), sub: R.choiceSub ? R.choiceSub(S.frame, id) : '' } : null);
         // The CPU's free ball stays up until it strikes: its colour is off the order on purpose.
         if (byCpu && id === 'free') S.toastMs = 0;
@@ -732,9 +732,26 @@
         const p = S.drag ? Math.max(S.power, 5) : 50, t = poolTip();
         const hawk = poolHawk();
         const key = [S.aim.toFixed(5), Math.round(p), t.x, t.y, S.world.t, poolSeatCueId(poolPickSeat()), hawk].join();
-        if (key === S.guideKey) return;
-        S.guideKey = key;
-        S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined, hawk);
+        if (key !== S.guideKey) {
+            S.guideKey = key;
+            S.guide = pgGuide(S.world, poolHumanShot(p), hawk ? POOL_HAWK_REACH * S.cfg.halfLength : undefined, hawk);
+            // Aimed off the target, the Eye view switches off (still paid: on again is free), not back and forth.
+            if (S.eye && S.phase === 'aim' && !S.guide.obj) S.eye = false;
+        }
+        poolAutoNom();
+    }
+    // Snooker: the colour to nominate follows the aim (the first ball it meets), unless one was picked by hand.
+    function poolAutoNom() {
+        const S = poolS;
+        if (S.game !== 'snooker' || S.phase !== 'aim' || !poolCanAct()) return;
+        // Only when the aim, the pick or the turn changed: the status is not free every frame.
+        const key = [S.guideKey, S.nomPin, S.frame.turn, S.frame.phase, S.frame.freeBall, S.nom].join();
+        if (key === S.autoNomKey) return;
+        S.autoNomKey = key;
+        const on = poolRules().status(S.frame, S.world).on;
+        if (!on || !on.needsNomination) return;
+        const hit = S.guide ? S.guide.hit : -1;
+        S.nom = S.nomPin >= 0 ? S.nomPin : on.nominable.indexOf(hit) >= 0 ? hit : -1;
     }
     // The shot on screen, for the HUD to keep its overlays off (phShy): the aim line to the
     // contact, the object ball's path to its pocket (else the cushion), and those points as
@@ -1241,10 +1258,10 @@
         if (S.phase === 'bih') { S.drag = { kind: 'place' }; S.placed = false; if (!S.lock) poolPlace(sx, sy); return; }
         if (S.phase !== 'aim') return;
         const st = poolRules().status(S.frame, S.world);
-        // Snooker: a press on a colour that may be nominated nominates it (before any call).
+        // Snooker: a press on a colour that may be nominated picks it by hand (before any call).
         if (st.needsNomination) {
             const id = poolBallAt(sx, sy, st.nominable);
-            if (id >= 0) { S.nom = id; S.chipsOpen = false; return; }
+            if (id >= 0) { S.nom = S.nomPin = id; S.chipsOpen = false; return; }
         }
         if (st.callRequired) {
             const hit = pgPocketMarks(poolView(), S.world.table, S.cfg).find(m => m.inView && Math.hypot(m.x - sx, m.y - sy) < Math.max(22, m.r));
@@ -1344,6 +1361,8 @@
         if (e.key === 'Escape' && (S.tour.dialog === 'pause' || S.tour.dialog === 'abandon')) {
             poolTourOn[S.tour.dialog === 'pause' ? 'unpause' : 'keep'](); e.preventDefault(); e.stopImmediatePropagation(); return;
         }
+        // Esc folds snooker's open colour selector.
+        if (e.key === 'Escape' && S.chipsOpen) { S.chipsOpen = false; e.preventDefault(); e.stopImmediatePropagation(); return; }
         if (e.key === 'Escape' && S.drag && S.drag.kind === 'power') {
             // Cancel the stroke, and nothing else: not the Max modal, not a reset.
             S.drag = null; S.power = 0;
@@ -1399,8 +1418,16 @@
         const rate = POOL_HOLD_RATE[0] + (POOL_HOLD_RATE[1] - POOL_HOLD_RATE[0]) * k * k;
         S.aim += poolAimSign() * h.dir * rate * (to - from) / 1000 * poolRules().aimKey * POOL_DEG;
     }
-    // Turning the cue one way swings the target ball's line the other, so the Eye view turns inverted.
-    const poolAimSign = () => (poolEyeLive() ? -1 : 1);
+    // In the Eye view the input turns the target ball's line, not the cue: the line swings the other
+    // way and k times as far (k = dφ/dθ of the cut, 10–30 near the edge), so the cue turns −1/k.
+    const poolAimSign = () => (poolEyeLive() ? -1 / poolEyeTurn() : 1);
+    function poolEyeTurn() {
+        const S = poolS, b = S.world.balls.find(x => x.id === S.guide.hit), c = poolCueBall(), D = 2 * S.cfg.ballR;
+        if (!b) return 1;
+        const dx = b.x - c.x, dy = b.y - c.y, L = Math.hypot(dx, dy), th = S.aim - Math.atan2(dy, dx);
+        const s = Math.max(-1, Math.min(1, L * Math.sin(th) / D));
+        return Math.max(1, L * Math.cos(th) / (D * Math.max(0.1, Math.sqrt(1 - s * s))));
+    }
 
     // ── HUD wiring ────────────────────────────────────────────────────
     const poolOn = {
@@ -1478,15 +1505,18 @@
             if (!(S.frame && S.frame.pending)) { S.toast = null; S.fouled = 0; }
             S.clockLeft = poolTurnClock() || POOL_CLOCK_S;
         },
-        // Snooker: a colour chip, before the stroke.
+        // Snooker: a colour chip, or the "?" (-1), before the stroke.
         nominate: id => {
             const S = poolS;
             if (!poolCanAct() || S.phase !== 'aim' || S.drag) return;
             const st = poolRules().status(S.frame, S.world);
-            if (!st.on || st.on.nominable.indexOf(id) < 0) return;
-            // The folded chip (the nominated colour) reopens the chips; picking it again folds them.
-            if (id === S.nom) { S.chipsOpen = !S.chipsOpen; return; }
-            S.nom = id; S.chipsOpen = false; poolAimAtNearest();
+            if (!st.on) return;
+            // The folded "?" opens the selector; the open one goes back to following the aim.
+            if (id === -1) { if (S.chipsOpen) { S.nomPin = -1; S.chipsOpen = false; poolAutoNom(); } else S.chipsOpen = true; return; }
+            if (st.on.nominable.indexOf(id) < 0) return;
+            // The folded chip opens the selector; the colour picked again closes it.
+            if (id === S.nom && (!S.chipsOpen || id === S.nomPin)) { S.chipsOpen = !S.chipsOpen; return; }
+            S.nomPin = id; S.nom = id; S.chipsOpen = false; poolAimAtNearest(); poolAutoNom();
         },
         choose: id => {
             const S = poolS;

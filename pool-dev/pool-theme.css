@@ -1254,7 +1254,7 @@
             }
             .pool-hud .ph-chips.is-set, .pool-hud .ph-chips.is-power { border-color: rgba(var(--pool-accent-rgb), 0.55); }
             .pool-hud .ph-chips.is-hot { border-color: rgba(var(--pool-hot-rgb), 0.6); }
-            .pool-hud .ph-chips-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 44px; }
+            .pool-hud .ph-chips-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 44px; }
             .pool-hud .ph-chip { height: 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
             .pool-hud .ph-chip span {
                 width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -1263,6 +1263,8 @@
             .pool-hud .ph-chip[aria-checked="true"] span { box-shadow: 0 0 0 2px var(--pool-overlay-strong), 0 0 0 4px var(--pool-accent); }
             .pool-hud .ph-chip:disabled { cursor: default; }
             .pool-hud .ph-chip:disabled span { opacity: 0.22; }
+            /* The grey "?": no colour nominated yet (folded), or follow the aim (open). */
+            .pool-hud .ph-chip-q span { background: var(--pool-track); color: var(--pool-overlay-muted); box-shadow: inset 0 0 0 1px var(--pool-overlay-muted); }
             .pool-hud .ph-chips-cap { text-align: center; font-size: 12px; font-weight: 600; color: var(--pool-overlay-text); white-space: nowrap; }
             .pool-hud .ph-chips.is-set .ph-chips-cap, .pool-hud .ph-chips.is-power .ph-chips-cap { color: var(--pool-accent-lite); }
             .pool-hud .ph-chips.is-hot .ph-chips-cap { color: var(--pool-hot-lite); }
@@ -1337,7 +1339,7 @@
             .pool-hud[data-layout="max"] .ph-chips, .pool-hud[data-layout="max"] .ph-chips[data-fold] {
                 width: max-content; flex-direction: row; align-items: center; gap: 10px; padding: 3px 18px 3px 3px; border-radius: 28px;
             }
-            .pool-hud[data-layout="max"] .ph-chips-grid { display: grid; grid-template-columns: repeat(6, 50px); grid-auto-rows: 50px; }
+            .pool-hud[data-layout="max"] .ph-chips-grid { display: grid; grid-template-columns: repeat(7, 50px); grid-auto-rows: 50px; }
             .pool-hud[data-layout="max"] .ph-chips[data-fold] .ph-chips-grid { display: flex; }
             .pool-hud[data-layout="max"] .ph-chip, .pool-hud[data-layout="max"] .ph-chips[data-fold] .ph-chip { width: 50px; height: 50px; }
             /* Full table: each on a long cushion a quarter of the way in; Move cue ball and the picker above spin. */

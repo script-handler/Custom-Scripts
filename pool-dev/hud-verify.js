@@ -217,8 +217,12 @@ head("Snooker's in-match states");
        m.track.say === 'On a red. Ayesha 34, CPU 21. Reds left 9, colours yellow, green, brown, blue, pink, black, 99 points remaining.', m.track.say);
     ok('…and holds its last reading while balls run (null: nothing new to read)', snkGame({ phase: 'moving' }).track.say === null && snkGame({ phase: 'strike' }).track.say === null);
     m = snkGame({ frame: { phase: 'colour', brk: 35 } });
-    ok('snkNom: the chips (Tap a colour), the padlock, no hint; the pill "Nominate a colour"', m.chips.show && m.chips.caption === 'Tap a colour' && m.chips.items.length === 6 && m.chips.items.every(c => c.live) &&
-       m.gauge.locked && !m.hint.show && m.pill.text === 'Nominate a colour' && m.chips.label === 'Nominate a colour');
+    // Nothing nominated: folded to the grey "?" (the aim nominates); opened, the selector (the user, 2026-11-26).
+    ok('snkNom: folded to the "?" (Aim at a colour), the padlock, no hint; the pill "Nominate a colour"', m.chips.show && m.chips.folded && m.chips.auto && m.chips.caption === 'Aim at a colour' &&
+       m.chips.items.length === 6 && m.chips.items.every(c => c.live && !c.checked) &&
+       m.gauge.locked && !m.hint.show && m.pill.text === 'Nominate a colour' && m.chips.label === 'No colour nominated. Aim at one, or press to pick');
+    m = snkGame({ frame: { phase: 'colour', brk: 35 }, chipsOpen: true });
+    ok('…opened: the selector (Tap a colour)', !m.chips.folded && m.chips.caption === 'Tap a colour' && m.chips.label === 'Nominate a colour');
     m = snkGame({ frame: { phase: 'colour' }, nom: 6 });
     ok('snkNomPink: the pink checked, "Drag to shoot", the pill "On the pink", the gauge free, the pink ringed in the tracker',
        m.chips.items.find(c => c.id === 6).checked && m.chips.caption === 'Drag to shoot' && m.pill.text === 'On the pink' && !m.gauge.locked && m.track.dots.find(d => d.id === 6).on);
@@ -242,8 +246,9 @@ head("Snooker's in-match states");
     m = snkGame({ frame: { phase: 'colour' }, nom: 6, dragging: true, power: 90 });
     ok('⚙️ Max View: bars only in Max, and only when picked', vm({ layout: 'max', maxBars: true }).maxBars && !vm({ layout: 'max' }).maxBars && !vm({ maxBars: true }).maxBars);
     ok('nominated, the chips fold to the pink, and say how to change it', m.chips.folded && m.chips.label === 'Nominated: the pink. Press it to change');
-    ok('…open again (chipsOpen), the six; before a colour, never folded', !snkGame({ frame: { phase: 'colour' }, nom: 6, chipsOpen: true }).chips.folded &&
-       !snkGame({ frame: { phase: 'colour' } }).chips.folded && snkGame({ frame: { turn: 1, freeBall: true }, nom: 6 }).chips.label === 'Free ball: the pink. Press it to change');
+    ok('…open again (chipsOpen), the six; before a colour, folded to the "?"', !snkGame({ frame: { phase: 'colour' }, nom: 6, chipsOpen: true }).chips.folded &&
+       snkGame({ frame: { phase: 'colour' } }).chips.folded && !snkGame({ frame: { phase: 'colour' }, nom: 6 }).chips.auto &&
+       snkGame({ frame: { turn: 1, freeBall: true }, nom: 6 }).chips.label === 'Free ball: the pink. Press it to change');
     ok('the chips never show for the CPU, in the hand-off, under a toast or the sheet', !snkGame({ frame: { phase: 'colour', turn: 2 }, cpuTurn: true }).chips.show &&
        !snkGame({ frame: { phase: 'colour' }, handoff: 1 }).chips.show && !snkGame({ frame: { phase: 'colour' }, toast: { kind: 'notice', title: 'x' } }).chips.show &&
        !snkGame({ frame: { phase: 'colour' }, sheet: { open: true } }).chips.show);
@@ -262,7 +267,9 @@ head("Snooker's in-match states");
     m = foul({ mode: 'cpu', names: { 1: 'Ayesha', 2: 'CPU' }, cpuTurn: true, choice: { chooser: 2, cpu: true, options: [] } });
     ok('the CPU choosing: its card reads CHOOSING, and no buttons', m.cards[1].tag === 'CHOOSING' && !m.toast.choices.length);
     m = snkGame({ mode: 'pvp', names: { 1: 'Ayesha', 2: 'Bilal' }, frame: { turn: 2, freeBall: true, brk: 0 } });
-    ok('snkFreeNom: the free ball to nominate: the chips, "Nominate the free ball", the pill "Free ball"', m.chips.show && m.chips.label === 'Nominate the free ball' && m.pill.text === 'Free ball');
+    ok('snkFreeNom: the free ball to nominate: the chips (opened, "Nominate the free ball"), the pill "Free ball"', m.chips.show && m.chips.auto && m.pill.text === 'Free ball' &&
+       snkGame({ mode: 'pvp', names: { 1: 'Ayesha', 2: 'Bilal' }, frame: { turn: 2, freeBall: true, brk: 0 }, chipsOpen: true }).chips.label === 'Nominate the free ball');
+    ok('the chips carry the "?" first, then the six colours', /data-ph="chipQ"[\s\S]*?(data-ph-nom="\d"[\s\S]*?){6}/.test(P.phViewHTML(false)) && (P.phViewHTML(true).match(/data-ph-nom=/g) || []).length === 6);
     ok('…nominated: "Free ball · Pink"', snkGame({ frame: { turn: 1, freeBall: true }, nom: 6 }).pill.text === 'Free ball · Pink');
     // Snookers required, concede.
     m = snkGame({ mode: 'pvp', names: { 1: 'Ayesha', 2: 'Bilal' }, reds: 2, frame: { scores: { 1: 22, 2: 68 }, brk: 0 } });

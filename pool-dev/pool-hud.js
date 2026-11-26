@@ -405,13 +405,15 @@
         // The chips: while a colour is to be nominated (the gauge padlocks until one is).
         const chips = aiming && !!on.needsNomination && !g.cpuTurn && !g.handoff && !toast && !sheetOpen && !vm.spin.open && !g.confirm;
         const pw = Math.round(g.power || 0);
-        // Once a colour is nominated they fold to that chip and the caption; the chip reopens them.
-        const folded = nom >= 0 && !g.chipsOpen, callNeeded = aiming && !!st.callRequired && !(g.called >= 0);
+        // Folded to one chip: the colour the aim (or a hand pick) nominates, else the grey "?"; it opens the selector.
+        const folded = !g.chipsOpen, callNeeded = aiming && !!st.callRequired && !(g.called >= 0);
         vm.chips = chips ? {
-            show: true, folded,
-            label: folded ? (st.freeBall ? 'Free ball: the ' : 'Nominated: the ') + phSnkName(nom) + '. Press it to change' : st.freeBall ? 'Nominate the free ball' : 'Nominate a colour',
+            show: true, folded, auto: nom < 0,
+            label: !folded ? (st.freeBall ? 'Nominate the free ball' : 'Nominate a colour')
+                : nom < 0 ? 'No colour nominated. Aim at one, or press to pick'
+                : (st.freeBall ? 'Free ball: the ' : 'Nominated: the ') + phSnkName(nom) + '. Press it to change',
             items: PH_SNK.map(b => ({ id: b.id, name: b.name, live: (on.nominable || []).indexOf(b.id) >= 0, checked: nom === b.id })),
-            caption: nom < 0 ? 'Tap a colour' : g.dragging ? (pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel') : callNeeded ? 'Tap a pocket' : 'Drag to shoot',
+            caption: !folded ? 'Tap a colour' : nom < 0 ? 'Aim at a colour' : g.dragging ? (pw > 0 ? 'Release · ' + pw + '%' : 'Release to cancel') : callNeeded ? 'Tap a pocket' : 'Drag to shoot',
             tone: nom < 0 ? '' : g.dragging ? (pw >= PH_POWER_HOT ? 'hot' : 'power') : callNeeded ? 'call' : 'set',
             // With a call to make, the folded chips carry the pocket map in 3D (2D taps the table).
             pad: folded && !!st.callRequired && g.camera === '3d', called: g.called >= 0 ? g.called : -1,
@@ -615,6 +617,8 @@
             '<div class="ph-mini-pad"><div class="ph-mini-table"></div>' + mini + '</div></div>' +
             // Snooker's colour chips: a 3 × 2 grid, each ball carrying its value.
             '<div class="ph-chips ph-glass" role="group" data-ph="chips" hidden><div class="ph-chips-grid" role="radiogroup" data-ph="chipgrid">' +
+            // The grey "?": nothing nominated (folded), or back to following the aim (open).
+            '<button type="button" role="radio" class="ph-chip ph-chip-q" data-ph="chipQ" aria-checked="false" aria-label="Follow my aim"><span>?</span></button>' +
             PH_SNK.map(b => '<button type="button" role="radio" class="ph-chip" data-ph-nom="' + b.id + '" aria-checked="false" aria-label="' + phCap(b.name) + ', ' + b.id + ' points"><span>' + b.id + '</span></button>').join('') +
             '</div><span class="ph-chips-cap" data-ph="chipcap"></span>' +
             '<div class="ph-mini-pad ph-chips-pad" data-ph="chippad" hidden><div class="ph-mini-table"></div>' + pad('data-ph-ccall') + '</div></div>' +
@@ -730,7 +734,7 @@
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
             'sheet', 'sheetscrim', 'sheetx', 'sheetchip', 'sheetcpu', 'sheetpvp', 'sheetnote', 'sheetstart', 'sheetp1', 'sheetp2', 'sheetrules', 'sheethelp', 'sheetpop',
             'sheettour', 'sheettourgo', 'sheettourcta', 'sheettoursub', 'sheetcab', 'sheetabandon', 'bracket', 'pause', 'tourhead', 'tourk', 'tourn', 'tourf', 'title', 'trophy',
-            'toastacts', 'track', 'trred', 'trreds', 'trdots', 'trsnk', 'trconcede', 'trrem', 'trlive', 'chips', 'chipgrid', 'chipcap', 'chippad', 'dlgstats', 'cscrim', 'cdlg', 'cdlgt', 'cdlgy', 'cdlgn',
+            'toastacts', 'track', 'trred', 'trreds', 'trdots', 'trsnk', 'trconcede', 'trrem', 'trlive', 'chips', 'chipgrid', 'chipQ', 'chipcap', 'chippad', 'dlgstats', 'cscrim', 'cdlg', 'cdlgt', 'cdlgy', 'cdlgn',
             'cue', 'cues', 'cuenew', 'cuenewn', 'cuenewgo', 'cuenewx',
             'sheetnet', 'sheetnetsrv', 'sheetnetgo', 'sheetnetst', 'sheetnetbody', 'invite', 'invitek', 'invitet', 'invitego', 'invitex',
             'bubble1', 'bubble2', 'react', 'reactform', 'reacti', 'reactbtn', 'start', 'startgo', 'startl', 'startsub'].forEach(n => { hud[n] = ref(n); });
@@ -816,6 +820,7 @@
             s.style.color = phInkOn(pgBallLook('snooker', id).colour);
             b.addEventListener('click', () => fire('nominate', id));
         });
+        hud.chipQ.addEventListener('click', () => fire('nominate', -1));
         hud.chipCallButtons = Array.prototype.slice.call(el.querySelectorAll('[data-ph-ccall]'));
         hud.chipCallButtons.forEach(b => b.addEventListener('click', () => fire('call', +b.getAttribute('data-ph-ccall'))));
         hud.toastacts.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ph-choose]'); if (b) fire('choose', b.getAttribute('data-ph-choose')); });
@@ -1058,6 +1063,7 @@
                 b.disabled = !it.live;
                 b.setAttribute('aria-checked', it.checked ? 'true' : 'false');
             }));
+            s('chips.auto', !!ch.auto, v => hud.chipQ.setAttribute('aria-checked', v ? 'true' : 'false'));
             s('chips.cap', ch.caption, v => { hud.chipcap.textContent = v; });
             s('chips.called', ch.called === undefined ? -1 : ch.called, v => hud.chipCallButtons.forEach((b, i) => b.setAttribute('aria-pressed', i === v ? 'true' : 'false')));
             s('chips.tone', ch.tone || '', v => { hud.chips.className = 'ph-chips ph-glass' + (v ? ' is-' + v : ''); });
