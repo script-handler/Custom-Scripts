@@ -153,80 +153,87 @@
     }
 
     // ── Layers 1–4: the table ─────────────────────────────────────────
-    // The cushions, from the physics config so they match the colliders:
-    // { top, nose: [a, b], ends: [[p, q], …] } (nose face drops to the felt; end faces
-    // are jaw-coloured). Pool's are quads [nose start, nose end, rail end, rail start].
-    function pgCushions(cfg) {
-        if (cfg.pocketStyle === 'rounded') return pgRoundedCushions(cfg);
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth;
-        const CB = cfg.cornerRailEnd, CN = cfg.cornerNose, SB = cfg.sideRailEnd, SN = cfg.sideNose;
-        const N = pgNoseZ(cfg), T = pgRailZ(cfg), q = [];
-        [-1, 1].forEach(sy => {
-            [[-HL + CB, -SB, -HL + CN, -SN], [SB, HL - CB, SN, HL - CN]].forEach(g => {
-                q.push([[g[2], sy * HW, N], [g[3], sy * HW, N], [g[1], sy * (HW + CU), T], [g[0], sy * (HW + CU), T]]);
-            });
+    // The cushions, traced from the physics table so they are the colliders:
+    // { top, nose: [a, b], ends: [[p, q], …] } (nose face drops to the felt; end faces are jaw-coloured; the top rises
+    // from nose to rail height). Each end, nose side first: the nose's round (snooker's the collider's; pool's drawn,
+    // the user, 2026-10-15), the jaw onto the hole, then, if the jaw meets the hole before the rail line, the hole's
+    // edge back to it (cloth turning down into the hole).
+    function pgCushions(cfg, table) {
+        const t = table || ppBuildTable(cfg), CU = cfg.cushionWidth, N = pgNoseZ(cfg), T = pgRailZ(cfg);
+        const out = [];
+        t.segments.filter(s => s.kind === 'cushion').forEach(s => {
+            const o = [-s.nx, -s.ny], A = [s.ax, s.ay];                   // off the table; a point on the nose line
+            const dep = (x, y) => ((x - A[0]) * o[0] + (y - A[1]) * o[1]) / CU;
+            const at = (x, y) => [x, y, N + (T - N) * Math.max(0, Math.min(1, dep(x, y)))];
+            const end = (E, other) => {
+                const d = pgUnit(E[0] - other[0], E[1] - other[1]);
+                // The pocket, and which of its mouth's ends this is.
+                let p = null, k = 0, best = Infinity;
+                t.pockets.forEach(q => [0, 1].forEach(i => {
+                    const g = Math.hypot(q.mouth[2 * i] - (E[0] + d[0] * (cfg.noseRound || 0)), q.mouth[2 * i + 1] - (E[1] + d[1] * (cfg.noseRound || 0)));
+                    if (g < best) { best = g; p = q; k = i; }
+                }));
+                const j = p.jaws[k], ja = Array.isArray(j) ? [j[0], j[1]] : [j.ax, j.ay], jb = Array.isArray(j) ? [j[2], j[3]] : [j.bx, j.by];
+                const pts = [];
+                if (p.cuts) {
+                    const a = p.cuts[k], a0 = Math.atan2(-o[1], -o[0]), a1 = a0 + 2 * (a.mid - a0 - 2 * Math.PI * Math.round((a.mid - a0) / (2 * Math.PI)));
+                    for (let i = 0; i <= 8; i++) { const th = a0 + (a1 - a0) * i / 8; pts.push(at(a.cx + a.r * Math.cos(th), a.cy + a.r * Math.sin(th))); }
+                } else {
+                    // Pool's drawn round between the nose and the jaw (the nose point collider sits within a couple of units).
+                    const jl = Math.hypot(jb[0] - ja[0], jb[1] - ja[1]), u = [(jb[0] - ja[0]) / jl, (jb[1] - ja[1]) / jl], nb = [-d[0], -d[1]];
+                    const half = Math.acos(Math.max(-1, Math.min(1, nb[0] * u[0] + nb[1] * u[1]))) / 2;
+                    const r = Math.min(PG_NOSE_ROUND, 0.6 * jl * Math.tan(half)), dd = r / Math.tan(half);
+                    const bis = pgUnit(nb[0] + u[0], nb[1] + u[1]), C = [ja[0] + bis[0] * r / Math.sin(half), ja[1] + bis[1] * r / Math.sin(half)];
+                    const b0 = Math.atan2(ja[1] + nb[1] * dd - C[1], ja[0] + nb[0] * dd - C[0]), b1 = Math.atan2(ja[1] + u[1] * dd - C[1], ja[0] + u[0] * dd - C[0]);
+                    let sp = b1 - b0;
+                    sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
+                    for (let i = 0; i <= 8; i++) { const th = b0 + sp * i / 8; pts.push(at(C[0] + r * Math.cos(th), C[1] + r * Math.sin(th))); }
+                }
+                // The jaw: to the rail line, or to the hole and round its edge to the rail line.
+                const da = dep(ja[0], ja[1]), db = dep(jb[0], jb[1]);
+                if (db >= 1) {
+                    const f = (1 - da) / (db - da);
+                    pts.push(at(ja[0] + (jb[0] - ja[0]) * f, ja[1] + (jb[1] - ja[1]) * f));
+                } else {
+                    // Round the pocket's body (pgPocketBody) from the jaw's end, the way that goes deeper, to the rail line.
+                    pts.push(at(jb[0], jb[1]));
+                    const body = pgPocketBody(cfg, p, 0, 192), nb = body.length;
+                    let i0 = 0;
+                    body.forEach((q, i) => { if (Math.hypot(q[0] - jb[0], q[1] - jb[1]) < Math.hypot(body[i0][0] - jb[0], body[i0][1] - jb[1])) i0 = i; });
+                    const step = dep(...body[(i0 + 1) % nb]) > dep(...body[(i0 + nb - 1) % nb]) ? 1 : -1;
+                    let last = [jb[0], jb[1]];
+                    for (let i = 1; i < nb; i++) {
+                        const [x, y] = body[(i0 + step * i + nb * 2) % nb];
+                        if (dep(x, y) >= 1) {
+                            const f = (1 - dep(last[0], last[1])) / (dep(x, y) - dep(last[0], last[1]));
+                            pts.push(at(last[0] + (x - last[0]) * f, last[1] + (y - last[1]) * f));
+                            break;
+                        }
+                        pts.push(at(x, y));
+                        last = [x, y];
+                    }
+                }
+                return pts;
+            };
+            const sa = end([s.ax, s.ay], [s.bx, s.by]), sb = end([s.bx, s.by], [s.ax, s.ay]), ends = [];
+            [sa, sb].forEach(e => { for (let i = 0; i < e.length - 1; i++) ends.push([e[i], e[i + 1]]); });
+            out.push({ top: sa.slice().reverse().concat(sb), nose: [sa[0], sb[0]], ends });
         });
-        [-1, 1].forEach(sx => {
-            q.push([[sx * HL, -HW + CN, N], [sx * HL, HW - CN, N], [sx * (HL + CU), HW - CB, T], [sx * (HL + CU), -HW + CB, T]]);
-        });
-        // Each end's corner, where the playing face meets the jaw, is drawn rounded (the user,
-        // 2026-10-15), as snooker's are. Drawn only: the nose point collider sits within a
-        // couple of units of the arc.
-        const at = (x, y, A, u) => { const dep = Math.min(1, Math.abs(u[0] * (y - A[1]) - u[1] * (x - A[0])) / CU); return [x, y, N + (T - N) * dep]; };
-        const round = (A, other, rail) => {
-            const nb = pgUnit(other[0] - A[0], other[1] - A[1]), jl = Math.hypot(rail[0] - A[0], rail[1] - A[1]), jb = [(rail[0] - A[0]) / jl, (rail[1] - A[1]) / jl];
-            const half = Math.acos(Math.max(-1, Math.min(1, nb[0] * jb[0] + nb[1] * jb[1]))) / 2;    // half the corner's angle
-            const r = Math.min(PG_NOSE_ROUND, 0.6 * jl * Math.tan(half)), d = r / Math.tan(half);
-            const bis = pgUnit(nb[0] + jb[0], nb[1] + jb[1]), C = [A[0] + bis[0] * r / Math.sin(half), A[1] + bis[1] * r / Math.sin(half)];
-            const a0 = Math.atan2(A[1] + nb[1] * d - C[1], A[0] + nb[0] * d - C[0]), a1 = Math.atan2(A[1] + jb[1] * d - C[1], A[0] + jb[0] * d - C[0]);
-            let sp = a1 - a0;
-            sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
-            const pts = [];
-            for (let i = 0; i <= 8; i++) { const t = a0 + sp * i / 8; pts.push(at(C[0] + r * Math.cos(t), C[1] + r * Math.sin(t), A, nb)); }
-            return pts;                                                    // nose side first, jaw side last
-        };
-        return q.map(c => {
-            const sa = round(c[0], c[1], c[3]), sb = round(c[1], c[0], c[2]), ends = [];
-            [[sa, c[3]], [sb, c[2]]].forEach(([s, rail]) => {
-                for (let i = 0; i < s.length - 1; i++) ends.push([s[i], s[i + 1]]);
-                ends.push([s[s.length - 1], rail]);
-            });
-            return { top: [c[3]].concat(sa.slice().reverse(), sb, [c[2]]), nose: [sa[0], sb[0]], ends };
-        });
+        return out;
+    }
+    // The pocket as drawn: the drop (the capture circle) carried back along its outward line u to the rail's inner
+    // corner (a middle: the rail line), the way a real pocket's drop runs on under the rail inside its fall. A
+    // capsule of radius r + grow, xy points anticlockwise, the back half first.
+    function pgPocketBody(cfg, p, grow, n) {
+        const IX = cfg.halfLength + cfg.cushionWidth, IY = cfg.halfWidth + cfg.cushionWidth, u = p.u, m = (n || 48) / 2;
+        const L = p.kind === 'corner' ? Math.max(0, (p.sx * IX - p.x) * u[0] + (p.sy * IY - p.y) * u[1]) : Math.max(0, IY - Math.abs(p.y));
+        const r = p.r + grow, a0 = Math.atan2(u[1], u[0]), q = [p.x + u[0] * L, p.y + u[1] * L], out = [];
+        for (let i = 0; i <= m; i++) { const t = a0 - Math.PI / 2 + i / m * Math.PI; out.push([q[0] + r * Math.cos(t), q[1] + r * Math.sin(t)]); }
+        for (let i = 0; i <= m; i++) { const t = a0 + Math.PI / 2 + i / m * Math.PI; out.push([p.x + r * Math.cos(t), p.y + r * Math.sin(t)]); }
+        return out;
     }
     const PG_NOSE_ROUND = 12;             // pool's drawn nose radius: the cushion's depth, as snooker's design
     const pgUnit = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
-
-    // Snooker's cushions, matching ppBuildRoundedTable; the top rises from nose to rail height.
-    function pgRoundedCushions(cfg) {
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RHO = cfg.noseRound;
-        const c = cfg.cornerNose, s = cfg.sideNose, N = pgNoseZ(cfg), T = pgRailZ(cfg), NA = 8;
-        const out = [];
-        // One run from u = a to b; dirA/dirB point toward each end's pocket, jbA/jbB are the
-        // jaw leans; map(u, depth, z) is the point that fraction of the way to the rail.
-        const run = (a, b, dirA, dirB, jbA, jbB, map) => {
-            const at = (u, dep) => map(u, dep, N + (T - N) * dep);
-            const end = (e, dir, jb) => {
-                const pts = [];
-                for (let i = 0; i <= NA; i++) { const t = i / NA * Math.PI / 2; pts.push(at(e - dir * RHO + dir * RHO * Math.sin(t), RHO * (1 - Math.cos(t)) / CU)); }
-                pts.push(at(e + dir * jb, 1));
-                return pts;
-            };
-            const sa = end(a, dirA, jbA), sb = end(b, dirB, jbB);
-            const top = sb.concat(sa.slice().reverse());
-            const ends = [];
-            [sa, sb].forEach(p => { for (let i = 0; i < p.length - 1; i++) ends.push([p[i], p[i + 1]]); });
-            out.push({ top, nose: [sa[0], sb[0]], ends });
-        };
-        const cj = cfg.cornerJawBack, sj = cfg.sideJawBack;
-        [-1, 1].forEach(sy => {
-            const m = (u, dep, z) => [u, sy * (HW + dep * CU), z];
-            run(-HL + c, -s, -1, 1, cj, sj, m);
-            run(s, HL - c, -1, 1, sj, cj, m);
-        });
-        [-1, 1].forEach(sx => run(-HW + c, HW - c, -1, 1, cj, cj, (u, dep, z) => [sx * (HL + dep * CU), u, z]));
-        return out;
-    }
 
     // Which rail a cushion lies along, and the way into the table from it. The design's world is
     // ours mirrored in y: its N, the top of its 2D view and of ours, is our +y.
@@ -305,6 +312,13 @@
         pool: { far: ['#5C381F', '#B67E47', '#966236', '#6A4123'], near: ['#6E4426', '#D09455', '#B0753F', '#7E4F2A'], apron: ['#45291A', '#1F1209'] },
         snooker: { far: ['#2E1108', '#642B19', '#4C1D10', '#2A1007'], near: ['#3A160B', '#7A3520', '#5E2414', '#34140A'], apron: ['#2A0E06', '#120502'] },
     };
+    // Pocket caps over the rail's cut-out (the user's references, 2026-11-27): pool's leather, snooker's brass fall.
+    //   cap, curl: the plate and its rolled lip; seam: its edge on the wood; lip: the lit roll; drop: the liner's bands down the hole
+    const PG_POCKET_CAP = {
+        pool: { cap: '#7A4E2C', curl: '#A87349', seam: '#2A170C', lip: 'rgba(255, 214, 170, 0.55)', drop: ['#36231A', '#1A110B', '#090605'] },
+        snooker: { cap: '#9C8559', curl: '#CDB585', seam: '#2A1A0C', lip: 'rgba(255, 240, 205, 0.6)', drop: ['#332A1E', '#17120C', '#080706'] },
+    };
+    const PG_FALL_W = 0.4;             // the fall plate's width round the pocket's body, ·r
     const PG_BEVEL = 5, PG_BEVEL_A = { N: 0.34, W: 0.28, S: 0.2, E: 0.16 };
     // Pool's sights, mother-of-pearl in a brass ring: [dx, dy, r, colour, alpha] (ring, pearl,
     // a blue-green and a pink tint, a highlight).
@@ -513,26 +527,17 @@
         const TZ = pgRailZ(cfg), OX = HL + CU + RL, OY = HW + CU + RL, IX = HL + CU, IY = HW + CU;
         const eye = view.eye, wood = PG_WOOD[cfg.game] || PG_WOOD.pool;
 
-        // 1. The room, shadow, apron, felt.
+        // 1. The room, shadow, felt (the apron after the rails, step 3).
         if (eye) pgDrawRoomLayer(ctx, view, cfg, mk);
         const shadow = view.ortho ? P(pgRect(OX + 4, OY + 4, -1).map(p => [p[0], p[1] - 12, p[2]])) : P(pgRect(OX + 30, OY + 30, -90));
         ctx.save();
         if ('filter' in ctx) ctx.filter = 'blur(9px)';
         pgFill(ctx, [shadow], '#000000', 0.55);
         ctx.restore();
-        if (eye) {
-            const lo = -46;
-            [[OX, -OY, OX, OY, eye[0] > OX], [-OX, -OY, -OX, OY, eye[0] < -OX], [-OX, OY, OX, OY, eye[1] > OY], [-OX, -OY, OX, -OY, eye[1] < -OY]].forEach(([x0, y0, x1, y1, seen]) => {
-                if (!seen) return;
-                const a = [x0, y0, TZ], b = [x1, y1, TZ], face = P([a, b, [x1, y1, lo], [x0, y0, lo]]), g = pgBandGradient(ctx, view, a, b, 0, 0, lo);
-                if (g) wood.apron.forEach((c, i) => g.addColorStop(i, c));
-                pgFill(ctx, [face], g || wood.apron[1]);
-                pgGrain(ctx, view, mk, face, a, b);
-            });
-        }
         const felt = P(pgRect(IX, IY, 0));
-        if (felt.length >= 3) {
-            // Radial at (50%, 46%), r 62% of the felt's bounding box.
+        // Radial at (50%, 46%), r 62% of the felt's bounding box (again through a pocket's cut, step 4).
+        const drawFelt = () => {
+            if (felt.length < 3) return;
             const b = pgBounds([felt]);
             ctx.save();
             ctx.beginPath(); pgTrace(ctx, felt);
@@ -543,10 +548,11 @@
             ctx.fillStyle = g;
             ctx.fill();
             ctx.restore();
-        }
+        };
+        drawFelt();
 
         // 2. The cushions' shadows on the cloth, rail inner faces, jaw faces, nose faces.
-        const cush = pgCushions(cfg);
+        const cush = pgCushions(cfg, table);
         pgDrawCushionShadows(ctx, view, cfg, cush, pgLight(mat));
         if (eye) {
             const ri = [];
@@ -594,74 +600,182 @@
             PG_SIGHT.forEach(([dx, dy, r, col, a]) => pgFill(ctx, at.map(([x, y]) => P(pgCirc(x + dx, y + dy, r, TZ + 0.1, 12))), col, a));
         }
         pgDrawMarks(ctx, view, pgMarks(table));
-
-        // 4. Pockets: a leather rim clamped to the rail's inner edge, then the hole.
-        const rims = table.pockets.map(p => P(pgCirc(p.x, p.y, p.r + 7, TZ + 0.2, 36).map(q => {
-            if (Math.abs(q[0]) < IX && Math.abs(q[1]) < IY) {
-                const dx = IX - Math.abs(q[0]), dy = IY - Math.abs(q[1]);
-                return dx < dy ? [Math.sign(q[0]) * IX, q[1], q[2]] : [q[0], Math.sign(q[1]) * IY, q[2]];
-            }
-            return q;
-        })));
-        pgFill(ctx, rims, '#1A1410');
-        const bandZ = [[TZ + 0.3, 0], [0, -22], [-22, PG_POCKET_FLOOR]];
-        const bandRGB = ['#563C29', '#302117', '#150F0B'];
-        const lit = [0.55, 0.8, 1.08];
-        const NF = 30;
-        // In 3D (pool and snooker): a pocket's lip is at rail height only over the rail and
-        // drops to the felt across the gap; the wall's top band shows only over the rail.
-        // The cushions are then redrawn in front of the holes.
+        // The aprons (the rails' outer sides, turned to the eye): last, as nothing on the table is in front of them. Drawn
+        // first, the cloth and cushions hidden behind the rail painted over them from a low eye outside it (the user's
+        // sweep, 2026-11-27).
         if (eye) {
-            const over = (x, y) => Math.abs(x) > IX || Math.abs(y) > IY;
+            const lo = -46;
+            [[OX, -OY, OX, OY, eye[0] > OX], [-OX, -OY, -OX, OY, eye[0] < -OX], [-OX, OY, OX, OY, eye[1] > OY], [-OX, -OY, OX, -OY, eye[1] < -OY]].forEach(([x0, y0, x1, y1, seen]) => {
+                if (!seen) return;
+                const a = [x0, y0, TZ], b = [x1, y1, TZ], face = P([a, b, [x1, y1, lo], [x0, y0, lo]]), g = pgBandGradient(ctx, view, a, b, 0, 0, lo);
+                if (g) wood.apron.forEach((c, i) => g.addColorStop(i, c));
+                pgFill(ctx, [face], g || wood.apron[1]);
+                pgGrain(ctx, view, mk, face, a, b);
+            });
+        }
+
+        // 4. Pockets. Each is its body (pgPocketBody: the drop carried back under the rail), wrapped on the rail by the
+        // fall plate (seam, plate, rolled lip), then the opening (the user, 2026-11-27: real pockets, refs).
+        const capK = pgK(cfg), cap = PG_POCKET_CAP[cfg.game] || PG_POCKET_CAP.pool;
+        // Points cut back to the rail (outside the cloth's inner edge): those over the cloth go to the nearest edge,
+        // through the corner when that edge changes (a straight cut across it drew a "D", the user, 2026-11-27).
+        // chord: cut straight across the corner instead (the opening from behind, which covers the cushions' corner).
+        const clampRail = (pts, p, z, chord) => {
+            const out = [], cx = Math.sign(p.x) * IX, cy = Math.sign(p.y) * IY, corner = !chord && p.kind === 'corner';
+            let edge = null;
+            pts.forEach(([x, y]) => {
+                if (Math.abs(x) > IX || Math.abs(y) > IY) { out.push([x, y, z]); edge = null; return; }
+                const e = IX - Math.abs(x) < IY - Math.abs(y) ? 'x' : 'y';
+                if (corner && edge && e !== edge) out.push([cx, cy, z]);
+                out.push(e === 'x' ? [Math.sign(x) * IX, y, z] : [x, Math.sign(y) * IY, z]);
+                edge = e;
+            });
+            return out;
+        };
+        const at = (pts, z) => pts.map(([x, y]) => [x, y, z]);
+        const fall = p => PG_FALL_W * p.r;
+        const plates = table.pockets.map(p => P(clampRail(pgPocketBody(cfg, p, fall(p), 48), p, TZ + 0.2)));
+        pgFill(ctx, table.pockets.map(p => P(clampRail(pgPocketBody(cfg, p, fall(p) + 1.2 * capK, 48), p, TZ + 0.15))), cap.seam);
+        pgFill(ctx, plates, cap.cap);
+        // The rolled lip round the opening, inside the plate (without clip, none).
+        if (typeof ctx.clip === 'function') table.pockets.forEach((p, i) => {
+            if (plates[i].length < 3) return;
+            ctx.save(); ctx.beginPath(); pgTrace(ctx, plates[i]); ctx.clip();
+            pgFill(ctx, [P(clampRail(pgPocketBody(cfg, p, 3.5 * capK, 48), p, TZ + 0.25))], cap.curl);
+            ctx.restore();
+        });
+        const bandZ = [[TZ + 0.3, 0], [0, -22], [-22, PG_POCKET_FLOOR]];
+        // The walls: the fall's liner curling in, then the drop, then the bag; dark below the lip, so from the table
+        // the back wall reads as the pocket's inside, not a varnished barrel (the user, 2026-11-27).
+        const bandRGB = cap.drop;
+        const lit = [0.55, 0.8, 1.08];
+        // In 3D (pool and snooker): the opening's edge is at rail height over the rail and drops to the felt across the
+        // mouth; the wall's top band shows only over the rail. The cushions are then redrawn in front of the openings.
+        if (eye) {
+            const over = (x, y) => Math.abs(x) > IX || Math.abs(y) > IY, holes = [], backs = [];
+            // A cushion face turned toward the eye (its outward normal: away from the cushion's middle), and a face as drawn.
+            const seen = (c, a, b) => {
+                const cx = c.top.reduce((s, t) => s + t[0], 0) / c.top.length, cy = c.top.reduce((s, t) => s + t[1], 0) / c.top.length;
+                const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+                let nx = b[1] - a[1], ny = a[0] - b[0];
+                if ((mx - cx) * nx + (my - cy) * ny < 0) { nx = -nx; ny = -ny; }
+                return (eye[0] - mx) * nx + (eye[1] - my) * ny > 0;
+            };
+            const face = (a, b) => P([a, b, [b[0], b[1], 0], [a[0], a[1], 0]]);
+            const faces = () => {
+                const jaws = [], noses = [];
+                cush.forEach(c => {
+                    c.ends.forEach(([a, b]) => { if (seen(c, a, b)) jaws.push(face(a, b)); });
+                    if (seen(c, c.nose[0], c.nose[1])) noses.push(face(c.nose[0], c.nose[1]));
+                });
+                pgFill(ctx, jaws, mat.jaw);
+                pgFill(ctx, noses, mat.nose);
+            };
             table.pockets.forEach(p => {
-                const rim = [];
-                for (let i = 0; i < 72; i++) {
-                    const t0 = i / 72 * Math.PI * 2, t1 = (i + 1) / 72 * Math.PI * 2;
-                    const x0 = p.x + p.r * Math.cos(t0), y0 = p.y + p.r * Math.sin(t0), x1 = p.x + p.r * Math.cos(t1), y1 = p.y + p.r * Math.sin(t1);
-                    const o0 = over(x0, y0), o1 = over(x1, y1);
-                    rim.push([x0, y0, o0 ? TZ + 0.3 : 0.05]);
-                    if (o0 !== o1) { const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2; rim.push([xm, ym, o0 ? TZ + 0.3 : 0.05], [xm, ym, o1 ? TZ + 0.3 : 0.05]); }
+                // The opening is the pocket's body (the user, 2026-11-27: a round hole with a fall sloping behind it read as a
+                // sink gutter, the pocket gone; the long pockets back).
+                const body = pgPocketBody(cfg, p, 0, 72), nb = body.length;
+                // Behind: the eye outside the table beyond a rail this pocket's body cuts (a corner's both, a middle's own).
+                // Tested on the hole, a hole just inside the rail's edge was drawn over the rail in front of it (the user,
+                // 2026-11-27: "they clip through").
+                const behind = (p.kind === 'corner' && Math.abs(eye[0]) > IX && eye[0] * p.x > 0) || (Math.abs(eye[1]) > IY && eye[1] * p.y > 0 && (p.kind === 'corner' || Math.abs(p.y) + p.r > IY));
+                // lid: the rail top's opening, closed along the inner edge (straight across the corner from behind, for the
+                // no-clip fallback); mouth: the loop dropping to the felt across the mouth.
+                const lid = clampRail(body, p, TZ + 0.3, behind), mouth = [];
+                for (let i = 0; i < nb; i++) {
+                    const [x0, y0] = body[i], [x1, y1] = body[(i + 1) % nb], o0 = over(x0, y0), o1 = over(x1, y1);
+                    mouth.push([x0, y0, o0 ? TZ + 0.3 : 0.05]);
+                    if (o0 !== o1) { const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2; mouth.push([xm, ym, o0 ? TZ + 0.3 : 0.05], [xm, ym, o1 ? TZ + 0.3 : 0.05]); }
                 }
-                const ap = P(rim);
-                if (ap.length < 3) return;
-                pgFill(ctx, [ap], '#040303');
-                // The opening need not be convex, so this uses clip(); without it, the opening alone.
-                if (typeof ctx.clip !== 'function') return;
+                // The opening is both: seen from the side the mouth's felt edge rises above the lid's inner edge, and the
+                // lid alone left a D of the cap across the mouth (the user, 2026-11-27). From behind, a sightline through the
+                // body at rail height lands in it up to its far felt edge, and on the bed past it: the mouth cut to that
+                // outline (the lid there drew a chord nothing makes; low, it shrinks to the rail's cut, no wedges).
+                const aps = (behind ? [P(mouth)] : [P(lid), P(mouth)]).filter(a => a.length >= 3);
+                if (!aps.length) return;
+                const cut = behind ? P(at(body, TZ + 0.3)) : null;
+                if (!behind) holes.push(...aps);
+                else if (cut.length >= 3) backs.push({ p, cut, ap: aps[0] });
+                // The opening need not be convex, so this uses clip(); without it, the rail's cut alone (from behind).
+                if (typeof ctx.clip !== 'function') { pgFill(ctx, behind ? [P(lid)] : aps, '#040303'); return; }
                 ctx.save();
-                ctx.beginPath(); pgTrace(ctx, ap); ctx.clip();
-                const walls = [[], [], [], [], [], [], [], [], []], cl = Math.hypot(p.x, p.y) || 1;
-                for (let k = 0; k < NF; k++) {
-                    const a0 = k / NF * Math.PI * 2, a1 = (k + 1) / NF * Math.PI * 2, am = (a0 + a1) / 2;
-                    const nx = -Math.cos(am), ny = -Math.sin(am), px = p.x + p.r * Math.cos(am), py = p.y + p.r * Math.sin(am);
+                if (cut && cut.length >= 3) {
+                    // Through the rail's cut: the bed and the cushions past the hole (a shading trick here drew a dark
+                    // blob over the cloth up close, the user's sweep, 2026-11-27); not the bed under the body, the drop.
+                    ctx.beginPath(); pgTrace(ctx, cut); ctx.clip();
+                    const under = P(at(body, 0));
+                    pgFill(ctx, [cut], '#040303');
+                    ctx.save();
+                    if (under.length >= 3) { ctx.beginPath(); ctx.rect(0, 0, view.W, view.H); pgTrace(ctx, under.slice().reverse()); ctx.clip('evenodd'); }
+                    drawFelt();
+                    ctx.restore();
+                    faces();
+                    pgDrawCushionTops(ctx, view, cfg, cush, mat);
+                }
+                pgFill(ctx, aps, '#040303');
+                ctx.beginPath(); aps.forEach(a => pgTrace(ctx, a)); ctx.clip();
+                // The walls round the body (inward faces turned to the eye), and the cloth rolling over the bed's edge into
+                // the drop where the body crosses the bed.
+                const cloth = [[], [], []], CF = 0.45 * cfg.ballR, cl = Math.hypot(p.x, p.y) || 1;
+                const walls = [[], [], [], [], [], [], [], [], []];
+                for (let i = 0; i < nb; i++) {
+                    const [x0, y0] = body[i], [x1, y1] = body[(i + 1) % nb], l = Math.hypot(x1 - x0, y1 - y0) || 1;
+                    const nx = -(y1 - y0) / l, ny = (x1 - x0) / l, px = (x0 + x1) / 2, py = (y0 + y1) / 2;
                     if ((eye[0] - px) * nx + (eye[1] - py) * ny <= 0) continue;
-                    const face = Math.max(0, nx * (-p.x / cl) + ny * (-p.y / cl)), bi = face > 0.66 ? 2 : face > 0.25 ? 1 : 0;
-                    const x0 = p.x + p.r * Math.cos(a0), y0 = p.y + p.r * Math.sin(a0), x1 = p.x + p.r * Math.cos(a1), y1 = p.y + p.r * Math.sin(a1);
+                    const lt = Math.max(0, nx * (-p.x / cl) + ny * (-p.y / cl)), bi = lt > 0.66 ? 2 : lt > 0.25 ? 1 : 0;
                     bandZ.forEach((bz, band) => {
-                        if (band === 0 && !over(px, py)) return;              // no rail wall above the felt across the gap
+                        if (band === 0 && !over(px, py)) return;              // no rail wall above the felt across the mouth
                         walls[band * 3 + bi].push(P([[x0, y0, bz[0]], [x1, y1, bz[0]], [x1, y1, bz[1]], [x0, y0, bz[1]]]));
                     });
+                    if (!over(px, py)) cloth[bi].push(P([[x0, y0, 0.05], [x1, y1, 0.05], [x1, y1, -CF], [x0, y0, -CF]]));
                 }
                 walls.forEach((w, i) => { if (w.length) pgFill(ctx, w, pgRgb(bandRGB[Math.floor(i / 3)], lit[i % 3])); });
-                pgFill(ctx, [P(pgCirc(p.x, p.y, p.r * 0.86, PG_POCKET_FLOOR, 36))], '#1E140E');
-                pgFill(ctx, [P(pgCirc(p.x, p.y, p.r * 0.66, PG_POCKET_FLOOR, 36))], '#020303');
+                pgFill(ctx, [P(at(pgPocketBody(cfg, p, -0.14 * p.r, 36), PG_POCKET_FLOOR))], '#1E140E');
+                pgFill(ctx, [P(at(pgPocketBody(cfg, p, -0.34 * p.r, 36), PG_POCKET_FLOOR))], '#020303');
+                cloth.forEach((c, i) => { if (c.length) pgFill(ctx, c, pgRgb(mat.cushion, [0.55, 0.7, 0.85][i])); });
+                ctx.restore();
+                // The rolled lip where the fall turns into the drop, over the rail only.
+                ctx.beginPath();
+                let pen = false;
+                for (let i = 0; i <= nb; i++) {
+                    const [x, y] = body[i % nb], s = over(x, y) && pcProject(view, [x, y, TZ + 0.3]);
+                    if (s) { if (pen) ctx.lineTo(s[0], s[1]); else ctx.moveTo(s[0], s[1]); }
+                    pen = !!s;
+                }
+                ctx.strokeStyle = cap.lip; ctx.lineWidth = 1.4; ctx.stroke();
+            });
+            // The cushions in front of the openings, and only there (clipped to them): elsewhere step 2–3 drew them in
+            // order. Only faces turned toward the eye (back faces painted over the rail, the user, 2026-11-27).
+            ctx.save();
+            if (typeof ctx.clip === 'function') { ctx.beginPath(); holes.forEach(h => pgTrace(ctx, h)); ctx.clip(); }
+            faces();
+            pgDrawCushionTops(ctx, view, cfg, cush, mat);
+            ctx.restore();
+            // From behind: only the jaw faces over the drop, where they turn down into it. No tops: drawn there they laid
+            // the cloth flat across the hole (the user, 2026-11-27).
+            if (typeof ctx.clip === 'function') backs.forEach(({ p, cut, ap }) => {
+                const hang = [];
+                cush.forEach(c => c.ends.forEach(([a, b]) => {
+                    if (seen(c, a, b) && Math.hypot((a[0] + b[0]) / 2 - p.x, (a[1] + b[1]) / 2 - p.y) < p.r) hang.push(face(a, b));
+                }));
+                if (!hang.length) return;
+                ctx.save();
+                ctx.beginPath(); pgTrace(ctx, cut); ctx.clip();
+                ctx.beginPath(); pgTrace(ctx, ap); ctx.clip();
+                pgFill(ctx, hang, mat.jaw);
                 ctx.restore();
             });
-            const jaws = [];
-            cush.forEach(c => c.ends.forEach(([p, q]) => jaws.push(P([p, q, [q[0], q[1], 0], [p[0], p[1], 0]]))));
-            pgFill(ctx, jaws, mat.jaw);
-            pgFill(ctx, cush.map(c => P([c.nose[0], c.nose[1], [c.nose[1][0], c.nose[1][1], 0], [c.nose[0][0], c.nose[0][1], 0]])), mat.nose);
-            pgDrawCushionTops(ctx, view, cfg, cush, mat);
             pgDrawAir(ctx, view, P(pgRect(OX, OY, TZ)), mk);
             return;
         }
-        // 2D: the cushions' playing edge, then the hole from above, its floor inside it.
+        // 2D: the cushions' playing edge, then the opening from above, its floor inside it.
         pgDrawCushionEdges(ctx, view, cfg, cush);
         table.pockets.forEach(p => {
-            const aperture = P(pgCirc(p.x, p.y, p.r, TZ + 0.3, 36));
+            const aperture = P(at(pgPocketBody(cfg, p, 0, 48), TZ + 0.3));
             if (aperture.length < 3) return;
             pgFill(ctx, [aperture], '#3A281C');
-            pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.86, PG_POCKET_FLOOR, 36)), aperture)], '#1E140E');
-            pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.66, PG_POCKET_FLOOR, 36)), aperture)], '#020303');
+            pgFill(ctx, [pgClipConvex(P(at(pgPocketBody(cfg, p, -0.14 * p.r, 36), PG_POCKET_FLOOR)), aperture)], '#1E140E');
+            pgFill(ctx, [pgClipConvex(P(at(pgPocketBody(cfg, p, -0.34 * p.r, 36), PG_POCKET_FLOOR)), aperture)], '#020303');
         });
     }
 
@@ -1098,11 +1212,13 @@
         // 8. Cue, power ring, called-pocket rings, ball in hand.
         if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
             // The shooter's cue (scene.cue, else Standard) at the game's scale: the tip off the
-            // ball by the pull-back, the butt rising a tenth of the length.
+            // ball by the pull-back, the butt rising a tenth of the length; near a rail, raised over it on a fixed line.
             const a = scene.aim, d = [Math.cos(a.angle), Math.sin(a.angle)], D = 2 * R, len = (PQ_GAME[theme.game] || PQ_GAME.pool)[0] * D;
             const gap = (a.gap !== undefined ? a.gap : 8 + (a.power || 0) * 1.1) * K;
-            const ax = pcNorm([-d[0], -d[1], 0.1]);
-            const axis = s => [cue.x - d[0] * (R + gap + s * len), cue.y - d[1] * (R + gap + s * len), R + 1.5 * K + 0.1 * s * len];
+            const m = pcCueRise([cue.x, cue.y], a.angle, cfg), slope = PC_CUE_SLOPE, fix = Math.min(1, (m - slope) / 0.05);
+            const ax = pcNorm([-d[0], -d[1], m]);
+            const axis = s => [cue.x - d[0] * (R + gap + s * len), cue.y - d[1] * (R + gap + s * len),
+                R + 1.5 * K + slope * s * len + (m - slope) * (gap + s * len) + fix * slope * gap];
             const toEye = p => (view.ortho ? [0, 0, 1] : pcNorm(pcSub(view.eye, p)));
             // The silhouette's sides, square to the rod and the line of sight.
             const side = p => pcNorm(pcCross(ax, toEye(p)));

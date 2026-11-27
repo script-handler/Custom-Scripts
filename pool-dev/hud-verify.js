@@ -64,9 +64,17 @@ const vm = o => P.phModel(game(o));
     ok('main: no gauge in 3D (the cue-ball ring shows the power)', !m.gauge.show && !vm({ dragging: true, power: 40 }).gauge.show);
     // The Eye view under the slider: lit while on, greyed with no target or no peeks (a paid shot toggles free).
     const ev = e => vm({ eye: e }).eye;
-    ok('eye: a target and peeks left is pressable, its badge and label count them', ev({ can: true, left: 3 }).enabled && ev({ can: true, left: 3 }).left === 3 && ev({ can: true, left: 3 }).label === 'Target view (X) · 3 peeks left' && ev({ can: true, left: 1 }).label.endsWith('1 peek left'));
+    ok('eye: a target and peeks left is pressable, its badge and label count them', ev({ can: true, left: 3 }).enabled && ev({ can: true, left: 3 }).left === 3 && ev({ can: true, left: 3 }).label === 'Target view (X) · 3 peeks left · 0 of 5 pots to the next' && ev({ can: true, left: 1, run: 2 }).label.endsWith('1 peek left · 2 of 5 pots to the next'));
+    ok('eye: the ring carries the run (0–4) and its last flash or dimming', ev({ run: 3 }).run === 3 && ev({ run: 9 }).run === 4 && ev({}).fx === null &&
+        ev({ fx: { id: 4, kind: 'grant', from: 5, plus: true } }).fx.plus && ev({ fx: { id: 5, kind: 'break', from: 3 } }).fx.from === 3);
+    ok('eye: both buttons carry the five-segment ring and the +1', (P.phViewHTML(false).match(/class="ph-seg"/g) || []).length === 10 && (P.phViewHTML(false).match(/ph-eye-plus/g) || []).length === 2);
     ok('eye: greyed with no peeks, or no target; a paid shot or a lit button stays pressable',
         !ev({ can: true, left: 0 }).enabled && !ev({ can: false, left: 3 }).enabled && ev({ can: true, left: 0, paid: true }).enabled && ev({ on: true, left: 0 }).on && ev({ on: true, left: 0 }).enabled);
+    ok('eye: in 2D it rides in the 2D / 3D switch (no slider); in 3D it sits under the slider',
+        vm({ camera: '2d' }).eye.solo && !vm({ camera: '2d' }).lean.show && vm({}).eye.show && !vm({}).eye.solo &&
+        /data-ph="cam3d"[\s\S]*?<\/button><button[^>]*data-ph="eye2"[^>]*hidden>[\s\S]*?data-ph="eye2n"[\s\S]*?<\/button><\/div>/.test(P.phViewHTML(false)));
+    ok('…not with the ball in hand, while balls run, or under the sheet',
+        !vm({ camera: '2d', phase: 'bih', frame: { ballInHand: 'anywhere' }, bih: { valid: true } }).eye.show && !vm({ camera: '2d', phase: 'moving' }).eye.solo && !vm({ camera: '2d', sheet: { open: true } }).eye.solo);
     ok('eye: the button sits in the View rail, under its label', [false, true].every(mx => /data-ph="leanv"><\/span><button[^>]*data-ph="eye"[^>]*>[\s\S]*?data-ph="eyen"[\s\S]*?<\/button><\/div>/.test(P.phViewHTML(mx))));
     const trk = m.cards[0].group;
     ok('main: the tracker lists the seven solids, potted ones dimmed', trk.length === 7 && trk.filter(d => d.down).map(d => d.id).join() === '2,5', trk.filter(d => d.down).map(d => d.id).join());

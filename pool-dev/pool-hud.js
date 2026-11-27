@@ -65,6 +65,13 @@
     const PH_SNK_SHORT = { 'YOUR CHOICE': 'CHOICE', 'BALL IN HAND': 'IN HAND', CHOOSING: 'CHOOSING' };
     const PH_CLOCK_HOT = 5;          // seconds left when the clock goes hot
     const PH_POWER_HOT = 85;         // % at which the gauge goes hot
+    const PH_PEEK_RUN = 5;           // the Eye ring's segments: pots in a row without a peek that earn one
+    // The ring round the Eye button: five arcs with gaps, and the "+1" that floats off it.
+    const PH_EYE_RING = (() => {
+        const p = a => (20 + 18 * Math.cos(a)).toFixed(2) + ' ' + (20 + 18 * Math.sin(a)).toFixed(2), D = Math.PI / 180, n = PH_PEEK_RUN;
+        const seg = i => '<path class="ph-seg" d="M' + p((-90 + i * 360 / n + 6) * D) + ' A18 18 0 0 1 ' + p((-90 + (i + 1) * 360 / n - 6) * D) + '"></path>';
+        return '<svg class="ph-eye-ring" viewBox="0 0 40 40" aria-hidden="true">' + Array.from({ length: n }, (_, i) => seg(i)).join('') + '</svg><span class="ph-eye-plus" aria-hidden="true">+1</span>';
+    })();
     // The camera's lean stops (pool-camera.js PC_LEAN_AT): V cycles them, the rail's dots jump to them.
     const PH_LEAN_STOPS = [0, 45, 100], PH_LEAN_NAMES = ['Cue', 'Stand', 'High'];
     const phLeanStop = v => { let b = 0; PH_LEAN_STOPS.forEach((s, i) => { if (Math.abs(s - v) < Math.abs(PH_LEAN_STOPS[b] - v)) b = i; }); return b; };
@@ -226,10 +233,15 @@
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
             // The Eye view under the slider: lit while on, greyed with no target or no peeks left.
+            // In 2D it rides in the 2D / 3D switch (solo); pressed, the view swings up into 3D behind the target.
             eye: (() => {
                 const e = g.eye || {}, left = Math.max(0, e.left || 0), on = !!e.on;
                 const enabled = on || (!!e.can && (!!e.paid || left > 0));
-                return { on, left, enabled, label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left' };
+                const show = !over && !moving && !sheetOpen && !bih, solo = show && !is3d;
+                // The ring: pots in a row without a peek (of PH_PEEK_RUN), and its last flash (+1) or dimming.
+                const run = Math.max(0, Math.min(PH_PEEK_RUN - 1, e.run || 0)), fx = e.fx && e.fx.id ? { id: e.fx.id, kind: e.fx.kind, from: e.fx.from, plus: !!e.fx.plus } : null;
+                return { show, solo, on, left, enabled, run, fx,
+                    label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left · ' + run + ' of ' + PH_PEEK_RUN + ' pots to the next' };
             })(),
             // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
@@ -433,7 +445,7 @@
             if (g.handoff) vm.toast.sub = who + ' chooses how play continues';
         }
         // While the choice is open the lean slider steps aside for the toast's buttons.
-        if (g.phase === 'choice') vm.lean = Object.assign({}, vm.lean, { show: false });
+        if (g.phase === 'choice') { vm.lean = Object.assign({}, vm.lean, { show: false }); vm.eye = Object.assign({}, vm.eye, { show: false, solo: false }); }
         const other = 3 - seat;
         vm.concede = g.confirm && seat ? { show: true, text: phWins(g.names[other]) + ' ' + st.scores[other] + '–' + st.scores[seat] } : { show: false };
         return vm;
@@ -570,7 +582,9 @@
         const mini = pad('data-ph-call');
         return '<div class="ph-view" data-ph="view"><canvas class="ph-canvas" data-ph="canvas"></canvas><div class="ph-layer">' +
             '<div class="ph-cam ph-glass" data-ph="cam"><button type="button" class="ph-label" data-ph="cam2d" aria-pressed="false">' + PH_ICON.d2 + '<span data-ph="cam2dl">2D</span></button>' +
-            '<button type="button" class="ph-label" data-ph="cam3d" aria-pressed="true">' + PH_ICON.d3 + '<span data-ph="cam3dl">3D</span></button></div>' +
+            '<button type="button" class="ph-label" data-ph="cam3d" aria-pressed="true">' + PH_ICON.d3 + '<span data-ph="cam3dl">3D</span></button>' +
+            // 2D's Eye button: up into 3D behind the target ball.
+            '<button type="button" class="ph-label ph-cam-eye" data-ph="eye2" aria-pressed="false" title="Target view (X)" hidden>' + PH_ICON.eye + PH_EYE_RING + '<span class="ph-eye-n ph-num" data-ph="eye2n"></span></button></div>' +
             '<div class="ph-pill ph-glass" data-ph="pill"><span class="ph-pill-dot"></span><span data-ph="pillt"></span></div>' +
             '<div class="ph-toast ph-glass" role="status" data-ph="toast" hidden><div class="ph-toast-row"><span class="ph-toast-icon" data-ph="toasti"></span>' +
             '<span class="ph-toast-text"><span class="ph-toast-title" data-ph="toastt"></span><span class="ph-toast-sub" data-ph="toasts"></span></span></div>' +
@@ -581,7 +595,7 @@
             PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
             '</div><span class="ph-lean-v" data-ph="leanv"></span>' +
             // The Eye view: behind the target ball, X; the badge is the peeks left.
-            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
+            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + PH_EYE_RING + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -728,7 +742,7 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'eye2', 'eye2n', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
             'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
@@ -752,6 +766,7 @@
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
         PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
         hud.eye.addEventListener('click', () => fire('eye'));
+        hud.eye2.addEventListener('click', () => fire('eye'));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -1073,6 +1088,7 @@
         if (cq.show) s('concede.text', cq.text, v => { hud.cdlgt.textContent = v; });
 
         s('lean.show', vm.lean.show, v => phShow(hud.lean, v));
+        s('eye.solo', !!vm.eye.solo, v => phShow(hud.eye2, v));
         s('lean.value', vm.lean.value, v => {
             if (+hud.leani.value !== v) hud.leani.value = v;
             hud.leanf.style.height = v + '%';
@@ -1083,10 +1099,30 @@
             hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
         }));
 
-        s('eye.on', vm.eye.on, v => { hud.eye.classList.toggle('is-on', v); hud.eye.setAttribute('aria-pressed', v ? 'true' : 'false'); });
-        s('eye.enabled', vm.eye.enabled, v => { hud.eye.classList.toggle('is-off', !v); hud.eye.setAttribute('aria-disabled', v ? 'false' : 'true'); });
-        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = String(v); });
-        s('eye.label', vm.eye.label, v => hud.eye.setAttribute('aria-label', v));
+        // The Eye button: under the slider (3D) and in the 2D / 3D switch (2D), one state.
+        const eyes = [hud.eye, hud.eye2];
+        s('eye.on', vm.eye.on, v => eyes.forEach(b => { b.classList.toggle('is-on', v); b.setAttribute('aria-pressed', v ? 'true' : 'false'); }));
+        s('eye.enabled', vm.eye.enabled, v => eyes.forEach(b => { b.classList.toggle('is-off', !v); b.setAttribute('aria-disabled', v ? 'false' : 'true'); }));
+        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = hud.eye2n.textContent = String(v); });
+        s('eye.label', vm.eye.label, v => eyes.forEach(b => b.setAttribute('aria-label', v)));
+        // The ring: the run's segments lit; a new event flashes them all away (+1) or dims the lit ones, once.
+        const ring = n => eyes.forEach(b => b.querySelectorAll('.ph-seg').forEach((p, i) => p.classList.toggle('is-lit', i < n)));
+        hud.eyeRun = vm.eye.run;
+        s('eye.run', vm.eye.run, v => { if (!hud.eyeFxT) ring(v); });
+        const fx = vm.eye.fx, fxId = fx ? fx.id : 0;
+        if (hud.eyeFxSeen === undefined) hud.eyeFxSeen = fxId;      // a fresh HUD never replays an old one
+        else if (fxId > hud.eyeFxSeen) {
+            hud.eyeFxSeen = fxId;
+            const cls = ['is-grant', 'is-break', 'is-plus'];
+            ring(fx.kind === 'grant' ? PH_PEEK_RUN : fx.from);
+            eyes.forEach(b => {
+                b.classList.remove(...cls); void b.offsetWidth;
+                b.classList.add(fx.kind === 'grant' ? 'is-grant' : 'is-break');
+                if (fx.plus) b.classList.add('is-plus');
+            });
+            clearTimeout(hud.eyeFxT);
+            hud.eyeFxT = setTimeout(() => { hud.eyeFxT = 0; eyes.forEach(b => b.classList.remove(...cls)); ring(hud.eyeRun); }, 1200);
+        }
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });

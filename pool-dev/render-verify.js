@@ -78,8 +78,16 @@ function designCamera(mode, cue, aimDeg, lean) {
         const want = H / 2 + P.PC_CHASE.drop[i] * H;
         ok(['Cue', 'Stand', 'High'][i] + ' stop: the cue ball sits on the centre line, ' + P.PC_CHASE.drop[i] + '·H below the centre', Math.abs(at[0] - W / 2) < 1e-9 && Math.abs(at[1] - want) < 0.5, at[1].toFixed(1) + ' vs ' + want.toFixed(1));
     });
+    // Bridging off the cushion (the user, 2026-11-27): near a rail the cue clears it and the eye stays over the cue.
+    [cfg, scfg].filter(Boolean).forEach(c => {
+        const R = c.ballR, el = (cue, a) => { const p = P.pcChase(cue, a, 0, W, H, c); return Math.atan2(p.eye[2] - R, Math.hypot(p.eye[0] - cue[0], p.eye[1] - cue[1])); };
+        const IX = c.halfLength + c.cushionWidth, frozen = [-(c.halfLength - R), 40], open = [0, 0];
+        const m = P.pcCueRise(frozen, 0, c), tB = IX + frozen[0] + P.PC_BRIDGE.back * R;
+        ok((c.game || 'pool') + ': frozen on the rail the cue rests over it, ' + P.PC_BRIDGE.up + 'R above the top', Math.abs(R + 1.5 * R / 14 + m * (tB - R) - (P.pcRailTop(c) + P.PC_BRIDGE.up * R)) < 1e-9 && m > P.PC_CUE_SLOPE, m.toFixed(3));
+        ok((c.game || 'pool') + ': …the eye rises over the cue, and mid-table nothing changes', Math.abs(el(frozen, 0) - Math.atan(m) - P.PC_EYE_OVER) < 1e-9 && P.pcCueRise(open, 0, c) === P.PC_CUE_SLOPE && Math.abs(el(open, 0) - P.PC_CHASE.phi[0] * Math.PI / 180) < 1e-9);
+    });
     {
-        const R = cfg.ballR, cueStop = P.pcChase([0, 0], 0, 0, W, H, cfg), cs = P.pcProject(P.pcView(cueStop), [0, 0, R]);
+        const R = cfg.ballR, cueStop = P.pcChase([0, 0], 0, 0, W, H, cfg), cs =P.pcProject(P.pcView(cueStop), [0, 0, R]);
         ok('Cue stop: at least a quarter of the height is left below the cue ball for the cue', H - cs[1] >= 0.25 * H, ((H - cs[1]) / H).toFixed(2) + '·H');
         // The cue's axis at the eye's distance back (pool-render.js: R + 1.5K + 0.1·s past the ball and its 8 K gap).
         const back = Math.hypot(cueStop.eye[0], cueStop.eye[1]), axisZ = R + 1.5 + 0.1 * (back - R - 8);
@@ -524,13 +532,16 @@ head('Snooker table');
     const dIn = frame({ view: so, world: P.psCreateWorld(), zone: 'D' }).px(...at(-330, 0)), dOut = frame({ view: so, world: P.psCreateWorld() }).px(...at(-330, 0));
     ok('ball in hand tints the D in the theme accent', dIn.join() !== dOut.join(), dIn.join(',') + ' vs ' + dOut.join(','));
     const rounded = P.pgCushions(scfg), square = P.pgCushions(cfg);
-    ok('snooker\'s cushions curve into the pockets (each end a 9-point rounded nose and a straight jaw, the design revision 1790749498-5862)',
-       rounded.length === 6 && rounded.every(c => c.ends.length === 18));
+    // Traced from the physics (the pockets rebuilt, 2026-11-27): each end the nose's round, the jaw, then the pocket's
+    // edge back to the rail line, ending on it at rail height.
+    const sT = P.pgRailZ(scfg);
+    ok('snooker\'s cushions curve into the pockets: each end a 9-point round, the jaw, and the pocket\'s edge to the rail',
+       rounded.length === 6 && rounded.every(c => c.ends.length > 18 && [c.top[0], c.top[c.top.length - 1]].every(q => Math.abs(q[2] - sT) < 1e-9)));
     // Pool's are drawn rounded too (the user, 2026-10-15), within a couple of units of the nose colliders.
     const noses = P.ppCreateWorld().table.points.filter(p => p.kind === 'nose'), arcPts = [].concat(...square.map(c => c.top));
     const off = Math.max(...noses.map(n => Math.min(...arcPts.map(q => Math.hypot(q[0] - n.x, q[1] - n.y)))));
-    ok('pool\'s cushion ends are drawn rounded (a 9-point arc into a straight jaw), within 2.5 u of each nose collider',
-       square.length === 6 && square.every(c => c.ends.length === 18 && c.top.length === 20) && noses.length === 12 && off < 2.5, off.toFixed(2) + ' u');
+    ok('pool\'s cushion ends are drawn rounded (a 9-point arc into a straight jaw), within 2.75 u of each nose collider (2.5 before the tighter mouths, 2026-11-27)',
+       square.length === 6 && square.every(c => c.ends.length === 18 && c.top.length === 20) && noses.length === 12 && off < 2.75, off.toFixed(2) + ' u');
     // Since the v3 camera the chase is sized in ball diameters, so snooker's eye sits at its own scale.
     const kE = (P.pcChase([0, 0], 0, 0, W, H, scfg).eye[2] - scfg.ballR) / (P.pcChase([0, 0], 0, 0, W, H, cfg).eye[2] - cfg.ballR);
     ok('the chase camera is sized by the ball on the snooker table; the shadow shrinks with the ball', P.pgK(scfg) < 0.53 && Math.abs(kE - scfg.ballR / cfg.ballR) < 1e-9, kE.toFixed(3));

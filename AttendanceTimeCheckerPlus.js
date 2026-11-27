@@ -3158,16 +3158,14 @@
         halfWidth: 250,
         ballR: 14,
         railWidth: 48,            // cushion + rail, for the off-table fail-safe
-        // Pockets and cushion ends. A jaw runs from a cushion's nose end to its rail end and on to the hole.
+        // Pockets, built from the mouth back (the user, 2026-11-27: real pockets): the hole on the pocket's outward line,
+        // holeW balls wide, its front edge shelf·R behind the mouth; each jaw runs from its nose tangent onto the hole.
+        // A ball drops once its centre is inside the hole.
         cushionWidth: 12,         // nose line to rail line
-        cornerNose: 39,           // nose end, from the corner along each cushion (mouth 39·√2)
-        cornerRailEnd: 24,        // rail end, from the corner, on the rail line (on the hole's edge)
-        sideNose: 34,             // nose end, either side of the side pocket's centre (mouth 68)
-        sideRailEnd: 27,
-        cornerPocketOffset: 4,    // hole centre (±(HL+4), ±(HW+4))
-        cornerPocketR: 29,        // a ball drops once its centre is inside the hole
-        sidePocketOffset: 16,     // hole centre (0, ±(HW+16))
-        sidePocketR: 27,
+        cornerNose: 36,           // nose end, from the corner along each cushion (mouth 36·√2; 39 before: tighter, the user, 2026-11-27)
+        sideNose: 32,             // nose end, either side of the side pocket's centre (mouth 64; 68 before)
+        cornerHoleW: 1.7, cornerShelf: 0.25,     // tuned on pocket-probe.js: takes balls as the old hole did
+        sideHoleW: 1.8, sideShelf: -0.9,
         // Cloth and collisions
         gravity: 3862,            // 9.81 m/s² in table units (1 u = 2.54 mm)
         muSlide: 0.2,             // ball–cloth sliding friction
@@ -3195,6 +3193,27 @@
     // Every collider is a one-sided segment (normal onto the playable side) or
     // a point (nose or jaw tip). Jaws end on the pocket's capture circle, which
     // closes the throat: a ball in it either drops or comes back out.
+    //
+    // A pocket is built from its mouth back, as a real one (the user, 2026-11-27): the hole on the pocket's outward
+    // line u (a corner's diagonal, a middle's normal), holeW balls wide, its front edge shelf·R behind the mouth's
+    // middle; each jaw is the line touching its nose and the hole, so the throat runs into the hole's sides.
+    function ppHole(cfg, kind, sx, sy, mouth) {
+        const R = cfg.ballR, corner = kind === 'corner';
+        const r = (corner ? cfg.cornerHoleW : cfg.sideHoleW) * R, k = (corner ? cfg.cornerShelf : cfg.sideShelf) * R + r;
+        const u = corner ? [sx * Math.SQRT1_2, sy * Math.SQRT1_2] : [0, sy];
+        return { kind, x: (mouth[0] + mouth[2]) / 2 + u[0] * k, y: (mouth[1] + mouth[3]) / 2 + u[1] * k, r, sx, sy, u, mouth, jaws: [] };
+    }
+    // The jaw from a nose (centre cx, cy, radius rc; 0 for a point) onto hole h: the line with the nose on one side and
+    // the hole on the other, the one facing the table rather than off it (o). n: its normal onto the playable side;
+    // a: where it leaves the nose, b: where it meets the hole. Null when the nose reaches the hole.
+    function ppJawLine(cx, cy, rc, h, ox, oy) {
+        const vx = h.x - cx, vy = h.y - cy, L = Math.hypot(vx, vy), k = h.r + rc;
+        if (L <= k) return null;
+        const g = Math.acos(k / L), base = Math.atan2(vy, vx);
+        const n = [base + g, base - g].map(t => [Math.cos(t), Math.sin(t)]).reduce((p, q) => (q[0] * ox + q[1] * oy < p[0] * ox + p[1] * oy ? q : p));
+        return { n, a: [cx + n[0] * rc, cy + n[1] * rc], b: [h.x - n[0] * h.r, h.y - n[1] * h.r] };
+    }
+
     function ppBuildTable(cfg) {
         if (cfg.pocketStyle === 'rounded') return ppBuildRoundedTable(cfg);
         const HL = cfg.halfLength, HW = cfg.halfWidth;
@@ -3206,38 +3225,20 @@
         };
         const addPoint = (x, y, kind) => points.push({ x, y, kind });
 
-        // First intersection of a ray with a circle, or null.
-        const rayCircle = (px, py, dx, dy, cx, cy, r) => {
-            const ox = px - cx, oy = py - cy;
-            const b = ox * dx + oy * dy, c = ox * ox + oy * oy - r * r;
-            const disc = b * b - c;
-            if (disc < 0) return null;
-            const t = -b - Math.sqrt(disc);
-            return t > 0 ? { x: px + dx * t, y: py + dy * t } : null;
-        };
-
-        // A jaw leaves nose point (px,py) toward its rail end (rx,ry) and runs on to the hole.
-        const addJaw = (px, py, rx, ry, pocket, otherX, otherY) => {
-            const l = Math.hypot(rx - px, ry - py), dx = (rx - px) / l, dy = (ry - py) / l;
-            const end = rayCircle(px, py, dx, dy, pocket.x, pocket.y, pocket.r);
-            if (!end) throw new Error('pool table: a jaw misses its pocket; check the pocket settings');
-            // Playable side of the jaw faces the opposite nose point.
-            let nx = -dy, ny = dx;
-            if ((otherX - px) * nx + (otherY - py) * ny < 0) { nx = -nx; ny = -ny; }
-            addSeg(px, py, end.x, end.y, nx, ny, 'jaw');
-            addPoint(end.x, end.y, 'jawEnd');
-            pocket.jaws.push([px, py, end.x, end.y]);
+        // A jaw leaves nose point (px, py) and runs onto the hole; (ox, oy) points off the table.
+        const addJaw = (px, py, ox, oy, pocket) => {
+            const j = ppJawLine(px, py, 0, pocket, ox, oy);
+            if (!j) throw new Error('pool table: a nose reaches its pocket; check the pocket settings');
+            addSeg(px, py, j.b[0], j.b[1], j.n[0], j.n[1], 'jaw');
+            addPoint(j.b[0], j.b[1], 'jawEnd');
+            pocket.jaws.push([px, py, j.b[0], j.b[1]]);
         };
 
         const c = cfg.cornerNose, s = cfg.sideNose;
-        const cr = cfg.cornerRailEnd, sr = cfg.sideRailEnd, CU = cfg.cushionWidth;
 
         // Pocket indices are fixed: TL, top-side, TR, BL, bottom-side, BR (y up: top is +HW).
-        const corner = (sx, sy) => {
-            const k = cfg.cornerPocketOffset;
-            return { kind: 'corner', x: sx * (HL + k), y: sy * (HW + k), r: cfg.cornerPocketR, sx, sy, jaws: [] };
-        };
-        const side = sy => ({ kind: 'side', x: 0, y: sy * (HW + cfg.sidePocketOffset), r: cfg.sidePocketR, sx: 0, sy, jaws: [] });
+        const corner = (sx, sy) => ppHole(cfg, 'corner', sx, sy, [sx * (HL - c), sy * HW, sx * HL, sy * (HW - c)]);
+        const side = sy => ppHole(cfg, 'side', 0, sy, [-s, sy * HW, s, sy * HW]);
         pockets.push(corner(-1, 1), side(1), corner(1, 1), corner(-1, -1), side(-1), corner(1, -1));
 
         // Long cushions (top and bottom), two runs each, split by the side pocket.
@@ -3252,19 +3253,14 @@
         });
 
         pockets.forEach(p => {
+            const [ax, ay, bx, by] = p.mouth;
+            addPoint(ax, ay, 'nose'); addPoint(bx, by, 'nose');
             if (p.kind === 'corner') {
-                const ax = p.sx * (HL - c), ay = p.sy * HW;          // on the long cushion
-                const bx = p.sx * HL, by = p.sy * (HW - c);          // on the short cushion
-                addPoint(ax, ay, 'nose'); addPoint(bx, by, 'nose');
-                addJaw(ax, ay, p.sx * (HL - cr), p.sy * (HW + CU), p, bx, by);
-                addJaw(bx, by, p.sx * (HL + CU), p.sy * (HW - cr), p, ax, ay);
-                p.mouth = [ax, ay, bx, by];
+                addJaw(ax, ay, 0, p.sy, p);                          // the long cushion's
+                addJaw(bx, by, p.sx, 0, p);                          // the short cushion's
             } else {
-                const y = p.sy * HW, yr = p.sy * (HW + CU);
-                addPoint(-s, y, 'nose'); addPoint(s, y, 'nose');
-                addJaw(-s, y, -sr, yr, p, s, y);
-                addJaw(s, y, sr, yr, p, -s, y);
-                p.mouth = [-s, y, s, y];
+                addJaw(ax, ay, 0, p.sy, p);
+                addJaw(bx, by, 0, p.sy, p);
             }
         });
 
@@ -3275,23 +3271,19 @@
         };
     }
 
-    // Snooker's table (pocketStyle 'rounded'; only it has arcs): each cushion rounds off in a
-    // nose of radius noseRound, then a straight jaw goes back to the rail, leaning sideJawBack /
-    // cornerJawBack toward the pocket. The nose is an arc collider (met at R + noseRound, only
-    // on its quarter), tangent so there is no tip; each jaw ends inside its pocket's hole.
+    // Snooker's table (pocketStyle 'rounded'; only it has arcs): each cushion rounds off in a nose of radius
+    // noseRound, and its jaw leaves the round on the line touching it and the hole. The nose is an arc collider (met
+    // at R + noseRound, only from the nose line round to the jaw), tangent at both ends so there is no tip.
     function ppBuildRoundedTable(cfg) {
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RHO = cfg.noseRound;
+        const HL = cfg.halfLength, HW = cfg.halfWidth, RHO = cfg.noseRound;
         const c = cfg.cornerNose, s = cfg.sideNose;
         const segments = [], pockets = [], arcs = [];
         const addSeg = (ax, ay, bx, by, nx, ny, kind) => {
             const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
             segments.push({ ax, ay, bx, by, tx: dx / len, ty: dy / len, len, nx, ny, kind: kind || 'cushion' });
         };
-        const corner = (sx, sy) => {
-            const k = cfg.cornerPocketOffset;
-            return { kind: 'corner', x: sx * (HL + k), y: sy * (HW + k), r: cfg.cornerPocketR, sx, sy, jaws: [], cuts: [] };
-        };
-        const side = sy => ({ kind: 'side', x: 0, y: sy * (HW + cfg.sidePocketOffset), r: cfg.sidePocketR, sx: 0, sy, jaws: [], cuts: [] });
+        const corner = (sx, sy) => Object.assign(ppHole(cfg, 'corner', sx, sy, [sx * (HL - c), sy * HW, sx * HL, sy * (HW - c)]), { cuts: [] });
+        const side = sy => Object.assign(ppHole(cfg, 'side', 0, sy, [-s, sy * HW, s, sy * HW]), { cuts: [] });
         pockets.push(corner(-1, 1), side(1), corner(1, 1), corner(-1, -1), side(-1), corner(1, -1));
 
         // The noses, each stopping one nose radius short of its end.
@@ -3303,36 +3295,28 @@
         [-1, 1].forEach(sx => addSeg(sx * HL, -HW + c + RHO, sx * HL, HW - c - RHO, -sx, 0));
 
         // A cushion end at (ex, ey) on the nose line: (ox, oy) points off the table, (dx, dy)
-        // along the cushion toward the pocket; jb is how far the jaw leans toward it at the rail.
-        const addEnd = (ex, ey, ox, oy, dx, dy, jb, pocket) => {
+        // along the cushion toward the pocket.
+        const addEnd = (ex, ey, ox, oy, dx, dy, pocket) => {
             const cx = ex - dx * RHO + ox * RHO, cy = ey - dy * RHO + oy * RHO;
-            const a0 = Math.atan2(-oy, -ox), a1 = Math.atan2(dy, dx);
+            const j = ppJawLine(cx, cy, RHO, pocket, ox, oy);
+            if (!j) throw new Error('snooker table: a nose reaches its pocket; check the pocket settings');
+            const a0 = Math.atan2(-oy, -ox), a1 = Math.atan2(j.n[1], j.n[0]);
             let sp = a1 - a0;
             sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
             const arc = { cx, cy, r: RHO, mid: a0 + sp / 2, half: Math.abs(sp) / 2, pocket: pockets.indexOf(pocket) };
             arcs.push(arc);
             pocket.cuts.push(arc);
-            // The jaw, from where the nose's round ends back to the rail; it faces the gap.
-            const jx0 = ex + ox * RHO, jy0 = ey + oy * RHO, jx1 = ex + dx * jb + ox * CU, jy1 = ey + dy * jb + oy * CU;
-            if ((jx1 - pocket.x) ** 2 + (jy1 - pocket.y) ** 2 >= pocket.r * pocket.r) {
-                throw new Error('snooker table: a jaw misses its pocket; check the pocket settings');
-            }
-            const D = CU - RHO, L = Math.hypot(jb, D);
-            addSeg(jx0, jy0, jx1, jy1, (dx * D - ox * jb) / L, (dy * D - oy * jb) / L, 'jaw');
+            addSeg(j.a[0], j.a[1], j.b[0], j.b[1], j.n[0], j.n[1], 'jaw');
             pocket.jaws.push(segments[segments.length - 1]);
         };
         pockets.forEach(p => {
+            const [ax, ay, bx, by] = p.mouth;
             if (p.kind === 'corner') {
-                const ax = p.sx * (HL - c), ay = p.sy * HW;          // on the long cushion
-                const bx = p.sx * HL, by = p.sy * (HW - c);          // on the short cushion
-                addEnd(ax, ay, 0, p.sy, p.sx, 0, cfg.cornerJawBack, p);
-                addEnd(bx, by, p.sx, 0, 0, p.sy, cfg.cornerJawBack, p);
-                p.mouth = [ax, ay, bx, by];
+                addEnd(ax, ay, 0, p.sy, p.sx, 0, p);                 // on the long cushion
+                addEnd(bx, by, p.sx, 0, 0, p.sy, p);                 // on the short cushion
             } else {
-                const y = p.sy * HW;
-                addEnd(-s, y, 0, p.sy, 1, 0, cfg.sideJawBack, p);
-                addEnd(s, y, 0, p.sy, -1, 0, cfg.sideJawBack, p);
-                p.mouth = [-s, y, s, y];
+                addEnd(ax, ay, 0, p.sy, 1, 0, p);
+                addEnd(bx, by, 0, p.sy, -1, 0, p);
             }
         });
 
@@ -4212,12 +4196,12 @@
     const PS_TABLE = {
         game: 'snooker',
         ballR: 7.36,
-        // Cushions stop 17 u from each corner and 14.5 u either side of a middle pocket; each
-        // end is a nose of radius 6, then a jaw to the rail, square at the middle, leaning 5 u at corners.
+        // Cushions stop 15.5 u from each corner and 12.5 u either side of a middle pocket (17 and 14.5 before: tighter, the
+        // user, 2026-11-27); each
+        // end is a nose of radius 6, then a jaw onto the hole (pool-physics.js, ppHole).
         pocketStyle: 'rounded',
-        cornerNose: 17, sideNose: 14.5, noseRound: 6, cornerJawBack: 5, sideJawBack: 0,
-        cornerPocketOffset: 2, cornerPocketR: 18,       // holes at (±502, ±252)
-        sidePocketOffset: 9, sidePocketR: 15.5,         // holes at (0, ±259)
+        cornerNose: 15.5, sideNose: 12.5, noseRound: 6,
+        cornerHoleW: 1.55, cornerShelf: -0.5, sideHoleW: 1.65, sideShelf: -0.9,   // tuned on pocket-probe.js
         // Pool's 8 m/s top speed; snooker cloth's lower rolling resistance (a feel number).
         gravity: 2749,                                  // 9.81 m/s² at 3.569 mm/u
         maxSpeed: 2240,
@@ -5048,6 +5032,22 @@
     const PC_FAR_CONE = 0.5, PC_FAR_FADE = 0.7;
     const PC_PULL_MAX = 4;             // the eye may pull back to this many times the stop's distance
 
+    // Bridging off the cushion: near a rail the cue rises to rest on fingers above the rail top, and the eye stays over it.
+    const PC_CUE_SLOPE = 0.1;          // the cue's own rise, per unit back from the ball
+    const PC_BRIDGE = { up: 0.8, back: 1 };   // fingers above the rail top, hand in from its inner edge (·R)
+    const PC_EYE_OVER = 6 * Math.PI / 180;    // the eye's elevation over the cue's
+
+    // The cue's slope at the ball: its own, or steeper to clear the rail behind it.
+    function pcCueRise(cue, aim, cfg) {
+        if (!cfg || !cue) return PC_CUE_SLOPE;
+        const R = cfg.ballR, K = R / 14, IX = cfg.halfLength + cfg.cushionWidth, IY = cfg.halfWidth + cfg.cushionWidth;
+        const bx = -Math.cos(aim), by = -Math.sin(aim);
+        const tx = bx > 1e-9 ? (IX - cue[0]) / bx : bx < -1e-9 ? (IX + cue[0]) / -bx : Infinity;
+        const ty = by > 1e-9 ? (IY - cue[1]) / by : by < -1e-9 ? (IY + cue[1]) / -by : Infinity;
+        const tB = Math.max(2 * R, Math.min(tx, ty) + PC_BRIDGE.back * R);
+        return Math.max(PC_CUE_SLOPE, (pcRailTop(cfg) + PC_BRIDGE.up * R - R - 1.5 * K) / (tB - R));
+    }
+
     function pcLeanLerp(v, lean) {
         const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
         const i = l <= A[1] ? 0 : 1;
@@ -5061,7 +5061,7 @@
     function pcChase(cue, aim, lean, W, H, cfg, focus, far) {
         const R = cfg ? cfg.ballR : 14, D = 2 * R, lean0 = Math.max(0, Math.min(100, lean));
         const z0 = 1 + (pcZoom(focus, D) - 1) * (1 - lean0 / 100);
-        const phi = pcLeanLerp(PC_CHASE.phi, lean0) * Math.PI / 180, dist0 = pcLeanLerp(PC_CHASE.dist, lean0) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean0);
+        const phi = Math.max(pcLeanLerp(PC_CHASE.phi, lean0) * Math.PI / 180, Math.atan(pcCueRise(cue, aim, cfg)) + PC_EYE_OVER), dist0 = pcLeanLerp(PC_CHASE.dist, lean0) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean0);
         let z = z0, u = 1, drop, F, back, up;
         // [along, across, pad, top, side room]; a far point's demands ease in with its cone weight.
         const m = PC_SURVEY_MARGIN, pts = [];
@@ -5266,7 +5266,7 @@
     //   peek    the Eye view: chase from behind the object ball along its line (input.peek)
     // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far?,
     //           peek?: { at, angle, focus, far } }
-    const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
+    const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750, eye: 750 };
     const PC_SURVEY_DWELL_MS = 450;
     const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
@@ -5275,7 +5275,7 @@
     }
 
     // The Eye view applies: aiming in 3D with a peek handed in.
-    const pcPeekOn = input => !!input.peek && input.phase === 'aim' && input.camera !== '2d';
+    const pcPeekOn = input => !!input.peek && input.phase === 'aim';
 
     // Eases dir.focus, dir.far (and the Eye view's angle) toward the input's; snaps within half a unit
     // so the pose comes to rest, and on a switch between the cue and Eye views.
@@ -5299,6 +5299,8 @@
 
     function pcTarget(dir, input) {
         const two = input.camera === '2d' || input.phase === 'bih';
+        // The Eye view comes first: in 2D too it swings into 3D behind the target ball.
+        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         if (two) return { key: 'ortho', pose: pcOrtho(dir.W, dir.H, dir.cfg) };
         if (input.phase === 'moving') {
             if (input.shotCam !== '3d') return { key: 'broadcast', pose: pcBroadcast(dir.W, dir.H, dir.cfg) };
@@ -5306,7 +5308,6 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
-        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
     }
 
@@ -5316,20 +5317,25 @@
         pcFocus(dir, input, dtMs);
         const tg = pcTarget(dir, input);
         if (dir.key !== tg.key) {
-            const cut = !dir.pose || tg.key === 'ortho' || dir.key === 'ortho';
+            // 2D ↔ the Eye view swings through the broadcast pose (2D's look in perspective), not a cut.
+            const viaTop = !!dir.pose && ((dir.key === 'ortho' && tg.key === 'peek') || (dir.key === 'peek' && tg.key === 'ortho'));
+            const cut = !viaTop && (!dir.pose || tg.key === 'ortho' || dir.key === 'ortho');
             const fromSurvey = dir.key === 'survey';
             // A soft shot barely stood up, so it gets a shorter beat back.
             const risen = fromSurvey ? pcEase(dir.t) : 0;
-            dir.from = dir.pose;
+            dir.from = viaTop && dir.key === 'ortho' ? pcBroadcast(dir.W, dir.H, dir.cfg) : dir.pose;
+            dir.down = viaTop && tg.key === 'ortho';
             dir.key = tg.key;
-            dir.ms = tg.key === 'broadcast' ? PC_TWEEN_MS.moving : tg.key === 'survey' ? PC_TWEEN_MS.survey
+            dir.ms = viaTop ? PC_TWEEN_MS.eye : tg.key === 'broadcast' ? PC_TWEEN_MS.moving : tg.key === 'survey' ? PC_TWEEN_MS.survey
                 : fromSurvey ? PC_TWEEN_MS.back : PC_TWEEN_MS.aim;
             // A negative t is the beat: the pose stays put until t passes 0.
             dir.t = cut ? 1 : fromSurvey && tg.key === 'chase' ? -PC_SURVEY_DWELL_MS * risen / dir.ms : 0;
         } else {
             dir.t = Math.min(1, dir.t + (dtMs || 0) / dir.ms);
         }
-        dir.pose = dir.t >= 1 ? tg.pose : pcBlend(dir.from, tg.pose, pcEase(dir.t));
+        // Back down into 2D: blend to the broadcast, and cut to 2D when it lands.
+        const to = dir.down && dir.t < 1 ? pcBroadcast(dir.W, dir.H, dir.cfg) : tg.pose;
+        dir.pose = dir.t >= 1 ? tg.pose : pcBlend(dir.from, to, pcEase(dir.t));
         return dir.pose;
     }
 
@@ -5914,80 +5920,87 @@
     }
 
     // ── Layers 1–4: the table ─────────────────────────────────────────
-    // The cushions, from the physics config so they match the colliders:
-    // { top, nose: [a, b], ends: [[p, q], …] } (nose face drops to the felt; end faces
-    // are jaw-coloured). Pool's are quads [nose start, nose end, rail end, rail start].
-    function pgCushions(cfg) {
-        if (cfg.pocketStyle === 'rounded') return pgRoundedCushions(cfg);
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth;
-        const CB = cfg.cornerRailEnd, CN = cfg.cornerNose, SB = cfg.sideRailEnd, SN = cfg.sideNose;
-        const N = pgNoseZ(cfg), T = pgRailZ(cfg), q = [];
-        [-1, 1].forEach(sy => {
-            [[-HL + CB, -SB, -HL + CN, -SN], [SB, HL - CB, SN, HL - CN]].forEach(g => {
-                q.push([[g[2], sy * HW, N], [g[3], sy * HW, N], [g[1], sy * (HW + CU), T], [g[0], sy * (HW + CU), T]]);
-            });
+    // The cushions, traced from the physics table so they are the colliders:
+    // { top, nose: [a, b], ends: [[p, q], …] } (nose face drops to the felt; end faces are jaw-coloured; the top rises
+    // from nose to rail height). Each end, nose side first: the nose's round (snooker's the collider's; pool's drawn,
+    // the user, 2026-10-15), the jaw onto the hole, then, if the jaw meets the hole before the rail line, the hole's
+    // edge back to it (cloth turning down into the hole).
+    function pgCushions(cfg, table) {
+        const t = table || ppBuildTable(cfg), CU = cfg.cushionWidth, N = pgNoseZ(cfg), T = pgRailZ(cfg);
+        const out = [];
+        t.segments.filter(s => s.kind === 'cushion').forEach(s => {
+            const o = [-s.nx, -s.ny], A = [s.ax, s.ay];                   // off the table; a point on the nose line
+            const dep = (x, y) => ((x - A[0]) * o[0] + (y - A[1]) * o[1]) / CU;
+            const at = (x, y) => [x, y, N + (T - N) * Math.max(0, Math.min(1, dep(x, y)))];
+            const end = (E, other) => {
+                const d = pgUnit(E[0] - other[0], E[1] - other[1]);
+                // The pocket, and which of its mouth's ends this is.
+                let p = null, k = 0, best = Infinity;
+                t.pockets.forEach(q => [0, 1].forEach(i => {
+                    const g = Math.hypot(q.mouth[2 * i] - (E[0] + d[0] * (cfg.noseRound || 0)), q.mouth[2 * i + 1] - (E[1] + d[1] * (cfg.noseRound || 0)));
+                    if (g < best) { best = g; p = q; k = i; }
+                }));
+                const j = p.jaws[k], ja = Array.isArray(j) ? [j[0], j[1]] : [j.ax, j.ay], jb = Array.isArray(j) ? [j[2], j[3]] : [j.bx, j.by];
+                const pts = [];
+                if (p.cuts) {
+                    const a = p.cuts[k], a0 = Math.atan2(-o[1], -o[0]), a1 = a0 + 2 * (a.mid - a0 - 2 * Math.PI * Math.round((a.mid - a0) / (2 * Math.PI)));
+                    for (let i = 0; i <= 8; i++) { const th = a0 + (a1 - a0) * i / 8; pts.push(at(a.cx + a.r * Math.cos(th), a.cy + a.r * Math.sin(th))); }
+                } else {
+                    // Pool's drawn round between the nose and the jaw (the nose point collider sits within a couple of units).
+                    const jl = Math.hypot(jb[0] - ja[0], jb[1] - ja[1]), u = [(jb[0] - ja[0]) / jl, (jb[1] - ja[1]) / jl], nb = [-d[0], -d[1]];
+                    const half = Math.acos(Math.max(-1, Math.min(1, nb[0] * u[0] + nb[1] * u[1]))) / 2;
+                    const r = Math.min(PG_NOSE_ROUND, 0.6 * jl * Math.tan(half)), dd = r / Math.tan(half);
+                    const bis = pgUnit(nb[0] + u[0], nb[1] + u[1]), C = [ja[0] + bis[0] * r / Math.sin(half), ja[1] + bis[1] * r / Math.sin(half)];
+                    const b0 = Math.atan2(ja[1] + nb[1] * dd - C[1], ja[0] + nb[0] * dd - C[0]), b1 = Math.atan2(ja[1] + u[1] * dd - C[1], ja[0] + u[0] * dd - C[0]);
+                    let sp = b1 - b0;
+                    sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
+                    for (let i = 0; i <= 8; i++) { const th = b0 + sp * i / 8; pts.push(at(C[0] + r * Math.cos(th), C[1] + r * Math.sin(th))); }
+                }
+                // The jaw: to the rail line, or to the hole and round its edge to the rail line.
+                const da = dep(ja[0], ja[1]), db = dep(jb[0], jb[1]);
+                if (db >= 1) {
+                    const f = (1 - da) / (db - da);
+                    pts.push(at(ja[0] + (jb[0] - ja[0]) * f, ja[1] + (jb[1] - ja[1]) * f));
+                } else {
+                    // Round the pocket's body (pgPocketBody) from the jaw's end, the way that goes deeper, to the rail line.
+                    pts.push(at(jb[0], jb[1]));
+                    const body = pgPocketBody(cfg, p, 0, 192), nb = body.length;
+                    let i0 = 0;
+                    body.forEach((q, i) => { if (Math.hypot(q[0] - jb[0], q[1] - jb[1]) < Math.hypot(body[i0][0] - jb[0], body[i0][1] - jb[1])) i0 = i; });
+                    const step = dep(...body[(i0 + 1) % nb]) > dep(...body[(i0 + nb - 1) % nb]) ? 1 : -1;
+                    let last = [jb[0], jb[1]];
+                    for (let i = 1; i < nb; i++) {
+                        const [x, y] = body[(i0 + step * i + nb * 2) % nb];
+                        if (dep(x, y) >= 1) {
+                            const f = (1 - dep(last[0], last[1])) / (dep(x, y) - dep(last[0], last[1]));
+                            pts.push(at(last[0] + (x - last[0]) * f, last[1] + (y - last[1]) * f));
+                            break;
+                        }
+                        pts.push(at(x, y));
+                        last = [x, y];
+                    }
+                }
+                return pts;
+            };
+            const sa = end([s.ax, s.ay], [s.bx, s.by]), sb = end([s.bx, s.by], [s.ax, s.ay]), ends = [];
+            [sa, sb].forEach(e => { for (let i = 0; i < e.length - 1; i++) ends.push([e[i], e[i + 1]]); });
+            out.push({ top: sa.slice().reverse().concat(sb), nose: [sa[0], sb[0]], ends });
         });
-        [-1, 1].forEach(sx => {
-            q.push([[sx * HL, -HW + CN, N], [sx * HL, HW - CN, N], [sx * (HL + CU), HW - CB, T], [sx * (HL + CU), -HW + CB, T]]);
-        });
-        // Each end's corner, where the playing face meets the jaw, is drawn rounded (the user,
-        // 2026-10-15), as snooker's are. Drawn only: the nose point collider sits within a
-        // couple of units of the arc.
-        const at = (x, y, A, u) => { const dep = Math.min(1, Math.abs(u[0] * (y - A[1]) - u[1] * (x - A[0])) / CU); return [x, y, N + (T - N) * dep]; };
-        const round = (A, other, rail) => {
-            const nb = pgUnit(other[0] - A[0], other[1] - A[1]), jl = Math.hypot(rail[0] - A[0], rail[1] - A[1]), jb = [(rail[0] - A[0]) / jl, (rail[1] - A[1]) / jl];
-            const half = Math.acos(Math.max(-1, Math.min(1, nb[0] * jb[0] + nb[1] * jb[1]))) / 2;    // half the corner's angle
-            const r = Math.min(PG_NOSE_ROUND, 0.6 * jl * Math.tan(half)), d = r / Math.tan(half);
-            const bis = pgUnit(nb[0] + jb[0], nb[1] + jb[1]), C = [A[0] + bis[0] * r / Math.sin(half), A[1] + bis[1] * r / Math.sin(half)];
-            const a0 = Math.atan2(A[1] + nb[1] * d - C[1], A[0] + nb[0] * d - C[0]), a1 = Math.atan2(A[1] + jb[1] * d - C[1], A[0] + jb[0] * d - C[0]);
-            let sp = a1 - a0;
-            sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
-            const pts = [];
-            for (let i = 0; i <= 8; i++) { const t = a0 + sp * i / 8; pts.push(at(C[0] + r * Math.cos(t), C[1] + r * Math.sin(t), A, nb)); }
-            return pts;                                                    // nose side first, jaw side last
-        };
-        return q.map(c => {
-            const sa = round(c[0], c[1], c[3]), sb = round(c[1], c[0], c[2]), ends = [];
-            [[sa, c[3]], [sb, c[2]]].forEach(([s, rail]) => {
-                for (let i = 0; i < s.length - 1; i++) ends.push([s[i], s[i + 1]]);
-                ends.push([s[s.length - 1], rail]);
-            });
-            return { top: [c[3]].concat(sa.slice().reverse(), sb, [c[2]]), nose: [sa[0], sb[0]], ends };
-        });
+        return out;
+    }
+    // The pocket as drawn: the drop (the capture circle) carried back along its outward line u to the rail's inner
+    // corner (a middle: the rail line), the way a real pocket's drop runs on under the rail inside its fall. A
+    // capsule of radius r + grow, xy points anticlockwise, the back half first.
+    function pgPocketBody(cfg, p, grow, n) {
+        const IX = cfg.halfLength + cfg.cushionWidth, IY = cfg.halfWidth + cfg.cushionWidth, u = p.u, m = (n || 48) / 2;
+        const L = p.kind === 'corner' ? Math.max(0, (p.sx * IX - p.x) * u[0] + (p.sy * IY - p.y) * u[1]) : Math.max(0, IY - Math.abs(p.y));
+        const r = p.r + grow, a0 = Math.atan2(u[1], u[0]), q = [p.x + u[0] * L, p.y + u[1] * L], out = [];
+        for (let i = 0; i <= m; i++) { const t = a0 - Math.PI / 2 + i / m * Math.PI; out.push([q[0] + r * Math.cos(t), q[1] + r * Math.sin(t)]); }
+        for (let i = 0; i <= m; i++) { const t = a0 + Math.PI / 2 + i / m * Math.PI; out.push([p.x + r * Math.cos(t), p.y + r * Math.sin(t)]); }
+        return out;
     }
     const PG_NOSE_ROUND = 12;             // pool's drawn nose radius: the cushion's depth, as snooker's design
     const pgUnit = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
-
-    // Snooker's cushions, matching ppBuildRoundedTable; the top rises from nose to rail height.
-    function pgRoundedCushions(cfg) {
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RHO = cfg.noseRound;
-        const c = cfg.cornerNose, s = cfg.sideNose, N = pgNoseZ(cfg), T = pgRailZ(cfg), NA = 8;
-        const out = [];
-        // One run from u = a to b; dirA/dirB point toward each end's pocket, jbA/jbB are the
-        // jaw leans; map(u, depth, z) is the point that fraction of the way to the rail.
-        const run = (a, b, dirA, dirB, jbA, jbB, map) => {
-            const at = (u, dep) => map(u, dep, N + (T - N) * dep);
-            const end = (e, dir, jb) => {
-                const pts = [];
-                for (let i = 0; i <= NA; i++) { const t = i / NA * Math.PI / 2; pts.push(at(e - dir * RHO + dir * RHO * Math.sin(t), RHO * (1 - Math.cos(t)) / CU)); }
-                pts.push(at(e + dir * jb, 1));
-                return pts;
-            };
-            const sa = end(a, dirA, jbA), sb = end(b, dirB, jbB);
-            const top = sb.concat(sa.slice().reverse());
-            const ends = [];
-            [sa, sb].forEach(p => { for (let i = 0; i < p.length - 1; i++) ends.push([p[i], p[i + 1]]); });
-            out.push({ top, nose: [sa[0], sb[0]], ends });
-        };
-        const cj = cfg.cornerJawBack, sj = cfg.sideJawBack;
-        [-1, 1].forEach(sy => {
-            const m = (u, dep, z) => [u, sy * (HW + dep * CU), z];
-            run(-HL + c, -s, -1, 1, cj, sj, m);
-            run(s, HL - c, -1, 1, sj, cj, m);
-        });
-        [-1, 1].forEach(sx => run(-HW + c, HW - c, -1, 1, cj, cj, (u, dep, z) => [sx * (HL + dep * CU), u, z]));
-        return out;
-    }
 
     // Which rail a cushion lies along, and the way into the table from it. The design's world is
     // ours mirrored in y: its N, the top of its 2D view and of ours, is our +y.
@@ -6066,6 +6079,13 @@
         pool: { far: ['#5C381F', '#B67E47', '#966236', '#6A4123'], near: ['#6E4426', '#D09455', '#B0753F', '#7E4F2A'], apron: ['#45291A', '#1F1209'] },
         snooker: { far: ['#2E1108', '#642B19', '#4C1D10', '#2A1007'], near: ['#3A160B', '#7A3520', '#5E2414', '#34140A'], apron: ['#2A0E06', '#120502'] },
     };
+    // Pocket caps over the rail's cut-out (the user's references, 2026-11-27): pool's leather, snooker's brass fall.
+    //   cap, curl: the plate and its rolled lip; seam: its edge on the wood; lip: the lit roll; drop: the liner's bands down the hole
+    const PG_POCKET_CAP = {
+        pool: { cap: '#7A4E2C', curl: '#A87349', seam: '#2A170C', lip: 'rgba(255, 214, 170, 0.55)', drop: ['#36231A', '#1A110B', '#090605'] },
+        snooker: { cap: '#9C8559', curl: '#CDB585', seam: '#2A1A0C', lip: 'rgba(255, 240, 205, 0.6)', drop: ['#332A1E', '#17120C', '#080706'] },
+    };
+    const PG_FALL_W = 0.4;             // the fall plate's width round the pocket's body, ·r
     const PG_BEVEL = 5, PG_BEVEL_A = { N: 0.34, W: 0.28, S: 0.2, E: 0.16 };
     // Pool's sights, mother-of-pearl in a brass ring: [dx, dy, r, colour, alpha] (ring, pearl,
     // a blue-green and a pink tint, a highlight).
@@ -6274,26 +6294,17 @@
         const TZ = pgRailZ(cfg), OX = HL + CU + RL, OY = HW + CU + RL, IX = HL + CU, IY = HW + CU;
         const eye = view.eye, wood = PG_WOOD[cfg.game] || PG_WOOD.pool;
 
-        // 1. The room, shadow, apron, felt.
+        // 1. The room, shadow, felt (the apron after the rails, step 3).
         if (eye) pgDrawRoomLayer(ctx, view, cfg, mk);
         const shadow = view.ortho ? P(pgRect(OX + 4, OY + 4, -1).map(p => [p[0], p[1] - 12, p[2]])) : P(pgRect(OX + 30, OY + 30, -90));
         ctx.save();
         if ('filter' in ctx) ctx.filter = 'blur(9px)';
         pgFill(ctx, [shadow], '#000000', 0.55);
         ctx.restore();
-        if (eye) {
-            const lo = -46;
-            [[OX, -OY, OX, OY, eye[0] > OX], [-OX, -OY, -OX, OY, eye[0] < -OX], [-OX, OY, OX, OY, eye[1] > OY], [-OX, -OY, OX, -OY, eye[1] < -OY]].forEach(([x0, y0, x1, y1, seen]) => {
-                if (!seen) return;
-                const a = [x0, y0, TZ], b = [x1, y1, TZ], face = P([a, b, [x1, y1, lo], [x0, y0, lo]]), g = pgBandGradient(ctx, view, a, b, 0, 0, lo);
-                if (g) wood.apron.forEach((c, i) => g.addColorStop(i, c));
-                pgFill(ctx, [face], g || wood.apron[1]);
-                pgGrain(ctx, view, mk, face, a, b);
-            });
-        }
         const felt = P(pgRect(IX, IY, 0));
-        if (felt.length >= 3) {
-            // Radial at (50%, 46%), r 62% of the felt's bounding box.
+        // Radial at (50%, 46%), r 62% of the felt's bounding box (again through a pocket's cut, step 4).
+        const drawFelt = () => {
+            if (felt.length < 3) return;
             const b = pgBounds([felt]);
             ctx.save();
             ctx.beginPath(); pgTrace(ctx, felt);
@@ -6304,10 +6315,11 @@
             ctx.fillStyle = g;
             ctx.fill();
             ctx.restore();
-        }
+        };
+        drawFelt();
 
         // 2. The cushions' shadows on the cloth, rail inner faces, jaw faces, nose faces.
-        const cush = pgCushions(cfg);
+        const cush = pgCushions(cfg, table);
         pgDrawCushionShadows(ctx, view, cfg, cush, pgLight(mat));
         if (eye) {
             const ri = [];
@@ -6355,74 +6367,182 @@
             PG_SIGHT.forEach(([dx, dy, r, col, a]) => pgFill(ctx, at.map(([x, y]) => P(pgCirc(x + dx, y + dy, r, TZ + 0.1, 12))), col, a));
         }
         pgDrawMarks(ctx, view, pgMarks(table));
-
-        // 4. Pockets: a leather rim clamped to the rail's inner edge, then the hole.
-        const rims = table.pockets.map(p => P(pgCirc(p.x, p.y, p.r + 7, TZ + 0.2, 36).map(q => {
-            if (Math.abs(q[0]) < IX && Math.abs(q[1]) < IY) {
-                const dx = IX - Math.abs(q[0]), dy = IY - Math.abs(q[1]);
-                return dx < dy ? [Math.sign(q[0]) * IX, q[1], q[2]] : [q[0], Math.sign(q[1]) * IY, q[2]];
-            }
-            return q;
-        })));
-        pgFill(ctx, rims, '#1A1410');
-        const bandZ = [[TZ + 0.3, 0], [0, -22], [-22, PG_POCKET_FLOOR]];
-        const bandRGB = ['#563C29', '#302117', '#150F0B'];
-        const lit = [0.55, 0.8, 1.08];
-        const NF = 30;
-        // In 3D (pool and snooker): a pocket's lip is at rail height only over the rail and
-        // drops to the felt across the gap; the wall's top band shows only over the rail.
-        // The cushions are then redrawn in front of the holes.
+        // The aprons (the rails' outer sides, turned to the eye): last, as nothing on the table is in front of them. Drawn
+        // first, the cloth and cushions hidden behind the rail painted over them from a low eye outside it (the user's
+        // sweep, 2026-11-27).
         if (eye) {
-            const over = (x, y) => Math.abs(x) > IX || Math.abs(y) > IY;
+            const lo = -46;
+            [[OX, -OY, OX, OY, eye[0] > OX], [-OX, -OY, -OX, OY, eye[0] < -OX], [-OX, OY, OX, OY, eye[1] > OY], [-OX, -OY, OX, -OY, eye[1] < -OY]].forEach(([x0, y0, x1, y1, seen]) => {
+                if (!seen) return;
+                const a = [x0, y0, TZ], b = [x1, y1, TZ], face = P([a, b, [x1, y1, lo], [x0, y0, lo]]), g = pgBandGradient(ctx, view, a, b, 0, 0, lo);
+                if (g) wood.apron.forEach((c, i) => g.addColorStop(i, c));
+                pgFill(ctx, [face], g || wood.apron[1]);
+                pgGrain(ctx, view, mk, face, a, b);
+            });
+        }
+
+        // 4. Pockets. Each is its body (pgPocketBody: the drop carried back under the rail), wrapped on the rail by the
+        // fall plate (seam, plate, rolled lip), then the opening (the user, 2026-11-27: real pockets, refs).
+        const capK = pgK(cfg), cap = PG_POCKET_CAP[cfg.game] || PG_POCKET_CAP.pool;
+        // Points cut back to the rail (outside the cloth's inner edge): those over the cloth go to the nearest edge,
+        // through the corner when that edge changes (a straight cut across it drew a "D", the user, 2026-11-27).
+        // chord: cut straight across the corner instead (the opening from behind, which covers the cushions' corner).
+        const clampRail = (pts, p, z, chord) => {
+            const out = [], cx = Math.sign(p.x) * IX, cy = Math.sign(p.y) * IY, corner = !chord && p.kind === 'corner';
+            let edge = null;
+            pts.forEach(([x, y]) => {
+                if (Math.abs(x) > IX || Math.abs(y) > IY) { out.push([x, y, z]); edge = null; return; }
+                const e = IX - Math.abs(x) < IY - Math.abs(y) ? 'x' : 'y';
+                if (corner && edge && e !== edge) out.push([cx, cy, z]);
+                out.push(e === 'x' ? [Math.sign(x) * IX, y, z] : [x, Math.sign(y) * IY, z]);
+                edge = e;
+            });
+            return out;
+        };
+        const at = (pts, z) => pts.map(([x, y]) => [x, y, z]);
+        const fall = p => PG_FALL_W * p.r;
+        const plates = table.pockets.map(p => P(clampRail(pgPocketBody(cfg, p, fall(p), 48), p, TZ + 0.2)));
+        pgFill(ctx, table.pockets.map(p => P(clampRail(pgPocketBody(cfg, p, fall(p) + 1.2 * capK, 48), p, TZ + 0.15))), cap.seam);
+        pgFill(ctx, plates, cap.cap);
+        // The rolled lip round the opening, inside the plate (without clip, none).
+        if (typeof ctx.clip === 'function') table.pockets.forEach((p, i) => {
+            if (plates[i].length < 3) return;
+            ctx.save(); ctx.beginPath(); pgTrace(ctx, plates[i]); ctx.clip();
+            pgFill(ctx, [P(clampRail(pgPocketBody(cfg, p, 3.5 * capK, 48), p, TZ + 0.25))], cap.curl);
+            ctx.restore();
+        });
+        const bandZ = [[TZ + 0.3, 0], [0, -22], [-22, PG_POCKET_FLOOR]];
+        // The walls: the fall's liner curling in, then the drop, then the bag; dark below the lip, so from the table
+        // the back wall reads as the pocket's inside, not a varnished barrel (the user, 2026-11-27).
+        const bandRGB = cap.drop;
+        const lit = [0.55, 0.8, 1.08];
+        // In 3D (pool and snooker): the opening's edge is at rail height over the rail and drops to the felt across the
+        // mouth; the wall's top band shows only over the rail. The cushions are then redrawn in front of the openings.
+        if (eye) {
+            const over = (x, y) => Math.abs(x) > IX || Math.abs(y) > IY, holes = [], backs = [];
+            // A cushion face turned toward the eye (its outward normal: away from the cushion's middle), and a face as drawn.
+            const seen = (c, a, b) => {
+                const cx = c.top.reduce((s, t) => s + t[0], 0) / c.top.length, cy = c.top.reduce((s, t) => s + t[1], 0) / c.top.length;
+                const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+                let nx = b[1] - a[1], ny = a[0] - b[0];
+                if ((mx - cx) * nx + (my - cy) * ny < 0) { nx = -nx; ny = -ny; }
+                return (eye[0] - mx) * nx + (eye[1] - my) * ny > 0;
+            };
+            const face = (a, b) => P([a, b, [b[0], b[1], 0], [a[0], a[1], 0]]);
+            const faces = () => {
+                const jaws = [], noses = [];
+                cush.forEach(c => {
+                    c.ends.forEach(([a, b]) => { if (seen(c, a, b)) jaws.push(face(a, b)); });
+                    if (seen(c, c.nose[0], c.nose[1])) noses.push(face(c.nose[0], c.nose[1]));
+                });
+                pgFill(ctx, jaws, mat.jaw);
+                pgFill(ctx, noses, mat.nose);
+            };
             table.pockets.forEach(p => {
-                const rim = [];
-                for (let i = 0; i < 72; i++) {
-                    const t0 = i / 72 * Math.PI * 2, t1 = (i + 1) / 72 * Math.PI * 2;
-                    const x0 = p.x + p.r * Math.cos(t0), y0 = p.y + p.r * Math.sin(t0), x1 = p.x + p.r * Math.cos(t1), y1 = p.y + p.r * Math.sin(t1);
-                    const o0 = over(x0, y0), o1 = over(x1, y1);
-                    rim.push([x0, y0, o0 ? TZ + 0.3 : 0.05]);
-                    if (o0 !== o1) { const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2; rim.push([xm, ym, o0 ? TZ + 0.3 : 0.05], [xm, ym, o1 ? TZ + 0.3 : 0.05]); }
+                // The opening is the pocket's body (the user, 2026-11-27: a round hole with a fall sloping behind it read as a
+                // sink gutter, the pocket gone; the long pockets back).
+                const body = pgPocketBody(cfg, p, 0, 72), nb = body.length;
+                // Behind: the eye outside the table beyond a rail this pocket's body cuts (a corner's both, a middle's own).
+                // Tested on the hole, a hole just inside the rail's edge was drawn over the rail in front of it (the user,
+                // 2026-11-27: "they clip through").
+                const behind = (p.kind === 'corner' && Math.abs(eye[0]) > IX && eye[0] * p.x > 0) || (Math.abs(eye[1]) > IY && eye[1] * p.y > 0 && (p.kind === 'corner' || Math.abs(p.y) + p.r > IY));
+                // lid: the rail top's opening, closed along the inner edge (straight across the corner from behind, for the
+                // no-clip fallback); mouth: the loop dropping to the felt across the mouth.
+                const lid = clampRail(body, p, TZ + 0.3, behind), mouth = [];
+                for (let i = 0; i < nb; i++) {
+                    const [x0, y0] = body[i], [x1, y1] = body[(i + 1) % nb], o0 = over(x0, y0), o1 = over(x1, y1);
+                    mouth.push([x0, y0, o0 ? TZ + 0.3 : 0.05]);
+                    if (o0 !== o1) { const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2; mouth.push([xm, ym, o0 ? TZ + 0.3 : 0.05], [xm, ym, o1 ? TZ + 0.3 : 0.05]); }
                 }
-                const ap = P(rim);
-                if (ap.length < 3) return;
-                pgFill(ctx, [ap], '#040303');
-                // The opening need not be convex, so this uses clip(); without it, the opening alone.
-                if (typeof ctx.clip !== 'function') return;
+                // The opening is both: seen from the side the mouth's felt edge rises above the lid's inner edge, and the
+                // lid alone left a D of the cap across the mouth (the user, 2026-11-27). From behind, a sightline through the
+                // body at rail height lands in it up to its far felt edge, and on the bed past it: the mouth cut to that
+                // outline (the lid there drew a chord nothing makes; low, it shrinks to the rail's cut, no wedges).
+                const aps = (behind ? [P(mouth)] : [P(lid), P(mouth)]).filter(a => a.length >= 3);
+                if (!aps.length) return;
+                const cut = behind ? P(at(body, TZ + 0.3)) : null;
+                if (!behind) holes.push(...aps);
+                else if (cut.length >= 3) backs.push({ p, cut, ap: aps[0] });
+                // The opening need not be convex, so this uses clip(); without it, the rail's cut alone (from behind).
+                if (typeof ctx.clip !== 'function') { pgFill(ctx, behind ? [P(lid)] : aps, '#040303'); return; }
                 ctx.save();
-                ctx.beginPath(); pgTrace(ctx, ap); ctx.clip();
-                const walls = [[], [], [], [], [], [], [], [], []], cl = Math.hypot(p.x, p.y) || 1;
-                for (let k = 0; k < NF; k++) {
-                    const a0 = k / NF * Math.PI * 2, a1 = (k + 1) / NF * Math.PI * 2, am = (a0 + a1) / 2;
-                    const nx = -Math.cos(am), ny = -Math.sin(am), px = p.x + p.r * Math.cos(am), py = p.y + p.r * Math.sin(am);
+                if (cut && cut.length >= 3) {
+                    // Through the rail's cut: the bed and the cushions past the hole (a shading trick here drew a dark
+                    // blob over the cloth up close, the user's sweep, 2026-11-27); not the bed under the body, the drop.
+                    ctx.beginPath(); pgTrace(ctx, cut); ctx.clip();
+                    const under = P(at(body, 0));
+                    pgFill(ctx, [cut], '#040303');
+                    ctx.save();
+                    if (under.length >= 3) { ctx.beginPath(); ctx.rect(0, 0, view.W, view.H); pgTrace(ctx, under.slice().reverse()); ctx.clip('evenodd'); }
+                    drawFelt();
+                    ctx.restore();
+                    faces();
+                    pgDrawCushionTops(ctx, view, cfg, cush, mat);
+                }
+                pgFill(ctx, aps, '#040303');
+                ctx.beginPath(); aps.forEach(a => pgTrace(ctx, a)); ctx.clip();
+                // The walls round the body (inward faces turned to the eye), and the cloth rolling over the bed's edge into
+                // the drop where the body crosses the bed.
+                const cloth = [[], [], []], CF = 0.45 * cfg.ballR, cl = Math.hypot(p.x, p.y) || 1;
+                const walls = [[], [], [], [], [], [], [], [], []];
+                for (let i = 0; i < nb; i++) {
+                    const [x0, y0] = body[i], [x1, y1] = body[(i + 1) % nb], l = Math.hypot(x1 - x0, y1 - y0) || 1;
+                    const nx = -(y1 - y0) / l, ny = (x1 - x0) / l, px = (x0 + x1) / 2, py = (y0 + y1) / 2;
                     if ((eye[0] - px) * nx + (eye[1] - py) * ny <= 0) continue;
-                    const face = Math.max(0, nx * (-p.x / cl) + ny * (-p.y / cl)), bi = face > 0.66 ? 2 : face > 0.25 ? 1 : 0;
-                    const x0 = p.x + p.r * Math.cos(a0), y0 = p.y + p.r * Math.sin(a0), x1 = p.x + p.r * Math.cos(a1), y1 = p.y + p.r * Math.sin(a1);
+                    const lt = Math.max(0, nx * (-p.x / cl) + ny * (-p.y / cl)), bi = lt > 0.66 ? 2 : lt > 0.25 ? 1 : 0;
                     bandZ.forEach((bz, band) => {
-                        if (band === 0 && !over(px, py)) return;              // no rail wall above the felt across the gap
+                        if (band === 0 && !over(px, py)) return;              // no rail wall above the felt across the mouth
                         walls[band * 3 + bi].push(P([[x0, y0, bz[0]], [x1, y1, bz[0]], [x1, y1, bz[1]], [x0, y0, bz[1]]]));
                     });
+                    if (!over(px, py)) cloth[bi].push(P([[x0, y0, 0.05], [x1, y1, 0.05], [x1, y1, -CF], [x0, y0, -CF]]));
                 }
                 walls.forEach((w, i) => { if (w.length) pgFill(ctx, w, pgRgb(bandRGB[Math.floor(i / 3)], lit[i % 3])); });
-                pgFill(ctx, [P(pgCirc(p.x, p.y, p.r * 0.86, PG_POCKET_FLOOR, 36))], '#1E140E');
-                pgFill(ctx, [P(pgCirc(p.x, p.y, p.r * 0.66, PG_POCKET_FLOOR, 36))], '#020303');
+                pgFill(ctx, [P(at(pgPocketBody(cfg, p, -0.14 * p.r, 36), PG_POCKET_FLOOR))], '#1E140E');
+                pgFill(ctx, [P(at(pgPocketBody(cfg, p, -0.34 * p.r, 36), PG_POCKET_FLOOR))], '#020303');
+                cloth.forEach((c, i) => { if (c.length) pgFill(ctx, c, pgRgb(mat.cushion, [0.55, 0.7, 0.85][i])); });
+                ctx.restore();
+                // The rolled lip where the fall turns into the drop, over the rail only.
+                ctx.beginPath();
+                let pen = false;
+                for (let i = 0; i <= nb; i++) {
+                    const [x, y] = body[i % nb], s = over(x, y) && pcProject(view, [x, y, TZ + 0.3]);
+                    if (s) { if (pen) ctx.lineTo(s[0], s[1]); else ctx.moveTo(s[0], s[1]); }
+                    pen = !!s;
+                }
+                ctx.strokeStyle = cap.lip; ctx.lineWidth = 1.4; ctx.stroke();
+            });
+            // The cushions in front of the openings, and only there (clipped to them): elsewhere step 2–3 drew them in
+            // order. Only faces turned toward the eye (back faces painted over the rail, the user, 2026-11-27).
+            ctx.save();
+            if (typeof ctx.clip === 'function') { ctx.beginPath(); holes.forEach(h => pgTrace(ctx, h)); ctx.clip(); }
+            faces();
+            pgDrawCushionTops(ctx, view, cfg, cush, mat);
+            ctx.restore();
+            // From behind: only the jaw faces over the drop, where they turn down into it. No tops: drawn there they laid
+            // the cloth flat across the hole (the user, 2026-11-27).
+            if (typeof ctx.clip === 'function') backs.forEach(({ p, cut, ap }) => {
+                const hang = [];
+                cush.forEach(c => c.ends.forEach(([a, b]) => {
+                    if (seen(c, a, b) && Math.hypot((a[0] + b[0]) / 2 - p.x, (a[1] + b[1]) / 2 - p.y) < p.r) hang.push(face(a, b));
+                }));
+                if (!hang.length) return;
+                ctx.save();
+                ctx.beginPath(); pgTrace(ctx, cut); ctx.clip();
+                ctx.beginPath(); pgTrace(ctx, ap); ctx.clip();
+                pgFill(ctx, hang, mat.jaw);
                 ctx.restore();
             });
-            const jaws = [];
-            cush.forEach(c => c.ends.forEach(([p, q]) => jaws.push(P([p, q, [q[0], q[1], 0], [p[0], p[1], 0]]))));
-            pgFill(ctx, jaws, mat.jaw);
-            pgFill(ctx, cush.map(c => P([c.nose[0], c.nose[1], [c.nose[1][0], c.nose[1][1], 0], [c.nose[0][0], c.nose[0][1], 0]])), mat.nose);
-            pgDrawCushionTops(ctx, view, cfg, cush, mat);
             pgDrawAir(ctx, view, P(pgRect(OX, OY, TZ)), mk);
             return;
         }
-        // 2D: the cushions' playing edge, then the hole from above, its floor inside it.
+        // 2D: the cushions' playing edge, then the opening from above, its floor inside it.
         pgDrawCushionEdges(ctx, view, cfg, cush);
         table.pockets.forEach(p => {
-            const aperture = P(pgCirc(p.x, p.y, p.r, TZ + 0.3, 36));
+            const aperture = P(at(pgPocketBody(cfg, p, 0, 48), TZ + 0.3));
             if (aperture.length < 3) return;
             pgFill(ctx, [aperture], '#3A281C');
-            pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.86, PG_POCKET_FLOOR, 36)), aperture)], '#1E140E');
-            pgFill(ctx, [pgClipConvex(P(pgCirc(p.x, p.y, p.r * 0.66, PG_POCKET_FLOOR, 36)), aperture)], '#020303');
+            pgFill(ctx, [pgClipConvex(P(at(pgPocketBody(cfg, p, -0.14 * p.r, 36), PG_POCKET_FLOOR)), aperture)], '#1E140E');
+            pgFill(ctx, [pgClipConvex(P(at(pgPocketBody(cfg, p, -0.34 * p.r, 36), PG_POCKET_FLOOR)), aperture)], '#020303');
         });
     }
 
@@ -6859,11 +6979,13 @@
         // 8. Cue, power ring, called-pocket rings, ball in hand.
         if (scene.aim && cue && cue.state !== 'pocketed' && !scene.bih) {
             // The shooter's cue (scene.cue, else Standard) at the game's scale: the tip off the
-            // ball by the pull-back, the butt rising a tenth of the length.
+            // ball by the pull-back, the butt rising a tenth of the length; near a rail, raised over it on a fixed line.
             const a = scene.aim, d = [Math.cos(a.angle), Math.sin(a.angle)], D = 2 * R, len = (PQ_GAME[theme.game] || PQ_GAME.pool)[0] * D;
             const gap = (a.gap !== undefined ? a.gap : 8 + (a.power || 0) * 1.1) * K;
-            const ax = pcNorm([-d[0], -d[1], 0.1]);
-            const axis = s => [cue.x - d[0] * (R + gap + s * len), cue.y - d[1] * (R + gap + s * len), R + 1.5 * K + 0.1 * s * len];
+            const m = pcCueRise([cue.x, cue.y], a.angle, cfg), slope = PC_CUE_SLOPE, fix = Math.min(1, (m - slope) / 0.05);
+            const ax = pcNorm([-d[0], -d[1], m]);
+            const axis = s => [cue.x - d[0] * (R + gap + s * len), cue.y - d[1] * (R + gap + s * len),
+                R + 1.5 * K + slope * s * len + (m - slope) * (gap + s * len) + fix * slope * gap];
             const toEye = p => (view.ortho ? [0, 0, 1] : pcNorm(pcSub(view.eye, p)));
             // The silhouette's sides, square to the rod and the line of sight.
             const side = p => pcNorm(pcCross(ax, toEye(p)));
@@ -7030,6 +7152,13 @@
     const PH_SNK_SHORT = { 'YOUR CHOICE': 'CHOICE', 'BALL IN HAND': 'IN HAND', CHOOSING: 'CHOOSING' };
     const PH_CLOCK_HOT = 5;          // seconds left when the clock goes hot
     const PH_POWER_HOT = 85;         // % at which the gauge goes hot
+    const PH_PEEK_RUN = 5;           // the Eye ring's segments: pots in a row without a peek that earn one
+    // The ring round the Eye button: five arcs with gaps, and the "+1" that floats off it.
+    const PH_EYE_RING = (() => {
+        const p = a => (20 + 18 * Math.cos(a)).toFixed(2) + ' ' + (20 + 18 * Math.sin(a)).toFixed(2), D = Math.PI / 180, n = PH_PEEK_RUN;
+        const seg = i => '<path class="ph-seg" d="M' + p((-90 + i * 360 / n + 6) * D) + ' A18 18 0 0 1 ' + p((-90 + (i + 1) * 360 / n - 6) * D) + '"></path>';
+        return '<svg class="ph-eye-ring" viewBox="0 0 40 40" aria-hidden="true">' + Array.from({ length: n }, (_, i) => seg(i)).join('') + '</svg><span class="ph-eye-plus" aria-hidden="true">+1</span>';
+    })();
     // The camera's lean stops (pool-camera.js PC_LEAN_AT): V cycles them, the rail's dots jump to them.
     const PH_LEAN_STOPS = [0, 45, 100], PH_LEAN_NAMES = ['Cue', 'Stand', 'High'];
     const phLeanStop = v => { let b = 0; PH_LEAN_STOPS.forEach((s, i) => { if (Math.abs(s - v) < Math.abs(PH_LEAN_STOPS[b] - v)) b = i; }); return b; };
@@ -7191,10 +7320,15 @@
                 label: PH_LEAN_NAMES[phLeanStop(lean)], stop: phLeanStop(lean),
             },
             // The Eye view under the slider: lit while on, greyed with no target or no peeks left.
+            // In 2D it rides in the 2D / 3D switch (solo); pressed, the view swings up into 3D behind the target.
             eye: (() => {
                 const e = g.eye || {}, left = Math.max(0, e.left || 0), on = !!e.on;
                 const enabled = on || (!!e.can && (!!e.paid || left > 0));
-                return { on, left, enabled, label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left' };
+                const show = !over && !moving && !sheetOpen && !bih, solo = show && !is3d;
+                // The ring: pots in a row without a peek (of PH_PEEK_RUN), and its last flash (+1) or dimming.
+                const run = Math.max(0, Math.min(PH_PEEK_RUN - 1, e.run || 0)), fx = e.fx && e.fx.id ? { id: e.fx.id, kind: e.fx.kind, from: e.fx.from, plus: !!e.fx.plus } : null;
+                return { show, solo, on, left, enabled, run, fx,
+                    label: 'Target view (X) · ' + left + (left === 1 ? ' peek' : ' peeks') + ' left · ' + run + ' of ' + PH_PEEK_RUN + ' pots to the next' };
             })(),
             // 2D only: in 3D the ring beside the cue ball shows the power.
             gauge: {
@@ -7398,7 +7532,7 @@
             if (g.handoff) vm.toast.sub = who + ' chooses how play continues';
         }
         // While the choice is open the lean slider steps aside for the toast's buttons.
-        if (g.phase === 'choice') vm.lean = Object.assign({}, vm.lean, { show: false });
+        if (g.phase === 'choice') { vm.lean = Object.assign({}, vm.lean, { show: false }); vm.eye = Object.assign({}, vm.eye, { show: false, solo: false }); }
         const other = 3 - seat;
         vm.concede = g.confirm && seat ? { show: true, text: phWins(g.names[other]) + ' ' + st.scores[other] + '–' + st.scores[seat] } : { show: false };
         return vm;
@@ -7535,7 +7669,9 @@
         const mini = pad('data-ph-call');
         return '<div class="ph-view" data-ph="view"><canvas class="ph-canvas" data-ph="canvas"></canvas><div class="ph-layer">' +
             '<div class="ph-cam ph-glass" data-ph="cam"><button type="button" class="ph-label" data-ph="cam2d" aria-pressed="false">' + PH_ICON.d2 + '<span data-ph="cam2dl">2D</span></button>' +
-            '<button type="button" class="ph-label" data-ph="cam3d" aria-pressed="true">' + PH_ICON.d3 + '<span data-ph="cam3dl">3D</span></button></div>' +
+            '<button type="button" class="ph-label" data-ph="cam3d" aria-pressed="true">' + PH_ICON.d3 + '<span data-ph="cam3dl">3D</span></button>' +
+            // 2D's Eye button: up into 3D behind the target ball.
+            '<button type="button" class="ph-label ph-cam-eye" data-ph="eye2" aria-pressed="false" title="Target view (X)" hidden>' + PH_ICON.eye + PH_EYE_RING + '<span class="ph-eye-n ph-num" data-ph="eye2n"></span></button></div>' +
             '<div class="ph-pill ph-glass" data-ph="pill"><span class="ph-pill-dot"></span><span data-ph="pillt"></span></div>' +
             '<div class="ph-toast ph-glass" role="status" data-ph="toast" hidden><div class="ph-toast-row"><span class="ph-toast-icon" data-ph="toasti"></span>' +
             '<span class="ph-toast-text"><span class="ph-toast-title" data-ph="toastt"></span><span class="ph-toast-sub" data-ph="toasts"></span></span></div>' +
@@ -7546,7 +7682,7 @@
             PH_LEAN_STOPS.map((v, i) => '<button type="button" class="ph-stop" data-ph="stop' + i + '" style="bottom:' + v + '%" aria-label="' + PH_LEAN_NAMES[i] + ' view" aria-pressed="false"></button>').join('') +
             '</div><span class="ph-lean-v" data-ph="leanv"></span>' +
             // The Eye view: behind the target ball, X; the badge is the peeks left.
-            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
+            '<button type="button" class="ph-eye" data-ph="eye" aria-pressed="false" title="Target view (X)">' + PH_ICON.eye + PH_EYE_RING + '<span class="ph-eye-n ph-num" data-ph="eyen"></span></button></div>' +
             '<div class="ph-gauge" data-ph="gauge" aria-hidden="true"><div class="ph-gauge-fill" data-ph="gaugef"></div></div>' +
             '<div class="ph-lock" data-ph="lock" hidden>' + PH_ICON.lock + '</div>' +
             '<button type="button" class="ph-spin ph-glass" data-ph="spin" aria-haspopup="dialog" aria-expanded="false"><span class="ph-spin-ball" data-ph="spinball"><span class="ph-spin-dot" data-ph="spind"></span></span>' +
@@ -7693,7 +7829,7 @@
         const ref = n => q('[data-ph="' + n + '"]');
         const hud = { el, layout: max ? 'max' : 'compact', last: {}, theme: null };
         ['view', 'canvas', 'frames', 'trophies', 'cam', 'cam2d', 'cam3d', 'cam2dl', 'cam3dl', 'pill', 'pillt', 'toast', 'toasti', 'toastt', 'toasts',
-            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
+            'lean', 'leanv', 'leanf', 'leant', 'leani', 'stop0', 'stop1', 'stop2', 'eye', 'eyen', 'eye2', 'eye2n', 'gauge', 'gaugef', 'lock', 'spin', 'spind', 'spinv', 'spinball', 'spinpop', 'spinr', 'spinbig', 'spinbigd',
             'hint', 'hintt', 'hintd', 'bihnote', 'replace',
             'mini', 'minicap', 'scrim', 'dialog', 'dlgi', 'dlgk', 'dlgt', 'dlgr', 'dlgrec', 'dlgrl', 'dlgrv', 'dlgd', 'dlgn', 'dlgnt', 'dlgp', 'dlgs',
             'foot', 'mode', 'model', 'reset', 'max', 'handoff', 'hot', 'hof', 'ready',
@@ -7717,6 +7853,7 @@
         hud.leani.addEventListener('input', e => fire('lean', +e.target.value));
         PH_LEAN_STOPS.forEach((v, i) => hud['stop' + i].addEventListener('click', () => fire('lean', v)));
         hud.eye.addEventListener('click', () => fire('eye'));
+        hud.eye2.addEventListener('click', () => fire('eye'));
         // Spin: dragging the small ball's dot moves the tip; a click (no drag) opens the big
         // picker, where a press puts the dot under the pointer at once. Both map the pointer
         // onto the ball face (radius R), clamped to the miscue ring.
@@ -8038,6 +8175,7 @@
         if (cq.show) s('concede.text', cq.text, v => { hud.cdlgt.textContent = v; });
 
         s('lean.show', vm.lean.show, v => phShow(hud.lean, v));
+        s('eye.solo', !!vm.eye.solo, v => phShow(hud.eye2, v));
         s('lean.value', vm.lean.value, v => {
             if (+hud.leani.value !== v) hud.leani.value = v;
             hud.leanf.style.height = v + '%';
@@ -8048,10 +8186,30 @@
             hud['stop' + i].classList.toggle('is-on', i === v); hud['stop' + i].setAttribute('aria-pressed', i === v ? 'true' : 'false');
         }));
 
-        s('eye.on', vm.eye.on, v => { hud.eye.classList.toggle('is-on', v); hud.eye.setAttribute('aria-pressed', v ? 'true' : 'false'); });
-        s('eye.enabled', vm.eye.enabled, v => { hud.eye.classList.toggle('is-off', !v); hud.eye.setAttribute('aria-disabled', v ? 'false' : 'true'); });
-        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = String(v); });
-        s('eye.label', vm.eye.label, v => hud.eye.setAttribute('aria-label', v));
+        // The Eye button: under the slider (3D) and in the 2D / 3D switch (2D), one state.
+        const eyes = [hud.eye, hud.eye2];
+        s('eye.on', vm.eye.on, v => eyes.forEach(b => { b.classList.toggle('is-on', v); b.setAttribute('aria-pressed', v ? 'true' : 'false'); }));
+        s('eye.enabled', vm.eye.enabled, v => eyes.forEach(b => { b.classList.toggle('is-off', !v); b.setAttribute('aria-disabled', v ? 'false' : 'true'); }));
+        s('eye.left', vm.eye.left, v => { hud.eyen.textContent = hud.eye2n.textContent = String(v); });
+        s('eye.label', vm.eye.label, v => eyes.forEach(b => b.setAttribute('aria-label', v)));
+        // The ring: the run's segments lit; a new event flashes them all away (+1) or dims the lit ones, once.
+        const ring = n => eyes.forEach(b => b.querySelectorAll('.ph-seg').forEach((p, i) => p.classList.toggle('is-lit', i < n)));
+        hud.eyeRun = vm.eye.run;
+        s('eye.run', vm.eye.run, v => { if (!hud.eyeFxT) ring(v); });
+        const fx = vm.eye.fx, fxId = fx ? fx.id : 0;
+        if (hud.eyeFxSeen === undefined) hud.eyeFxSeen = fxId;      // a fresh HUD never replays an old one
+        else if (fxId > hud.eyeFxSeen) {
+            hud.eyeFxSeen = fxId;
+            const cls = ['is-grant', 'is-break', 'is-plus'];
+            ring(fx.kind === 'grant' ? PH_PEEK_RUN : fx.from);
+            eyes.forEach(b => {
+                b.classList.remove(...cls); void b.offsetWidth;
+                b.classList.add(fx.kind === 'grant' ? 'is-grant' : 'is-break');
+                if (fx.plus) b.classList.add('is-plus');
+            });
+            clearTimeout(hud.eyeFxT);
+            hud.eyeFxT = setTimeout(() => { hud.eyeFxT = 0; eyes.forEach(b => b.classList.remove(...cls)); ring(hud.eyeRun); }, 1200);
+        }
 
         s('gauge.show', vm.gauge.show, v => phShow(hud.gauge, v));
         s('gauge.power', vm.gauge.power, v => { hud.gaugef.style.height = v + '%'; });
@@ -8740,17 +8898,20 @@
         return on.filter(b => b.id !== 8 && (!st.group || prGroupOf(b.id) === st.group));
     }
 
-    // Where to send a ball into pocket p: between the mouth and the hole's centre.
+    // Where to send a ball into pocket p: a fixed depth past the mouth's middle on the pocket's outward line, ·R: where
+    // halfway to the old holes' centres was (the pockets rebuilt from the mouth, 2026-11-27, keep the CPU's aim).
+    const PA_AIM = { corner: 1.1872, side: 0.5714 };
     function paAimPoint(p) {
-        const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2;
-        return { x: (mx + p.x) / 2, y: (my + p.y) / 2 };
+        const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2, k = PA_AIM[p.kind] * PP_DEFAULTS.ballR;
+        return { x: mx + p.u[0] * k, y: my + p.u[1] * k };
     }
     // How far off line a ball arriving along (dx, dy) can be and still drop;
     // corners forgive more than sides, both less as the approach flattens.
     function paPocketTol(p, dx, dy) {
         const nx = p.kind === 'corner' ? p.sx / Math.SQRT2 : 0, ny = p.kind === 'corner' ? p.sy / Math.SQRT2 : p.sy;
         const c = Math.max(0, (dx * nx + dy * ny) / (Math.hypot(dx, dy) || 1));
-        return p.kind === 'corner' ? 11 * (0.55 + 0.45 * c) : Math.max(0, 15 * (c - 0.25) / 0.75);
+        // Scaled with the tighter pockets (pocket-probe.js drops: corners ×0.84, middles ×0.87; 11 and 15 before).
+        return p.kind === 'corner' ? 9.3 * (0.55 + 0.45 * c) : Math.max(0, 13 * (c - 0.25) / 0.75);
     }
     // Aim error times the cut's gain (dθ_object / dθ_cue = d / (2R cos cut)),
     // against the pocket's angular tolerance seen from the object ball.
@@ -9249,10 +9410,12 @@
         6:  { x: -335, y: 15, off: 1.45, speed: 1250, tipX: 0, tipY: 0 },
     };
 
-    // A little in from the hole's centre.
+    // A fixed depth past the mouth's middle on the pocket's outward line, ·R: where 0.35 r in from the old holes' centres
+    // was (the pockets rebuilt from the mouth, 2026-11-27, keep the CPU's aim).
+    const PA_SN_AIM = { corner: 1.1616, side: 0.4857 };
     function paSnAimPoint(p) {
-        const k = 0.35 * p.r;
-        return p.kind === 'corner' ? { x: p.x - p.sx * k / Math.SQRT2, y: p.y - p.sy * k / Math.SQRT2 } : { x: p.x, y: p.y - p.sy * k };
+        const k = PA_SN_AIM[p.kind] * PS_TABLE.ballR, m = p.mouth;
+        return { x: (m[0] + m[2]) / 2 + p.u[0] * k, y: (m[1] + m[3]) / 2 + p.u[1] * k };
     }
     // Drop tolerance as snooker-verify §1 measures it: a corner takes about ±6 u down its
     // diagonal (±8 off a jaw), even along the cushion; a middle pocket ±8 square on,
@@ -9261,10 +9424,10 @@
         const L = Math.hypot(dx, dy) || 1;
         if (p.kind === 'corner') {
             const c = (dx * p.sx + dy * p.sy) / (Math.SQRT2 * L);
-            return c < Math.cos(55 * PA_DEG) ? 0 : 7 * (0.35 + 0.65 * c);
+            return c < Math.cos(55 * PA_DEG) ? 0 : 6.1 * (0.35 + 0.65 * c);     // tighter pockets: ×0.87 (7 before)
         }
         const c = dy * p.sy / L;
-        return c < Math.cos(70 * PA_DEG) ? 0 : 8.5 * Math.pow(c, 0.7);
+        return c < Math.cos(70 * PA_DEG) ? 0 : 7.6 * Math.pow(c, 0.7);         // ×0.9 (8.5 before)
     }
     // What potting the ball on is worth now; paSnFollow adds a little for what it opens.
     function paSnPoints(frame, id) {
@@ -10222,8 +10385,8 @@
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
         // The object balls each seat has potted this frame (cards show them on an open table).
         pots: { 1: [], 2: [] },
-        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent.
-        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false,
+        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent, pots in a row without one.
+        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false, peekRun: { 1: 0, 2: 0 }, peekFx: null,
         toast: null, toastMs: 0, fouled: 0, handoff: 0, result: null, placed: false, clockLeft: POOL_CLOCK_S,
         cpu: null, wins: 0,
         // Cues: the picker open, the wins per cue (cached), a cue just unlocked or equipped, the frame card's line.
@@ -10461,7 +10624,7 @@
         const home = R.cueHome(S.world);
         S.world.balls[0].x = home[0]; S.world.balls[0].y = home[1];
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
-        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
+        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false; S.peekRun = { 1: 0, 2: 0 };
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
         S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
@@ -10548,8 +10711,21 @@
     function poolAfterTurn(v) {
         const S = poolS, R = poolRules(), shooter = v.shooter;
         S.netStep++;
-        // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
-        if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
+        // A pot: no foul, and the table kept or the frame won. A peeked one gets its peek back; five in a row
+        // without a peek earn one, up to the frame's starting count. A miss, a foul or a peek starts the run over.
+        const pot = !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending);
+        const run0 = S.peekRun[shooter];
+        // The ring round the Eye button plays it: flashed away on the fifth (with +1 if it paid), dimmed away if broken.
+        const fx = (kind, from, plus) => { S.peekFx = { id: (S.peekFx ? S.peekFx.id : 0) + 1, seat: shooter, step: S.netStep, kind, from, plus: !!plus }; };
+        if (S.eyePaid) { if (pot) S.peeks[shooter]++; S.peekRun[shooter] = 0; }
+        else if (!pot) S.peekRun[shooter] = 0;
+        else if (++S.peekRun[shooter] >= POOL_PEEK_RUN) {
+            const plus = S.peeks[shooter] < poolPeekStart(shooter);
+            S.peekRun[shooter] = 0; if (plus) S.peeks[shooter]++;
+            fx('grant', POOL_PEEK_RUN, plus);
+        }
+        // Broken: the run had begun and fell to 0 other than by a grant (a miss, a foul, a peeked shot).
+        if (run0 > 0 && S.peekRun[shooter] === 0 && !(pot && !S.eyePaid)) fx('break', run0);
         S.eye = false; S.eyePaid = false;
         S.frame = v.next; S.called = -1; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
@@ -10810,18 +10986,19 @@
     // Behind the target ball along its line, bought with a peek and refunded by a pot.
     // A frame's peeks: by the CPU's tier (else Normal's 3), plus the seat's cue rarity.
     const POOL_PEEK_BASE = { easy: 4, normal: 3, hard: 2, pro: 1 };
+    const POOL_PEEK_RUN = 5;                 // pots in a row without a peek that earn one back
     function poolPeekStart(seat) {
         if (poolMode === 'cpu' && seat === 2) return 0;
         const base = poolMode === 'cpu' ? (POOL_PEEK_BASE[poolCpuTier] || 3) : 3;
         return base + (PQ_PEEK[pqById(poolSeatCueId(seat)).rarity] || 0);
     }
-    // Can the shooter look now: 3D, aiming, theirs to play, a target ball on the line.
+    // Can the shooter look now: aiming (2D or 3D), theirs to play, a target ball on the line.
     function poolEyeCan() {
         const S = poolS;
-        return userPreferences.poolCamera !== '2d' && S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
+        return S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
     }
     // The Eye view is on screen: on, a target on the line, no power being drawn.
-    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && userPreferences.poolCamera !== '2d' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
+    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
     function poolPeekInput() {
         const S = poolS;
         if (!poolEyeLive()) return null;
@@ -11034,7 +11211,7 @@
             frames: S.frames, trophies: S.wins,
             frame: S.frame, world: S.world, phase: S.phase, camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
             lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip,
-            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid }, spinOpen: S.spinOpen, called: S.called,
+            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid, run: S.peekRun[poolPickSeat()] || 0, fx: S.peekFx && S.peekFx.seat === poolPickSeat() && S.peekFx.step === S.netStep ? S.peekFx : null }, spinOpen: S.spinOpen, called: S.called,
             clock: !cpuTurn && S.clockTotal ? { left: Math.max(0, S.clockLeft), total: poolTurnClock() } : null,
             toast: S.toast, fouled: S.fouled, handoff: S.handoff,
             bih: S.phase === 'bih' ? { valid: !bihBad, reason: bihBad, placed: S.placed, sx: gs && gs[0], sy: gs && gs[1], sr: gs ? S.cfg.ballR * gs[2] : 0 } : null,
@@ -11233,9 +11410,9 @@
         const dx = S.lock ? e.mx * (POOL_LOCK_GAIN[userPreferences.poolLockSpeed] || POOL_LOCK_GAIN.medium) : S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
         if (S.phase !== 'aim' || !poolCanAct()) return;
-        // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
+        // 3D, the Eye view (and any view, locked) turn with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d' || poolEyeLive()) S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -11301,7 +11478,7 @@
             e.preventDefault(); return;
         }
         // X: the Eye view, behind the target ball (spends a peek).
-        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e)) {
             poolEyeToggle(); e.preventDefault(); return;
         }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
@@ -11586,7 +11763,7 @@
         return {
             breaker: S.breaker, frame: JSON.parse(JSON.stringify(S.frame)),
             balls: S.world.balls.map(b => ({ id: b.id, x: b.x, y: b.y, q: b.q.slice(), state: b.state, pocket: b.pocket })),
-            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] },
+            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] }, peekRun: { 1: S.peekRun[1], 2: S.peekRun[2] },
         };
     }
     function poolApplySnap(snap, world) {
@@ -11598,6 +11775,7 @@
         S.pots = { 1: potsOf(snap.pots && snap.pots[1]), 2: potsOf(snap.pots && snap.pots[2]) };
         const pk = n => (Number.isInteger(n) && n >= 0 && n <= 20 ? n : null);
         if (snap.peeks) [1, 2].forEach(s => { const n = pk(snap.peeks[s]); if (n !== null) S.peeks[s] = n; });
+        if (snap.peekRun) [1, 2].forEach(s => { const n = pk(snap.peekRun[s]); if (n !== null) S.peekRun[s] = Math.min(n, POOL_PEEK_RUN - 1); });
     }
     // The clock it was left on, within today's limit: ⚙️ may have lowered it since.
     const poolSnapClock = snap => { const full = poolTurnClock() || POOL_CLOCK_S; return snap.clockLeft > 0 ? Math.min(snap.clockLeft, full) : full; };
@@ -22737,6 +22915,26 @@
                 position: relative; flex: none; width: 30px; height: 30px; padding: 0; margin-top: -2px; display: flex; align-items: center; justify-content: center;
                 border: 1px solid var(--pool-overlay-muted); border-radius: 50%; background: transparent; color: var(--pool-overlay-text); cursor: pointer;
             }
+            /* The ring round the Eye button: five pots in a row without a peek earn one. */
+            .pool-hud .ph-eye-ring { position: absolute; left: -6px; top: -6px; width: calc(100% + 12px); height: calc(100% + 12px); overflow: visible; pointer-events: none; }
+            .pool-hud .ph-cam .ph-cam-eye .ph-eye-ring { left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%); }
+            .pool-hud .ph-seg { fill: none; stroke: var(--pool-track); stroke-width: 2.5; stroke-linecap: round; transition: stroke 0.25s; }
+            .pool-hud .ph-seg.is-lit { stroke: var(--pool-accent); }
+            .pool-hud .is-grant .ph-seg { animation: ph-seg-flash 1.1s ease-out forwards; }
+            .pool-hud .is-break .ph-seg.is-lit { animation: ph-seg-dim 1s ease-in forwards; }
+            .pool-hud .ph-eye-plus {
+                position: absolute; left: 50%; top: -6px; transform: translateX(-50%); opacity: 0; pointer-events: none;
+                font-size: 11px; font-weight: 800; color: var(--pool-accent-lite); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+            }
+            .pool-hud .is-plus .ph-eye-plus { animation: ph-eye-plus 1.2s ease-out forwards; }
+            @keyframes ph-seg-flash { 0% { stroke: #FFFFFF; opacity: 1; } 35% { stroke: var(--pool-accent); opacity: 1; } 100% { stroke: var(--pool-accent); opacity: 0; } }
+            @keyframes ph-seg-dim { 0% { opacity: 1; } 30% { stroke: var(--pool-hot); opacity: 0.9; } 100% { stroke: var(--pool-hot); opacity: 0; } }
+            @keyframes ph-eye-plus { 0% { opacity: 0; transform: translate(-50%, 4px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -18px); } }
+            @media (prefers-reduced-motion: reduce) { .pool-hud .is-grant .ph-seg, .pool-hud .is-break .ph-seg.is-lit, .pool-hud .is-plus .ph-eye-plus { animation-duration: 0.01s; } }
+            /* 2D: the Eye button rides in the 2D / 3D switch, its badge the peeks left. */
+            .pool-hud .ph-cam .ph-cam-eye { position: relative; }
+            .pool-hud .ph-cam .ph-cam-eye.is-off { opacity: 0.38; cursor: default; }
+            .pool-hud .ph-cam .ph-cam-eye .ph-eye-n { top: -6px; right: -6px; }
             .pool-hud .ph-eye.is-on { background: var(--pool-accent); border-color: var(--pool-accent); color: var(--pool-primary-text); }
             .pool-hud .ph-eye.is-off { opacity: 0.38; cursor: default; }
             .pool-hud .ph-eye:focus-visible { outline: 2px solid var(--pool-accent); outline-offset: 2px; }

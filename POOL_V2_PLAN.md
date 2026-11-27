@@ -3080,7 +3080,16 @@ behind the target ball, looking down its guideline.
 - Drawing power cuts back behind the cue ball. Cancelling (power 0 or Esc) returns to the Eye view if it is still
   on.
 - With no ball on the line, the button greys out.
-- 3D only. Never on the CPU's turn, the other player's online turn, or with the ball in hand.
+- In 2D too (the user, 2026-11-27): the Eye button rides in the 2D / 3D switch as a third segment (`eye2`),
+  sharing state with the 3D one, and X works there.
+  - Pressed, the view swings up into 3D behind the target. `pcTarget` checks the peek before 2D, and `pcDirect`
+    blends from the broadcast pose (2D's look in perspective) over `PC_TWEEN_MS.eye`, 750 ms.
+  - When the Eye view ends (power drawn, toggled off, the shot), it blends back to the broadcast pose and cuts to
+    2D as it lands.
+  - In 2D's Eye view the mouse turns the target's line as in 3D, not 2D's point-at-the-pointer.
+  - The pill under the rail was tried first and overlapped the switch in 2D's band layouts, so it moved into the
+    switch.
+- Never on the CPU's turn, the other player's online turn, or with the ball in hand.
 - The Eye view shows the target's line even under Guide None. That is what the peek buys.
 
 ### Peeks
@@ -3091,6 +3100,18 @@ behind the target ball, looking down its guideline.
   after every shot.
 - A peeked shot that pots gets the peek back: no foul, and the shooter keeps the table (no pending choice) or
   wins the frame. A miss or a foul gets nothing back.
+- Five pots in a row without a peek (`POOL_PEEK_RUN`) earn one, up to the frame's starting count
+  (`poolPeekStart`). The user added this on 2026-11-27.
+  - A miss, a foul or a peeked shot starts the run over. After a grant the run starts from 0.
+  - `S.peekRun` is per seat, and rides in the table snapshot.
+  - The ring (the user): five arc segments round both Eye buttons (`PH_EYE_RING`), lit one per pot of the run.
+    - The fifth pot flashes them all white, then away, with a "+1" floating off when it paid (not at the starting
+      count).
+    - A broken run (miss, foul, peeked shot) dims its lit segments away through the hot colour.
+    - `S.peekFx` carries each event once (id, seat, `netStep`). The HUD plays a new id only, never on a fresh HUD,
+      and only on the shooter's turn, so a hot-seat miss doesn't replay later.
+    - Reduced motion shortens it to a blink.
+    - pool-table.html takes `run=N`.
 - Peeks ride in the table snapshot: reload, game switch and tournament.
 - Online they are local to each tab and not in the server's log, so a reload there starts the count over.
 
@@ -3141,6 +3162,202 @@ nomination follows the aim, and the full selector is only for a snookered colour
   the CPU, pool.
 - hud-verify: folded "?" and its caption, opened, the markup ("?" first).
 - The old "before a colour, never folded" assertion is reversed.
+
+## 3D pockets seen from behind (fixed 2026-11-27)
+
+The user's report: with the cue ball at a pocket's mouth, the camera is behind or over the pocket, and the pocket
+looked broken, with walls "see-through".
+
+### Causes, in `pgDrawTable` step 4
+- After the holes, every cushion jaw and nose face was redrawn with no facing test. From behind, the cushions'
+  back faces, and the jaws' feet that sit behind the rail body, painted over the near rail as green slabs or dark
+  wedges.
+- The hole outline is one loop: rail height over the rail, felt height across the mouth. From behind and low, the
+  mouth projects below the rail opening, so the outline folded out into wedges. In reality the rail hides the
+  mouth from there.
+- The walls were lit like varnished wood (`#563C29`), so from the table the far wall read as a barrel.
+
+### Fixes
+- The cushion redraw is clipped to the hole openings, and draws only faces turned toward the eye. Outside the holes,
+  steps 2–3 had already drawn the cushions in order.
+- When the eye is behind a pocket's rail line (outside the table on its side), the hole is only the rail top's
+  opening, closed along the rail's inner edge at rail height. That is exactly the leather rim's clamp, so the rim
+  no longer floats across the mouth.
+- The walls are dimmer (`#38271B` / `#261A12` / `#120D09`).
+- A first try folded the rim onto the hole's edge at the felt. From behind that drew large dark wings, so it was
+  reverted.
+
+### Checks
+- Real-Chrome snapshots, both tables, corner and middle, cue at the mouth aimed out (Cue and Stand) and from the
+  table side.
+- pool-table.html takes `cue=x,y` and `aimw=deg` (world units) to stage these.
+- The render pin moved (snooker-verify); nothing else did.
+
+## Bridging off the cushion, and pocket caps (2026-11-27)
+
+The user rejected the render study's drawings: they showed a camera looking through the rail at the pocket, a view
+no player has. Their references showed instead:
+- a player bridging off the cushion, the cue resting over the rail;
+- pool's leather pocket caps;
+- snooker's brass falls.
+
+### Bridge (`pcCueRise`, pool-camera.js)
+- Behind the ball along the cue, the line meets the rail's inner edge. The bridge hand sits `PC_BRIDGE.back` = 1 R
+  in from that edge, with the fingers `PC_BRIDGE.up` = 0.8 R above the rail top.
+- The cue's slope at the ball is its own 0.1, or steeper to rest on those fingers:
+  - pool, frozen to the cushion: 0.45 (24°);
+  - snooker, with its higher rail: 0.71 (35°).
+- The chase eye's elevation is at least the cue's plus `PC_EYE_OVER` = 6°, the way a player's head is over the
+  cue. Mid-table the Cue stop's 12° already exceeds that, so nothing changes there.
+  - The slope is continuous in the aim and the ball's position, so sweeping the aim never jumps.
+  - The Eye view uses the same rule for its ball.
+- The renderer lays the cue on that line. While the cue is raised, the pull-back slides along the line, so the
+  bridge point stays fixed.
+
+### Pocket caps (`PG_POCKET_CAP`, pool-render.js step 4)
+- On the rail, clamped to its inner edge as the old rim was: a dark seam, the plate, then a lighter rolled curl at
+  the hole.
+- A lit line runs along the lip over the rail.
+- The hole's bands are the liner: cap-coloured at the top, then dark, then the bag.
+- Pool's caps are leather (`#7A4E2C`, curl `#A87349`). Snooker's are brass (`#9C8559`, curl `#CDB585`).
+- 2D draws the same cap rings.
+- The user reported a "D" line at a corner pocket at some view angles. Points of a ring over the cloth used to go to
+  the nearest rail edge, and at a corner pocket that edge flips partway round. The ring then cut a diagonal across
+  the cushions' corner, and the bright cap showed that diagonal. Two fixes:
+  - `railCut` now takes the cap rings round the corner, along both edges.
+  - Seen from the table, the hole is the rail-top opening (`lid`) plus the loop that drops to the felt across the
+    mouth (`mouth`). From the side, the mouth's felt edge alone left part of the opening at rail height uncovered.
+- From behind a pocket (the eye outside the table beyond its rail), the user's marked-up screenshot showed the bed
+  lying flat across the hole. Overlays of the outlines on a real snapshot (the circle at rail height and at the
+  felt, the rail's inner edge, the jaws) found the cause: a straight chord at rail height inside the circle, where
+  there is no rail to make one. What really shows:
+  - A sightline through the circle at rail height lands in the hole, up to its far felt edge, and on the bed past it.
+    So the opening is the mouth loop cut to that circle on screen. It never meets a cushion on the way, since it
+    stays inside the pocket.
+  - Inside that circle the renderer draws the bed first, darkening toward the hole (the cloth falls into it), with
+    the cushions' faces and tops. Then the hole goes over them, so cloth can't cover it.
+  - A cloth fall: across the mouth, a 0.45 R band of cushion-coloured cloth turns down at the hole's far edge.
+  - Then only the jaw faces that overhang the hole (their middle inside the circle), clipped to the opening. No
+    cushion tops are redrawn there.
+  - Low, at Cue, the opening shrinks toward the rail's cut. The pocket is nearly as deep as it is wide (snooker:
+    rail 16, r 18), so from there most of the ring shows the bed falling away, as at a real table.
+- The no-clip fallback (the headless rasterizer) still fills the rail's cut alone from behind, cut straight across
+  the corner.
+- The liner under the lip is dark (`#36231A` for pool, `#332A1E` for snooker). Lit lighter, the far wall read as a
+  cup again at High.
+
+### Checks
+- render-verify: frozen on the rail, the cue rests 0.8 R over it and the eye is 6° above the cue. Mid-table, the
+  slope and the Cue stop are unchanged. Both tables are covered.
+- Snapshots: pool and snooker, corner and middle, Cue and Stand.
+- The render pin moved twice (snooker-verify notes both).
+
+## Pockets rebuilt from the mouth back (2026-11-27)
+
+### Why
+Drawing-only fixes (a ring, the "D", cloth in the hole, a crater, a small hole set into the corner) each failed. The
+cause was the geometry:
+- The drawn hole was the physics capture circle: snooker r 18 (2.4 balls wide), pool r 29 (2.1 balls wide).
+- It was centred on the bed's corner, so it filled the throat.
+- Snooker's jaws were square to their rails.
+
+The user's references show the anatomy of a real pocket:
+- the mouth between the noses;
+- jaws that close in;
+- a hole about 1.7 balls wide at the end of the throat, behind the corner;
+- a U-shaped fall wrapping its back;
+- rails that end flat.
+
+### The model (pool-physics.js `ppHole`, `ppJawLine`)
+**The hole**
+- It sits on the pocket's outward line u (the corner's diagonal, or the middle pocket's normal).
+- Its width is `holeW` balls, and its front edge is `shelf`·R behind the mouth's middle.
+- A ball drops once its centre is inside.
+
+**The jaws**
+- Each jaw is the line touching its nose and the hole: pool's nose point, or snooker's round of radius 6.
+- The nose is on one side of the line and the hole on the other, so the throat runs into the hole's sides.
+
+**Config**
+- The mouths are unchanged (`cornerNose` and `sideNose`). The user tuned them.
+- Replaced: `cornerRailEnd`, `sideRailEnd`, `cornerJawBack`, `sideJawBack`, and the offset and radius pairs.
+
+| | corner holeW | corner shelf | middle holeW | middle shelf |
+|---|---|---|---|---|
+| pool | 1.7 | +0.25 | 1.8 | −0.9 |
+| snooker | 1.55 (first 1.75) | −0.5 | 1.65 (first 1.8) | −0.9 |
+
+**Then tighter** (the user: "make the pockets tight but not too realistically tight"; the references measured a
+real snooker corner at about 3.5 in, roughly 1.7 balls):
+- **Mouths:** pool corners 36 (39 before), middles 32 (34); snooker noses 15.5 (17) and 12.5 (14.5). Snooker's holes
+  shrank with them, since a narrower mouth made the noses touch the hole.
+- **pocket-probe.js drops against the old pockets:** about 15% fewer:
+
+  | | corners | middles |
+  |---|---|---|
+  | pool | 114 → 96 | 135 → 117 |
+  | snooker | 123 → 107 | 117 → 105 |
+
+  - Straight-in shots still drop. The losses are at the edges of each pocket.
+- **CPU drop tolerances** are scaled by the same ratios: `paPocketTol` 11 → 9.3 and 15 → 13; `paSnPocketTol`
+  7 → 6.1 and 8.5 → 7.6.
+- **physics-verify's jaw lines** step with the narrower mouths: corner offsets 0, 8, 16, 18, 21, 24, middle 23.
+
+### Tuning: pots as hard as before
+- `pool-dev/pocket-probe.js` maps how each pocket takes a ball:
+  - fired at the mouth's centre, 5 approach angles × 13 offsets (±2 R) × 3 paces;
+  - each line scored dropped, jaw-drop, rattle or miss.
+- The old geometry was saved as the baseline. A sweep over `holeW` 1.5–1.8 and `shelf` −1.5…+1 picked the closest
+  set.
+- Same result as the old pockets, line by line:
+
+  | | corners | middles |
+  |---|---|---|
+  | pool | 100% | 100% |
+  | snooker | 96.9% | 100% |
+
+- Drop counts are identical, and snooker-verify's probe strings (`joooooooj`, the middle windows) still hold.
+- **The CPU's aim points** (`paAimPoint`, `paSnAimPoint`) were tied to the hole centre. They are now a fixed depth
+  past the mouth (`PA_AIM`, `PA_SN_AIM`, in R), equal to the old points to 0.001 u. Pocket tolerances are
+  unchanged, since the windows are.
+
+### Drawing (pool-render.js)
+- **`pgCushions(cfg, table)`** is traced from the colliders. Each end has:
+  - the nose round (snooker's real one; pool's drawn one);
+  - the jaw;
+  - then, if the jaw meets the hole before the rail line, the pocket body's edge back to the rail line (cloth
+    turning down).
+- **`pgPocketBody`** is the opening: the drop carried back along u to the rail's inner corner (a middle pocket:
+  the rail line), a capsule, dark, with walls round it.
+  - **The fall plate** (the body grown by `PG_FALL_W`·r) rims it on the rail.
+  - **Tried and reverted:** a round hole with a fall (`pgPocketFall`) sloping up behind it, and rail ends beside it.
+    The user: "the pocket disappears… shaped like a sink gutter", and "revert back to the previous long pockets since
+    they were better".
+- **"Behind" now tests the body**, not the hole: the eye beyond either rail at a corner, or a middle pocket's own
+  rail. The smaller hole sat just inside the rail's edge, so the hole was drawn over the rail in front of it ("they
+  clip through", the user).
+- **Through the rail's cut from behind:**
+  - The real cloth is redrawn, but not under the body, where the fall lies over it.
+  - The old shading trick drew a dark blob up close; it is gone.
+- **The aprons** (the rails' outer sides) are drawn after the rails. Drawn first, cloth and cushions hidden behind
+  the rail painted over them from a low eye outside it.
+- **Checked with a sweep:**
+  - 16 views a run, both tables: from behind and beside a corner, low and high, beside a middle, from the table side,
+    and 2D;
+  - tiled into a contact sheet, the close views zoomed;
+  - a temporary debug switch to isolate each pocket piece.
+
+### Tests
+- **physics-verify:** the geometry block is rewritten:
+  - hole size and shelf on the outward line;
+  - each jaw from its nose, tangent onto the hole;
+  - the throat narrows;
+  - the reach invariant kept.
+- **snooker-verify:**
+  - the geometry block is rewritten (rounds and tangency);
+  - `POOL_ON_MAIN` re-pinned with a note (judge unchanged).
+- **render-verify:** the cushion trace check is rewritten.
+- **pool-harness.html:** the sliders are now hole width and shelf.
 
 ## Decision log
 

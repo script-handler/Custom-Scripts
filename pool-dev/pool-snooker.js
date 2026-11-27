@@ -11,12 +11,12 @@
     const PS_TABLE = {
         game: 'snooker',
         ballR: 7.36,
-        // Cushions stop 17 u from each corner and 14.5 u either side of a middle pocket; each
-        // end is a nose of radius 6, then a jaw to the rail, square at the middle, leaning 5 u at corners.
+        // Cushions stop 15.5 u from each corner and 12.5 u either side of a middle pocket (17 and 14.5 before: tighter, the
+        // user, 2026-11-27); each
+        // end is a nose of radius 6, then a jaw onto the hole (pool-physics.js, ppHole).
         pocketStyle: 'rounded',
-        cornerNose: 17, sideNose: 14.5, noseRound: 6, cornerJawBack: 5, sideJawBack: 0,
-        cornerPocketOffset: 2, cornerPocketR: 18,       // holes at (±502, ±252)
-        sidePocketOffset: 9, sidePocketR: 15.5,         // holes at (0, ±259)
+        cornerNose: 15.5, sideNose: 12.5, noseRound: 6,
+        cornerHoleW: 1.55, cornerShelf: -0.5, sideHoleW: 1.65, sideShelf: -0.9,   // tuned on pocket-probe.js
         // Pool's 8 m/s top speed; snooker cloth's lower rolling resistance (a feel number).
         gravity: 2749,                                  // 9.81 m/s² at 3.569 mm/u
         maxSpeed: 2240,

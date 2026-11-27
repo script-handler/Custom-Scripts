@@ -612,10 +612,18 @@ function toggleGameMaxModal(cfg) {
         for (let i = 0; i < (+Q.get('t') || 15); i++) ppStep(S.world, 1 / 60);
         pcDirect(S.director, poolCamInput(), 0); pcDirect(S.director, poolCamInput(), 5000);
     }
+    // cue=x,y and aimw=deg: the cue ball and the aim in world units and degrees (for camera checks).
+    if (Q.has('cue')) {
+        const [x, y] = Q.get('cue').split(',').map(Number), c = poolCueBall();
+        c.x = x; c.y = y; c.state = 'onTable'; S.phase = 'aim'; S.placed = true; S.guideKey = '';
+    }
+    if (Q.has('aimw')) { S.aim = +Q.get('aimw') * DEG; S.guideKey = ''; }
     // eye=1: the Eye view on (a peek spent), as if X were pressed.
     if (Q.has('eye')) { S.awaitStart = null; S.handoff = 0; poolRefreshGuide(); poolEyeToggle(); }
     // chips=1: snooker's colour selector open; aim=… with no colour on the line shows the folded "?".
     if (Q.has('chips')) S.chipsOpen = true;
+    // run=N: N pots in a row without a peek (the Eye ring's lit segments).
+    if (Q.has('run')) S.peekRun[1] = +Q.get('run') || 0;
     if (still) {
         requestAnimationFrame(() => {
             const settle = () => { S.drawKey = ''; poolDraw(0); poolDraw(5000); };

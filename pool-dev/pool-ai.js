@@ -83,17 +83,20 @@
         return on.filter(b => b.id !== 8 && (!st.group || prGroupOf(b.id) === st.group));
     }
 
-    // Where to send a ball into pocket p: between the mouth and the hole's centre.
+    // Where to send a ball into pocket p: a fixed depth past the mouth's middle on the pocket's outward line, ·R: where
+    // halfway to the old holes' centres was (the pockets rebuilt from the mouth, 2026-11-27, keep the CPU's aim).
+    const PA_AIM = { corner: 1.1872, side: 0.5714 };
     function paAimPoint(p) {
-        const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2;
-        return { x: (mx + p.x) / 2, y: (my + p.y) / 2 };
+        const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2, k = PA_AIM[p.kind] * PP_DEFAULTS.ballR;
+        return { x: mx + p.u[0] * k, y: my + p.u[1] * k };
     }
     // How far off line a ball arriving along (dx, dy) can be and still drop;
     // corners forgive more than sides, both less as the approach flattens.
     function paPocketTol(p, dx, dy) {
         const nx = p.kind === 'corner' ? p.sx / Math.SQRT2 : 0, ny = p.kind === 'corner' ? p.sy / Math.SQRT2 : p.sy;
         const c = Math.max(0, (dx * nx + dy * ny) / (Math.hypot(dx, dy) || 1));
-        return p.kind === 'corner' ? 11 * (0.55 + 0.45 * c) : Math.max(0, 15 * (c - 0.25) / 0.75);
+        // Scaled with the tighter pockets (pocket-probe.js drops: corners ×0.84, middles ×0.87; 11 and 15 before).
+        return p.kind === 'corner' ? 9.3 * (0.55 + 0.45 * c) : Math.max(0, 13 * (c - 0.25) / 0.75);
     }
     // Aim error times the cut's gain (dθ_object / dθ_cue = d / (2R cos cut)),
     // against the pocket's angular tolerance seen from the object ball.

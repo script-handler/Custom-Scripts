@@ -18,16 +18,14 @@
         halfWidth: 250,
         ballR: 14,
         railWidth: 48,            // cushion + rail, for the off-table fail-safe
-        // Pockets and cushion ends. A jaw runs from a cushion's nose end to its rail end and on to the hole.
+        // Pockets, built from the mouth back (the user, 2026-11-27: real pockets): the hole on the pocket's outward line,
+        // holeW balls wide, its front edge shelf·R behind the mouth; each jaw runs from its nose tangent onto the hole.
+        // A ball drops once its centre is inside the hole.
         cushionWidth: 12,         // nose line to rail line
-        cornerNose: 39,           // nose end, from the corner along each cushion (mouth 39·√2)
-        cornerRailEnd: 24,        // rail end, from the corner, on the rail line (on the hole's edge)
-        sideNose: 34,             // nose end, either side of the side pocket's centre (mouth 68)
-        sideRailEnd: 27,
-        cornerPocketOffset: 4,    // hole centre (±(HL+4), ±(HW+4))
-        cornerPocketR: 29,        // a ball drops once its centre is inside the hole
-        sidePocketOffset: 16,     // hole centre (0, ±(HW+16))
-        sidePocketR: 27,
+        cornerNose: 36,           // nose end, from the corner along each cushion (mouth 36·√2; 39 before: tighter, the user, 2026-11-27)
+        sideNose: 32,             // nose end, either side of the side pocket's centre (mouth 64; 68 before)
+        cornerHoleW: 1.7, cornerShelf: 0.25,     // tuned on pocket-probe.js: takes balls as the old hole did
+        sideHoleW: 1.8, sideShelf: -0.9,
         // Cloth and collisions
         gravity: 3862,            // 9.81 m/s² in table units (1 u = 2.54 mm)
         muSlide: 0.2,             // ball–cloth sliding friction
@@ -55,6 +53,27 @@
     // Every collider is a one-sided segment (normal onto the playable side) or
     // a point (nose or jaw tip). Jaws end on the pocket's capture circle, which
     // closes the throat: a ball in it either drops or comes back out.
+    //
+    // A pocket is built from its mouth back, as a real one (the user, 2026-11-27): the hole on the pocket's outward
+    // line u (a corner's diagonal, a middle's normal), holeW balls wide, its front edge shelf·R behind the mouth's
+    // middle; each jaw is the line touching its nose and the hole, so the throat runs into the hole's sides.
+    function ppHole(cfg, kind, sx, sy, mouth) {
+        const R = cfg.ballR, corner = kind === 'corner';
+        const r = (corner ? cfg.cornerHoleW : cfg.sideHoleW) * R, k = (corner ? cfg.cornerShelf : cfg.sideShelf) * R + r;
+        const u = corner ? [sx * Math.SQRT1_2, sy * Math.SQRT1_2] : [0, sy];
+        return { kind, x: (mouth[0] + mouth[2]) / 2 + u[0] * k, y: (mouth[1] + mouth[3]) / 2 + u[1] * k, r, sx, sy, u, mouth, jaws: [] };
+    }
+    // The jaw from a nose (centre cx, cy, radius rc; 0 for a point) onto hole h: the line with the nose on one side and
+    // the hole on the other, the one facing the table rather than off it (o). n: its normal onto the playable side;
+    // a: where it leaves the nose, b: where it meets the hole. Null when the nose reaches the hole.
+    function ppJawLine(cx, cy, rc, h, ox, oy) {
+        const vx = h.x - cx, vy = h.y - cy, L = Math.hypot(vx, vy), k = h.r + rc;
+        if (L <= k) return null;
+        const g = Math.acos(k / L), base = Math.atan2(vy, vx);
+        const n = [base + g, base - g].map(t => [Math.cos(t), Math.sin(t)]).reduce((p, q) => (q[0] * ox + q[1] * oy < p[0] * ox + p[1] * oy ? q : p));
+        return { n, a: [cx + n[0] * rc, cy + n[1] * rc], b: [h.x - n[0] * h.r, h.y - n[1] * h.r] };
+    }
+
     function ppBuildTable(cfg) {
         if (cfg.pocketStyle === 'rounded') return ppBuildRoundedTable(cfg);
         const HL = cfg.halfLength, HW = cfg.halfWidth;
@@ -66,38 +85,20 @@
         };
         const addPoint = (x, y, kind) => points.push({ x, y, kind });
 
-        // First intersection of a ray with a circle, or null.
-        const rayCircle = (px, py, dx, dy, cx, cy, r) => {
-            const ox = px - cx, oy = py - cy;
-            const b = ox * dx + oy * dy, c = ox * ox + oy * oy - r * r;
-            const disc = b * b - c;
-            if (disc < 0) return null;
-            const t = -b - Math.sqrt(disc);
-            return t > 0 ? { x: px + dx * t, y: py + dy * t } : null;
-        };
-
-        // A jaw leaves nose point (px,py) toward its rail end (rx,ry) and runs on to the hole.
-        const addJaw = (px, py, rx, ry, pocket, otherX, otherY) => {
-            const l = Math.hypot(rx - px, ry - py), dx = (rx - px) / l, dy = (ry - py) / l;
-            const end = rayCircle(px, py, dx, dy, pocket.x, pocket.y, pocket.r);
-            if (!end) throw new Error('pool table: a jaw misses its pocket; check the pocket settings');
-            // Playable side of the jaw faces the opposite nose point.
-            let nx = -dy, ny = dx;
-            if ((otherX - px) * nx + (otherY - py) * ny < 0) { nx = -nx; ny = -ny; }
-            addSeg(px, py, end.x, end.y, nx, ny, 'jaw');
-            addPoint(end.x, end.y, 'jawEnd');
-            pocket.jaws.push([px, py, end.x, end.y]);
+        // A jaw leaves nose point (px, py) and runs onto the hole; (ox, oy) points off the table.
+        const addJaw = (px, py, ox, oy, pocket) => {
+            const j = ppJawLine(px, py, 0, pocket, ox, oy);
+            if (!j) throw new Error('pool table: a nose reaches its pocket; check the pocket settings');
+            addSeg(px, py, j.b[0], j.b[1], j.n[0], j.n[1], 'jaw');
+            addPoint(j.b[0], j.b[1], 'jawEnd');
+            pocket.jaws.push([px, py, j.b[0], j.b[1]]);
         };
 
         const c = cfg.cornerNose, s = cfg.sideNose;
-        const cr = cfg.cornerRailEnd, sr = cfg.sideRailEnd, CU = cfg.cushionWidth;
 
         // Pocket indices are fixed: TL, top-side, TR, BL, bottom-side, BR (y up: top is +HW).
-        const corner = (sx, sy) => {
-            const k = cfg.cornerPocketOffset;
-            return { kind: 'corner', x: sx * (HL + k), y: sy * (HW + k), r: cfg.cornerPocketR, sx, sy, jaws: [] };
-        };
-        const side = sy => ({ kind: 'side', x: 0, y: sy * (HW + cfg.sidePocketOffset), r: cfg.sidePocketR, sx: 0, sy, jaws: [] });
+        const corner = (sx, sy) => ppHole(cfg, 'corner', sx, sy, [sx * (HL - c), sy * HW, sx * HL, sy * (HW - c)]);
+        const side = sy => ppHole(cfg, 'side', 0, sy, [-s, sy * HW, s, sy * HW]);
         pockets.push(corner(-1, 1), side(1), corner(1, 1), corner(-1, -1), side(-1), corner(1, -1));
 
         // Long cushions (top and bottom), two runs each, split by the side pocket.
@@ -112,19 +113,14 @@
         });
 
         pockets.forEach(p => {
+            const [ax, ay, bx, by] = p.mouth;
+            addPoint(ax, ay, 'nose'); addPoint(bx, by, 'nose');
             if (p.kind === 'corner') {
-                const ax = p.sx * (HL - c), ay = p.sy * HW;          // on the long cushion
-                const bx = p.sx * HL, by = p.sy * (HW - c);          // on the short cushion
-                addPoint(ax, ay, 'nose'); addPoint(bx, by, 'nose');
-                addJaw(ax, ay, p.sx * (HL - cr), p.sy * (HW + CU), p, bx, by);
-                addJaw(bx, by, p.sx * (HL + CU), p.sy * (HW - cr), p, ax, ay);
-                p.mouth = [ax, ay, bx, by];
+                addJaw(ax, ay, 0, p.sy, p);                          // the long cushion's
+                addJaw(bx, by, p.sx, 0, p);                          // the short cushion's
             } else {
-                const y = p.sy * HW, yr = p.sy * (HW + CU);
-                addPoint(-s, y, 'nose'); addPoint(s, y, 'nose');
-                addJaw(-s, y, -sr, yr, p, s, y);
-                addJaw(s, y, sr, yr, p, -s, y);
-                p.mouth = [-s, y, s, y];
+                addJaw(ax, ay, 0, p.sy, p);
+                addJaw(bx, by, 0, p.sy, p);
             }
         });
 
@@ -135,23 +131,19 @@
         };
     }
 
-    // Snooker's table (pocketStyle 'rounded'; only it has arcs): each cushion rounds off in a
-    // nose of radius noseRound, then a straight jaw goes back to the rail, leaning sideJawBack /
-    // cornerJawBack toward the pocket. The nose is an arc collider (met at R + noseRound, only
-    // on its quarter), tangent so there is no tip; each jaw ends inside its pocket's hole.
+    // Snooker's table (pocketStyle 'rounded'; only it has arcs): each cushion rounds off in a nose of radius
+    // noseRound, and its jaw leaves the round on the line touching it and the hole. The nose is an arc collider (met
+    // at R + noseRound, only from the nose line round to the jaw), tangent at both ends so there is no tip.
     function ppBuildRoundedTable(cfg) {
-        const HL = cfg.halfLength, HW = cfg.halfWidth, CU = cfg.cushionWidth, RHO = cfg.noseRound;
+        const HL = cfg.halfLength, HW = cfg.halfWidth, RHO = cfg.noseRound;
         const c = cfg.cornerNose, s = cfg.sideNose;
         const segments = [], pockets = [], arcs = [];
         const addSeg = (ax, ay, bx, by, nx, ny, kind) => {
             const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
             segments.push({ ax, ay, bx, by, tx: dx / len, ty: dy / len, len, nx, ny, kind: kind || 'cushion' });
         };
-        const corner = (sx, sy) => {
-            const k = cfg.cornerPocketOffset;
-            return { kind: 'corner', x: sx * (HL + k), y: sy * (HW + k), r: cfg.cornerPocketR, sx, sy, jaws: [], cuts: [] };
-        };
-        const side = sy => ({ kind: 'side', x: 0, y: sy * (HW + cfg.sidePocketOffset), r: cfg.sidePocketR, sx: 0, sy, jaws: [], cuts: [] });
+        const corner = (sx, sy) => Object.assign(ppHole(cfg, 'corner', sx, sy, [sx * (HL - c), sy * HW, sx * HL, sy * (HW - c)]), { cuts: [] });
+        const side = sy => Object.assign(ppHole(cfg, 'side', 0, sy, [-s, sy * HW, s, sy * HW]), { cuts: [] });
         pockets.push(corner(-1, 1), side(1), corner(1, 1), corner(-1, -1), side(-1), corner(1, -1));
 
         // The noses, each stopping one nose radius short of its end.
@@ -163,36 +155,28 @@
         [-1, 1].forEach(sx => addSeg(sx * HL, -HW + c + RHO, sx * HL, HW - c - RHO, -sx, 0));
 
         // A cushion end at (ex, ey) on the nose line: (ox, oy) points off the table, (dx, dy)
-        // along the cushion toward the pocket; jb is how far the jaw leans toward it at the rail.
-        const addEnd = (ex, ey, ox, oy, dx, dy, jb, pocket) => {
+        // along the cushion toward the pocket.
+        const addEnd = (ex, ey, ox, oy, dx, dy, pocket) => {
             const cx = ex - dx * RHO + ox * RHO, cy = ey - dy * RHO + oy * RHO;
-            const a0 = Math.atan2(-oy, -ox), a1 = Math.atan2(dy, dx);
+            const j = ppJawLine(cx, cy, RHO, pocket, ox, oy);
+            if (!j) throw new Error('snooker table: a nose reaches its pocket; check the pocket settings');
+            const a0 = Math.atan2(-oy, -ox), a1 = Math.atan2(j.n[1], j.n[0]);
             let sp = a1 - a0;
             sp -= 2 * Math.PI * Math.round(sp / (2 * Math.PI));
             const arc = { cx, cy, r: RHO, mid: a0 + sp / 2, half: Math.abs(sp) / 2, pocket: pockets.indexOf(pocket) };
             arcs.push(arc);
             pocket.cuts.push(arc);
-            // The jaw, from where the nose's round ends back to the rail; it faces the gap.
-            const jx0 = ex + ox * RHO, jy0 = ey + oy * RHO, jx1 = ex + dx * jb + ox * CU, jy1 = ey + dy * jb + oy * CU;
-            if ((jx1 - pocket.x) ** 2 + (jy1 - pocket.y) ** 2 >= pocket.r * pocket.r) {
-                throw new Error('snooker table: a jaw misses its pocket; check the pocket settings');
-            }
-            const D = CU - RHO, L = Math.hypot(jb, D);
-            addSeg(jx0, jy0, jx1, jy1, (dx * D - ox * jb) / L, (dy * D - oy * jb) / L, 'jaw');
+            addSeg(j.a[0], j.a[1], j.b[0], j.b[1], j.n[0], j.n[1], 'jaw');
             pocket.jaws.push(segments[segments.length - 1]);
         };
         pockets.forEach(p => {
+            const [ax, ay, bx, by] = p.mouth;
             if (p.kind === 'corner') {
-                const ax = p.sx * (HL - c), ay = p.sy * HW;          // on the long cushion
-                const bx = p.sx * HL, by = p.sy * (HW - c);          // on the short cushion
-                addEnd(ax, ay, 0, p.sy, p.sx, 0, cfg.cornerJawBack, p);
-                addEnd(bx, by, p.sx, 0, 0, p.sy, cfg.cornerJawBack, p);
-                p.mouth = [ax, ay, bx, by];
+                addEnd(ax, ay, 0, p.sy, p.sx, 0, p);                 // on the long cushion
+                addEnd(bx, by, p.sx, 0, 0, p.sy, p);                 // on the short cushion
             } else {
-                const y = p.sy * HW;
-                addEnd(-s, y, 0, p.sy, 1, 0, cfg.sideJawBack, p);
-                addEnd(s, y, 0, p.sy, -1, 0, cfg.sideJawBack, p);
-                p.mouth = [-s, y, s, y];
+                addEnd(ax, ay, 0, p.sy, 1, 0, p);
+                addEnd(bx, by, 0, p.sy, -1, 0, p);
             }
         });
 

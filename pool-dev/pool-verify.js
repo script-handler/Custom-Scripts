@@ -1554,10 +1554,57 @@ head('The Eye view and peeks');
     ok('a foul gives nothing back', S.peeks[1] === 2);
     aimAt(G, 0); after(1);
     ok('a pot without a peek earns nothing', S.peeks[1] === 3);
+    // Five pots in a row without a peek earn one, up to the frame's starting count (the user, 2026-11-27).
+    const pots = n => { for (let i = 0; i < n; i++) after(1); };
+    S.peeks[1] = 1; S.peekRun[1] = 0; pots(4);
+    const four = S.peeks[1];
+    pots(1);
+    ok('five pots in a row without a peek earn one back', four === 1 && S.peeks[1] === 2 && S.peekRun[1] === 0, [four, S.peeks[1]]);
+    pots(5); pots(5);
+    ok('…never past the frame\'s starting count', S.peeks[1] === 3 && G.poolPeekStart(1) === 3, S.peeks[1]);
+    S.peeks[1] = 1; pots(4); after(2); pots(4);
+    ok('a miss starts the run over', S.peeks[1] === 1 && S.peekRun[1] === 4);
+    after(1, 'scratch'); pots(4);
+    ok('…and so does a foul', S.peeks[1] === 1 && S.peekRun[1] === 4);
+    S.eyePaid = true; after(1); pots(4);
+    ok('…and a peeked shot (its pot only gives that peek back)', S.peeks[1] === 2 && S.peekRun[1] === 4);
+    // The ring's events (the user, 2026-11-27): the fifth pot flashes it away (+1 if it paid), a broken run dims it.
+    const fxOf = () => S.peekFx && { kind: S.peekFx.kind, from: S.peekFx.from, plus: S.peekFx.plus };
+    S.peeks[1] = 1; S.peekRun[1] = 0; S.peekFx = null; pots(4);
+    const quiet = S.peekFx === null;
+    pots(1);
+    ok('the ring stays quiet while the run builds, and the fifth pot flashes it (+1)', quiet && JSON.stringify(fxOf()) === '{"kind":"grant","from":5,"plus":true}', JSON.stringify(fxOf()));
+    S.peeks[1] = 3; pots(5);
+    ok('…at the starting count it still flashes, without the +1', JSON.stringify(fxOf()) === '{"kind":"grant","from":5,"plus":false}');
+    pots(3); after(2);
+    ok('a miss three pots in dims those three', JSON.stringify(fxOf()) === '{"kind":"break","from":3,"plus":false}');
+    const id0 = S.peekFx.id; after(2);
+    ok('…and a miss with no run plays nothing', S.peekFx.id === id0);
+    pots(2); S.eyePaid = true; after(1);
+    ok('a peeked shot two pots in dims those two', fxOf().kind === 'break' && fxOf().from === 2);
+    S.peekRun[1] = 3;
+    const snapRun = G.poolSnapshotTable();
+    ok('the run rides in a saved frame', snapRun.peekRun[1] === 3);
 
-    // Blocked: 2D, ball in hand, the CPU's turn, no target, no peeks.
-    aimAt(G, 0); U.poolCamera = '2d'; G.poolEyeToggle();
-    ok('not in 2D', !S.eye && S.peeks[1] === 3);
+    // From 2D (the user, 2026-11-27): the same button and X swing the view up into 3D behind the target, and back.
+    {
+        aimAt(G, 0); U.poolCamera = '2d';
+        const d2 = G.pcDirector(368, 412, S.cfg);
+        G.pcDirect(d2, G.poolCamInput(), 0);
+        const flat = d2.key === 'ortho';
+        G.poolEyeToggle();
+        const first = G.pcDirect(d2, G.poolCamInput(), 16);
+        ok('2D: aimed at a target, the Eye view can be bought there too', flat && S.eye && S.peeks[1] === 2 && G.poolAimSign() < 0);
+        ok('…and the view swings up from 2D\'s top-down look, not a cut', d2.key === 'peek' && first.kind === 'persp' && first.eye[2] > 1000, Math.round(first.eye[2]));
+        for (let i = 0; i < 60; i++) G.pcDirect(d2, G.poolCamInput(), 16);
+        ok('…landing behind the target ball', d2.pose.kind === 'persp' && Math.abs(Math.atan2(S.guide.obj.y - d2.pose.eye[1], S.guide.obj.x - d2.pose.eye[0]) - Math.atan2(S.guide.obj.dy, S.guide.obj.dx)) < 0.01);
+        S.drag = { kind: 'power', x: 0, y: 0, ax: [0, -1], reach: 100 };
+        const mid = G.pcDirect(d2, G.poolCamInput(), 16);
+        for (let i = 0; i < 60; i++) G.pcDirect(d2, G.poolCamInput(), 16);
+        ok('drawing power swings back down to 2D', mid.kind === 'persp' && d2.key === 'ortho' && d2.pose.kind === 'ortho');
+        S.drag = null; S.eye = false; S.peeks[1] = 3; U.poolCamera = '3d';
+    }
+    // Blocked: ball in hand, the CPU's turn, no target, no peeks.
     aimAt(G, 0); S.phase = 'bih'; G.poolEyeToggle();
     ok('not with the ball in hand', !S.eye);
     aimAt(G, 0); S.frame.turn = 2; G.poolEyeToggle();

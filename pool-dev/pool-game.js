@@ -302,8 +302,8 @@
         drops: [], down: new Set(), drag: null, strikeT: 0, shot: null,
         // The object balls each seat has potted this frame (cards show them on an open table).
         pots: { 1: [], 2: [] },
-        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent.
-        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false,
+        // The Eye view: peeks left per seat, on for this shot, this shot's peek spent, pots in a row without one.
+        peeks: { 1: 0, 2: 0 }, eye: false, eyePaid: false, peekRun: { 1: 0, 2: 0 }, peekFx: null,
         toast: null, toastMs: 0, fouled: 0, handoff: 0, result: null, placed: false, clockLeft: POOL_CLOCK_S,
         cpu: null, wins: 0,
         // Cues: the picker open, the wins per cue (cached), a cue just unlocked or equipped, the frame card's line.
@@ -541,7 +541,7 @@
         const home = R.cueHome(S.world);
         S.world.balls[0].x = home[0]; S.world.balls[0].y = home[1];
         S.down = new Set(); S.drops = []; S.called = -1; S.guide = null; S.guideKey = ''; S.pots = { 1: [], 2: [] }; S.cpuSafeRun = 0; S.cueShots = {};
-        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false;
+        S.peeks = { 1: poolPeekStart(1), 2: poolPeekStart(2) }; S.eye = false; S.eyePaid = false; S.peekRun = { 1: 0, 2: 0 };
         S.aim = 0; S.power = 0; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.phase = 'bih'; S.placed = false; S.drag = null; S.shot = null;
         S.toast = null; S.toastMs = 0; S.fouled = 0; S.result = null; S.cpu = null; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false;
         // A tournament's later frames start with the breaker taking the seat.
@@ -628,8 +628,21 @@
     function poolAfterTurn(v) {
         const S = poolS, R = poolRules(), shooter = v.shooter;
         S.netStep++;
-        // A peeked shot that pots (no foul, the table kept or the frame won) gets its peek back.
-        if (S.eyePaid && !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending)) S.peeks[shooter]++;
+        // A pot: no foul, and the table kept or the frame won. A peeked one gets its peek back; five in a row
+        // without a peek earn one, up to the frame's starting count. A miss, a foul or a peek starts the run over.
+        const pot = !v.foul && (v.frameOver ? v.winner === shooter : v.next.turn === shooter && !v.next.pending);
+        const run0 = S.peekRun[shooter];
+        // The ring round the Eye button plays it: flashed away on the fifth (with +1 if it paid), dimmed away if broken.
+        const fx = (kind, from, plus) => { S.peekFx = { id: (S.peekFx ? S.peekFx.id : 0) + 1, seat: shooter, step: S.netStep, kind, from, plus: !!plus }; };
+        if (S.eyePaid) { if (pot) S.peeks[shooter]++; S.peekRun[shooter] = 0; }
+        else if (!pot) S.peekRun[shooter] = 0;
+        else if (++S.peekRun[shooter] >= POOL_PEEK_RUN) {
+            const plus = S.peeks[shooter] < poolPeekStart(shooter);
+            S.peekRun[shooter] = 0; if (plus) S.peeks[shooter]++;
+            fx('grant', POOL_PEEK_RUN, plus);
+        }
+        // Broken: the run had begun and fell to 0 other than by a grant (a miss, a foul, a peeked shot).
+        if (run0 > 0 && S.peekRun[shooter] === 0 && !(pot && !S.eyePaid)) fx('break', run0);
         S.eye = false; S.eyePaid = false;
         S.frame = v.next; S.called = -1; S.nom = -1; S.nomPin = -1; S.chipsOpen = false; S.confirm = false; S.tip = { x: 0, y: 0 }; S.spinOpen = false; S.power = 0; S.cpu = null; S.shot = null;
         if (v.frameOver) {
@@ -890,18 +903,19 @@
     // Behind the target ball along its line, bought with a peek and refunded by a pot.
     // A frame's peeks: by the CPU's tier (else Normal's 3), plus the seat's cue rarity.
     const POOL_PEEK_BASE = { easy: 4, normal: 3, hard: 2, pro: 1 };
+    const POOL_PEEK_RUN = 5;                 // pots in a row without a peek that earn one back
     function poolPeekStart(seat) {
         if (poolMode === 'cpu' && seat === 2) return 0;
         const base = poolMode === 'cpu' ? (POOL_PEEK_BASE[poolCpuTier] || 3) : 3;
         return base + (PQ_PEEK[pqById(poolSeatCueId(seat)).rarity] || 0);
     }
-    // Can the shooter look now: 3D, aiming, theirs to play, a target ball on the line.
+    // Can the shooter look now: aiming (2D or 3D), theirs to play, a target ball on the line.
     function poolEyeCan() {
         const S = poolS;
-        return userPreferences.poolCamera !== '2d' && S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
+        return S.phase === 'aim' && poolCanAct() && !!(S.guide && S.guide.obj);
     }
     // The Eye view is on screen: on, a target on the line, no power being drawn.
-    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && userPreferences.poolCamera !== '2d' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
+    const poolEyeLive = () => poolS.eye && poolS.phase === 'aim' && !!(poolS.guide && poolS.guide.obj) && !(poolS.drag && poolS.drag.kind === 'power');
     function poolPeekInput() {
         const S = poolS;
         if (!poolEyeLive()) return null;
@@ -1114,7 +1128,7 @@
             frames: S.frames, trophies: S.wins,
             frame: S.frame, world: S.world, phase: S.phase, camera: userPreferences.poolCamera === '2d' ? '2d' : '3d',
             lean: poolLean(), power: S.power, dragging: !!(S.drag && S.drag.kind === 'power'), tip: S.tip,
-            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid }, spinOpen: S.spinOpen, called: S.called,
+            eye: { on: S.eye, left: S.peeks[poolPickSeat()] || 0, can: poolEyeCan(), paid: S.eyePaid, run: S.peekRun[poolPickSeat()] || 0, fx: S.peekFx && S.peekFx.seat === poolPickSeat() && S.peekFx.step === S.netStep ? S.peekFx : null }, spinOpen: S.spinOpen, called: S.called,
             clock: !cpuTurn && S.clockTotal ? { left: Math.max(0, S.clockLeft), total: poolTurnClock() } : null,
             toast: S.toast, fouled: S.fouled, handoff: S.handoff,
             bih: S.phase === 'bih' ? { valid: !bihBad, reason: bihBad, placed: S.placed, sx: gs && gs[0], sy: gs && gs[1], sr: gs ? S.cfg.ballR * gs[2] : 0 } : null,
@@ -1313,9 +1327,9 @@
         const dx = S.lock ? e.mx * (POOL_LOCK_GAIN[userPreferences.poolLockSpeed] || POOL_LOCK_GAIN.medium) : S.lastX === null ? 0 : e.clientX - S.lastX;
         S.lastX = e.clientX;
         if (S.phase !== 'aim' || !poolCanAct()) return;
-        // 3D (and any view, locked) turns with the mouse; 2D points at the target, or with Shift turns finely from there.
+        // 3D, the Eye view (and any view, locked) turn with the mouse; 2D points at the target, or with Shift turns finely from there.
         const g = poolRules().aimMouse;
-        if (S.lock || userPreferences.poolCamera !== '2d') S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
+        if (S.lock || userPreferences.poolCamera !== '2d' || poolEyeLive()) S.aim -= poolAimSign() * dx * g[e.shiftKey ? 0 : 1] * POOL_DEG;
         else if (e.shiftKey) S.aim -= dx * g[0] * POOL_DEG;
         else {
             const p = poolView().unproject(sx, sy, S.cfg.ballR), c = poolCueBall();
@@ -1381,7 +1395,7 @@
             e.preventDefault(); return;
         }
         // X: the Eye view, behind the target ball (spends a peek).
-        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e) && userPreferences.poolCamera !== '2d') {
+        if (e.code === 'KeyX' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !poolTyping(e)) {
             poolEyeToggle(); e.preventDefault(); return;
         }
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && S.phase === 'aim' && poolCanAct() && (S.armed || poolMaximized)) {
@@ -1666,7 +1680,7 @@
         return {
             breaker: S.breaker, frame: JSON.parse(JSON.stringify(S.frame)),
             balls: S.world.balls.map(b => ({ id: b.id, x: b.x, y: b.y, q: b.q.slice(), state: b.state, pocket: b.pocket })),
-            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] },
+            clockLeft: S.clockLeft, fouled: S.fouled, pots: { 1: S.pots[1].slice(), 2: S.pots[2].slice() }, peeks: { 1: S.peeks[1], 2: S.peeks[2] }, peekRun: { 1: S.peekRun[1], 2: S.peekRun[2] },
         };
     }
     function poolApplySnap(snap, world) {
@@ -1678,6 +1692,7 @@
         S.pots = { 1: potsOf(snap.pots && snap.pots[1]), 2: potsOf(snap.pots && snap.pots[2]) };
         const pk = n => (Number.isInteger(n) && n >= 0 && n <= 20 ? n : null);
         if (snap.peeks) [1, 2].forEach(s => { const n = pk(snap.peeks[s]); if (n !== null) S.peeks[s] = n; });
+        if (snap.peekRun) [1, 2].forEach(s => { const n = pk(snap.peekRun[s]); if (n !== null) S.peekRun[s] = Math.min(n, POOL_PEEK_RUN - 1); });
     }
     // The clock it was left on, within today's limit: ⚙️ may have lowered it since.
     const poolSnapClock = snap => { const full = poolTurnClock() || POOL_CLOCK_S; return snap.clockLeft > 0 ? Math.min(snap.clockLeft, full) : full; };

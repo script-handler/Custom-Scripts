@@ -42,10 +42,12 @@
         6:  { x: -335, y: 15, off: 1.45, speed: 1250, tipX: 0, tipY: 0 },
     };
 
-    // A little in from the hole's centre.
+    // A fixed depth past the mouth's middle on the pocket's outward line, ·R: where 0.35 r in from the old holes' centres
+    // was (the pockets rebuilt from the mouth, 2026-11-27, keep the CPU's aim).
+    const PA_SN_AIM = { corner: 1.1616, side: 0.4857 };
     function paSnAimPoint(p) {
-        const k = 0.35 * p.r;
-        return p.kind === 'corner' ? { x: p.x - p.sx * k / Math.SQRT2, y: p.y - p.sy * k / Math.SQRT2 } : { x: p.x, y: p.y - p.sy * k };
+        const k = PA_SN_AIM[p.kind] * PS_TABLE.ballR, m = p.mouth;
+        return { x: (m[0] + m[2]) / 2 + p.u[0] * k, y: (m[1] + m[3]) / 2 + p.u[1] * k };
     }
     // Drop tolerance as snooker-verify §1 measures it: a corner takes about ±6 u down its
     // diagonal (±8 off a jaw), even along the cushion; a middle pocket ±8 square on,
@@ -54,10 +56,10 @@
         const L = Math.hypot(dx, dy) || 1;
         if (p.kind === 'corner') {
             const c = (dx * p.sx + dy * p.sy) / (Math.SQRT2 * L);
-            return c < Math.cos(55 * PA_DEG) ? 0 : 7 * (0.35 + 0.65 * c);
+            return c < Math.cos(55 * PA_DEG) ? 0 : 6.1 * (0.35 + 0.65 * c);     // tighter pockets: ×0.87 (7 before)
         }
         const c = dy * p.sy / L;
-        return c < Math.cos(70 * PA_DEG) ? 0 : 8.5 * Math.pow(c, 0.7);
+        return c < Math.cos(70 * PA_DEG) ? 0 : 7.6 * Math.pow(c, 0.7);         // ×0.9 (8.5 before)
     }
     // What potting the ball on is worth now; paSnFollow adds a little for what it opens.
     function paSnPoints(frame, id) {

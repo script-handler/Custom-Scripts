@@ -50,28 +50,30 @@ ok('every nose and jaw tip is a collider', T.points.length === 24);
 // The design's pockets (Table.dc.html), widened 3 u a corner end and 4 u a side end (the user,
 // 2026-10-24: at R 14 they took a narrower line than snooker's). The corners first went 7 u, wider
 // than two balls side by side, and came back to 39 (the user, 2026-10-26).
-ok('corner mouths are 39·√2 ≈ 55.2 u', T.pockets.filter(p => p.kind === 'corner').every(p =>
-    near(Math.hypot(p.mouth[0] - p.mouth[2], p.mouth[1] - p.mouth[3]), 39 * Math.SQRT2, 1e-9)));
-ok('side mouths are 68 u', T.pockets.filter(p => p.kind === 'side').every(p =>
-    near(Math.abs(p.mouth[0] - p.mouth[2]), 68, 1e-9)));
-ok('holes sit where the table draws them', T.pockets.every(p => p.kind === 'corner'
-    ? near(Math.abs(p.x), HL + 4, 1e-9) && near(Math.abs(p.y), HW + 4, 1e-9) && p.r === 29
-    : p.x === 0 && near(Math.abs(p.y), HW + 16, 1e-9) && p.r === 27));
+// Then tighter (the user, 2026-11-27: "tight but not too realistically tight"): 36 and 32 a side, ~15% fewer drops.
+ok('corner mouths are 36·√2 ≈ 50.9 u', T.pockets.filter(p => p.kind === 'corner').every(p =>
+    near(Math.hypot(p.mouth[0] - p.mouth[2], p.mouth[1] - p.mouth[3]), 36 * Math.SQRT2, 1e-9)));
+ok('side mouths are 64 u', T.pockets.filter(p => p.kind === 'side').every(p =>
+    near(Math.abs(p.mouth[0] - p.mouth[2]), 64, 1e-9)));
+// Pockets built from the mouth back (the user, 2026-11-27: real pockets, not a crater filling the throat).
+ok('holes: corners 1.7 balls wide, front edge 0.25 R behind the mouth; middles 1.8, 0.9 R in front; on the outward line', T.pockets.every(p => {
+    const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2, k = Math.hypot(p.x - mx, p.y - my);
+    const out = (p.x - mx) * p.u[0] + (p.y - my) * p.u[1];
+    return p.kind === 'corner' ? near(p.r, 1.7 * R, 1e-9) && near(k - p.r, 0.25 * R, 1e-9) && near(out, k, 1e-9)
+        : near(p.r, 1.8 * R, 1e-9) && near(k - p.r, -0.9 * R, 1e-9) && near(out, k, 1e-9) && p.x === 0;
+}));
 {
-    // Each jaw runs from a nose end through the design's rail end (on the rail line).
-    const CU = w0.cfg.cushionWidth;
-    const railEnds = [];
-    [-1, 1].forEach(sx => [-1, 1].forEach(sy => {
-        railEnds.push([sx * (HL - 24), sy * (HW + CU)], [sx * (HL + CU), sy * (HW - 24)]);
+    // Each jaw leaves its nose and meets the hole tangentially, the hole on its playable side: the throat runs
+    // into the hole's sides.
+    const tangent = T.pockets.every(p => p.jaws.every(([ax, ay, bx, by]) => {
+        const tx = bx - ax, ty = by - ay, l = Math.hypot(tx, ty);
+        return near(((bx - p.x) * tx + (by - p.y) * ty) / l, 0, 1e-9) && T.points.some(q => q.kind === 'nose' && q.x === ax && q.y === ay);
     }));
-    [-1, 1].forEach(sx => [-1, 1].forEach(sy => railEnds.push([sx * 27, sy * (HW + CU)])));
-    // On the jaw's line (zero distance along its normal) and within its length.
-    const through = T.segments.filter(s => s.kind === 'jaw').every(s => railEnds.some(([x, y]) => {
-        const off = (x - s.ax) * s.nx + (y - s.ay) * s.ny;
-        const along = (x - s.ax) * s.tx + (y - s.ay) * s.ty;
-        return Math.abs(off) < 1e-9 && along > 0 && along <= s.len + 1e-9;
+    ok('every jaw runs from its nose onto the hole, meeting it tangentially', tangent);
+    ok('the jaws close in behind the mouth (the throat narrows toward the hole)', T.pockets.every(p => {
+        const [a, b] = p.jaws, w0 = Math.hypot(a[0] - b[0], a[1] - b[1]), w1 = Math.hypot(a[2] - b[2], a[3] - b[3]);
+        return w1 < w0;
     }));
-    ok('every jaw passes through its rail end', through);
 
     // A hole may reach a little in front of its mouth line (the side holes do,
     // by design), but never as far as a ball resting against the cushion.
@@ -305,7 +307,7 @@ const potted = w => w.log.filter(e => e.type === 'pocket').map(e => e.ball);
     };
     // Offsets are in start y; the line runs at 45°, so the sideways offset is ×0.71.
     [500, 2600].forEach(speed => {
-        const res = [0, 10, 18, 20, 24, 28].map(o => corner(o, speed));
+        const res = [0, 8, 16, 18, 21, 24].map(o => corner(o, speed));          // were 0–28 for the 39 u noses
         ok(`${speed} u/s: lines near the centre drop cleanly`, res[0] === 'drop' && res[1] === 'drop', res.join(' '));
         ok(`${speed} u/s: a line that clips the jaw can still drop`, res.slice(2, 4).includes('jaw-drop'), res.join(' '));
         ok(`${speed} u/s: a line onto the jaw rattles out`, res[4] === 'rattle', res.join(' '));
@@ -319,7 +321,7 @@ const potted = w => w.log.filter(e => e.type === 'pocket').map(e => e.ball);
         return potted(w2).includes(0);
     };
     ok('a side-pocket line that clips the jaw drops at a gentle pace but spits out at full pace',
-       sideLine(25, 500) && !sideLine(25, 2600));
+       sideLine(23, 500) && !sideLine(23, 2600));                                // was 25 for the 34 u noses
 }
 
 // ── 7. The break ──────────────────────────────────────────────────────

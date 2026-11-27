@@ -42,6 +42,22 @@
     const PC_FAR_CONE = 0.5, PC_FAR_FADE = 0.7;
     const PC_PULL_MAX = 4;             // the eye may pull back to this many times the stop's distance
 
+    // Bridging off the cushion: near a rail the cue rises to rest on fingers above the rail top, and the eye stays over it.
+    const PC_CUE_SLOPE = 0.1;          // the cue's own rise, per unit back from the ball
+    const PC_BRIDGE = { up: 0.8, back: 1 };   // fingers above the rail top, hand in from its inner edge (·R)
+    const PC_EYE_OVER = 6 * Math.PI / 180;    // the eye's elevation over the cue's
+
+    // The cue's slope at the ball: its own, or steeper to clear the rail behind it.
+    function pcCueRise(cue, aim, cfg) {
+        if (!cfg || !cue) return PC_CUE_SLOPE;
+        const R = cfg.ballR, K = R / 14, IX = cfg.halfLength + cfg.cushionWidth, IY = cfg.halfWidth + cfg.cushionWidth;
+        const bx = -Math.cos(aim), by = -Math.sin(aim);
+        const tx = bx > 1e-9 ? (IX - cue[0]) / bx : bx < -1e-9 ? (IX + cue[0]) / -bx : Infinity;
+        const ty = by > 1e-9 ? (IY - cue[1]) / by : by < -1e-9 ? (IY + cue[1]) / -by : Infinity;
+        const tB = Math.max(2 * R, Math.min(tx, ty) + PC_BRIDGE.back * R);
+        return Math.max(PC_CUE_SLOPE, (pcRailTop(cfg) + PC_BRIDGE.up * R - R - 1.5 * K) / (tB - R));
+    }
+
     function pcLeanLerp(v, lean) {
         const l = Math.max(0, Math.min(100, lean)), A = PC_LEAN_AT;
         const i = l <= A[1] ? 0 : 1;
@@ -55,7 +71,7 @@
     function pcChase(cue, aim, lean, W, H, cfg, focus, far) {
         const R = cfg ? cfg.ballR : 14, D = 2 * R, lean0 = Math.max(0, Math.min(100, lean));
         const z0 = 1 + (pcZoom(focus, D) - 1) * (1 - lean0 / 100);
-        const phi = pcLeanLerp(PC_CHASE.phi, lean0) * Math.PI / 180, dist0 = pcLeanLerp(PC_CHASE.dist, lean0) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean0);
+        const phi = Math.max(pcLeanLerp(PC_CHASE.phi, lean0) * Math.PI / 180, Math.atan(pcCueRise(cue, aim, cfg)) + PC_EYE_OVER), dist0 = pcLeanLerp(PC_CHASE.dist, lean0) * D, drop0 = pcLeanLerp(PC_CHASE.drop, lean0);
         let z = z0, u = 1, drop, F, back, up;
         // [along, across, pad, top, side room]; a far point's demands ease in with its cone weight.
         const m = PC_SURVEY_MARGIN, pts = [];
@@ -260,7 +276,7 @@
     //   peek    the Eye view: chase from behind the object ball along its line (input.peek)
     // input = { camera: '3d'|'2d', shotCam: 'overhead'|'3d', phase: 'aim'|'moving'|'bih', cue, aim, lean, focus?, far?,
     //           peek?: { at, angle, focus, far } }
-    const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750 };
+    const PC_TWEEN_MS = { moving: 650, aim: 500, survey: 900, back: 750, eye: 750 };
     const PC_SURVEY_DWELL_MS = 450;
     const PC_FOCUS_MS = 250;           // the zoom's low-pass, so sweeping near and far balls doesn't pump
 
@@ -269,7 +285,7 @@
     }
 
     // The Eye view applies: aiming in 3D with a peek handed in.
-    const pcPeekOn = input => !!input.peek && input.phase === 'aim' && input.camera !== '2d';
+    const pcPeekOn = input => !!input.peek && input.phase === 'aim';
 
     // Eases dir.focus, dir.far (and the Eye view's angle) toward the input's; snaps within half a unit
     // so the pose comes to rest, and on a switch between the cue and Eye views.
@@ -293,6 +309,8 @@
 
     function pcTarget(dir, input) {
         const two = input.camera === '2d' || input.phase === 'bih';
+        // The Eye view comes first: in 2D too it swings into 3D behind the target ball.
+        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         if (two) return { key: 'ortho', pose: pcOrtho(dir.W, dir.H, dir.cfg) };
         if (input.phase === 'moving') {
             if (input.shotCam !== '3d') return { key: 'broadcast', pose: pcBroadcast(dir.W, dir.H, dir.cfg) };
@@ -300,7 +318,6 @@
             if (dir.key !== 'survey') dir.survey = pcSurvey(input.aim, dir.W, dir.H, dir.cfg);
             return { key: 'survey', pose: dir.survey };
         }
-        if (pcPeekOn(input)) return { key: 'peek', pose: pcChase(input.peek.at, dir.peekAngle, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
         return { key: 'chase', pose: pcChase(input.cue, input.aim, input.lean, dir.W, dir.H, dir.cfg, dir.focus, dir.far) };
     }
 
@@ -310,20 +327,25 @@
         pcFocus(dir, input, dtMs);
         const tg = pcTarget(dir, input);
         if (dir.key !== tg.key) {
-            const cut = !dir.pose || tg.key === 'ortho' || dir.key === 'ortho';
+            // 2D ↔ the Eye view swings through the broadcast pose (2D's look in perspective), not a cut.
+            const viaTop = !!dir.pose && ((dir.key === 'ortho' && tg.key === 'peek') || (dir.key === 'peek' && tg.key === 'ortho'));
+            const cut = !viaTop && (!dir.pose || tg.key === 'ortho' || dir.key === 'ortho');
             const fromSurvey = dir.key === 'survey';
             // A soft shot barely stood up, so it gets a shorter beat back.
             const risen = fromSurvey ? pcEase(dir.t) : 0;
-            dir.from = dir.pose;
+            dir.from = viaTop && dir.key === 'ortho' ? pcBroadcast(dir.W, dir.H, dir.cfg) : dir.pose;
+            dir.down = viaTop && tg.key === 'ortho';
             dir.key = tg.key;
-            dir.ms = tg.key === 'broadcast' ? PC_TWEEN_MS.moving : tg.key === 'survey' ? PC_TWEEN_MS.survey
+            dir.ms = viaTop ? PC_TWEEN_MS.eye : tg.key === 'broadcast' ? PC_TWEEN_MS.moving : tg.key === 'survey' ? PC_TWEEN_MS.survey
                 : fromSurvey ? PC_TWEEN_MS.back : PC_TWEEN_MS.aim;
             // A negative t is the beat: the pose stays put until t passes 0.
             dir.t = cut ? 1 : fromSurvey && tg.key === 'chase' ? -PC_SURVEY_DWELL_MS * risen / dir.ms : 0;
         } else {
             dir.t = Math.min(1, dir.t + (dtMs || 0) / dir.ms);
         }
-        dir.pose = dir.t >= 1 ? tg.pose : pcBlend(dir.from, tg.pose, pcEase(dir.t));
+        // Back down into 2D: blend to the broadcast, and cut to 2D when it lands.
+        const to = dir.down && dir.t < 1 ? pcBroadcast(dir.W, dir.H, dir.cfg) : tg.pose;
+        dir.pose = dir.t >= 1 ? tg.pose : pcBlend(dir.from, to, pcEase(dir.t));
         return dir.pose;
     }
 

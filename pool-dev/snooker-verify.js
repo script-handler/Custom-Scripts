@@ -60,14 +60,34 @@ const head = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 5
 // camera v3 (the user, 2026-11-19: GTA-style low view, a ball-wide corridor, rings on the felt for the
 // ghost ball): only the render moves; before it 7fc9682570378984. Then the room round the 3D table and a
 // white object-ball guide (the user, 2026-11-19): only the render moves; before it f096dcbff46b601d.
+// Then the 3D pockets seen from behind (the user, 2026-11-27: cushion backs over the rail, wedges at the
+// mouth): the redraw clipped to the holes and front faces only, the walls dimmer; before it b5b8a5db3359ff1b. Then the cue bridged
+// off the cushion (the user, 2026-11-27): near a rail the cue rides over it and the eye stays above;
+// before it bb8ea8bdc98439d6. Then the pocket caps (the user's references, 2026-11-27): pool's leather, snooker's
+// brass fall, a lit lip, the liner dark below it; before it 0ba71fcfce551065. Then the caps and the hole cut back
+// round the rail's corner, not across it, and the hole as lid plus mouth (the user, 2026-11-27: a D across the
+// mouth); before it c06633c1ae6a1770. Then from behind the hole cuts across the corner again, and no cushions are
+// redrawn in it (the user, 2026-11-27: the cloth poked into the hole); before it f3a142c0759f04da. Then from behind the mouth
+// too, cut to the circle at rail height (the user, 2026-11-27: a semicircle from over the rail); before it 538f49233988835c.
+// Then from behind the mouth alone, over the bed (falling dark) and cushions seen through the cut, a cloth fall and
+// the overhanging jaws (the user, 2026-11-27: the bed lay flat across the hole); before it 011f88bcf89d501a.
+// Then the pockets rebuilt from the mouth back, physics and drawing together (the user, 2026-11-27: real pockets): the
+// hole on the outward line, jaws tangent onto it, the CPU's aim points kept, the cushions traced from the colliders,
+// the drop carried under the rail, a round hole with the fall sloping up behind it, the rail ends beside it, the aprons
+// drawn after the rails. pocket-probe.js: the pockets take balls as before (pool 100%,
+// snooker corners 96.9%, middles 100%), so judge holds; the rest move. Before: table 5bd733503d768ea2, breaks
+// ffd797cb08eacfc5, fuzz 17590ecc164a4932, cpu 545e1b0238ea0a97, render d4761679af859233, match 9a523e40b537abab.
+// Then the long pockets back (the user, 2026-11-27: the round hole with a fall read as a sink gutter) and tighter
+// pockets ("tight but not too realistically tight": pool 36/32, snooker 15.5/12.5, ~15% fewer probe drops, the CPU's
+// drop tolerances scaled with them). Before: table efe049c72ec8ab25, breaks 9286bb317c3c31b8, fuzz 998e89c68e280ea5, judge 3f7cb57ff43b72e2, cpu 3d9f07124cfa1be3, render b720d81a7e760df9, match ac5deb34f08b1805.
 const POOL_ON_MAIN = {
-    table: '5bd733503d768ea2',
-    breaks: 'ffd797cb08eacfc5',
-    fuzz: '17590ecc164a4932',
-    judge: '3f7cb57ff43b72e2',
-    cpu: '545e1b0238ea0a97',
-    render: 'b5b8a5db3359ff1b',
-    match: '9a523e40b537abab',
+    table: 'e1d119635eec1e88',
+    breaks: 'e1b039027e3693e0',
+    fuzz: 'a575e3c32562fcea',
+    judge: '0af16c33296386a6',
+    cpu: 'eb8683978c54f78d',
+    render: 'c1d324ff845cead4',
+    match: 'e44bd144bb476465',
 };
 const WHAT = {
     table: 'the table geometry (segments, points, pockets)',
@@ -99,16 +119,25 @@ head('Snooker table: geometry (the design)');
     const noses = t.segments.filter(s => s.kind === 'cushion'), jaws = t.segments.filter(s => s.kind === 'jaw');
     ok('six straight cushion runs, twelve rounded noses and twelve straight jaws, no nose points', noses.length === 6 && jaws.length === 12 && t.arcs.length === 12 && t.points.length === 0);
     const want = [[-502, 252, 18], [0, 259, 15.5], [502, 252, 18], [-502, -252, 18], [0, -259, 15.5], [502, -252, 18]];
-    ok('the holes are the design\'s: corners r 18 at (±502, ±252), middles r 15.5 at (0, ±259), in pool\'s order',
-       t.pockets.every((p, i) => near(p.x, want[i][0]) && near(p.y, want[i][1]) && p.r === want[i][2]));
+    // Rebuilt from the mouth back (the user, 2026-11-27: real pockets); before, corners r 18 at (±502, ±252), middles
+    // r 15.5 at (0, ±259). Tuned on pocket-probe.js to take balls as those did; then tighter (the user, 2026-11-27:
+    // "tight but not too realistically tight"): noses 15.5 and 12.5 (17 and 14.5), holes 1.55 and 1.65 (1.75, 1.8).
+    ok('the holes: corners 1.55 balls wide, front edge 0.5 R in front of the mouth; middles 1.65, 0.9 R in front; in pool\'s order', t.pockets.every((p, i) => {
+        const mx = (p.mouth[0] + p.mouth[2]) / 2, my = (p.mouth[1] + p.mouth[3]) / 2, k = Math.hypot(p.x - mx, p.y - my);
+        return Math.sign(p.x) === Math.sign(want[i][0]) && Math.sign(p.y) === Math.sign(want[i][1]) &&
+            (p.kind === 'corner' ? near(p.r, 1.55 * R) && near(k - p.r, -0.5 * R) : near(p.r, 1.65 * R) && near(k - p.r, -0.9 * R));
+    }));
     const long = noses.filter(s => s.ay === s.by), short = noses.filter(s => s.ax === s.bx);
-    ok('the cushions end 17 u from each corner and 14.5 u from each middle pocket, the straight nose 6 u short of that (the round)',
-       long.every(s => [477, 20.5].includes(Math.abs(s.ax)) && [477, 20.5].includes(Math.abs(s.bx))) && short.every(s => Math.abs(s.ay) === 227 && Math.abs(s.by) === 227));
-    ok('every nose is a quarter-round of radius 6, one radius in from its end and one behind the nose line',
-       t.arcs.every(a => a.r === 6 && near(a.half, Math.PI / 4) && (Math.abs(Math.abs(a.cy) - 256) < 1e-9 || Math.abs(Math.abs(a.cx) - 506) < 1e-9)));
+    ok('the cushions end 15.5 u from each corner and 12.5 u from each middle pocket, the straight nose 6 u short of that (the round)',
+       long.every(s => [478.5, 18.5].includes(Math.abs(s.ax)) && [478.5, 18.5].includes(Math.abs(s.bx))) && short.every(s => Math.abs(s.ay) === 228.5 && Math.abs(s.by) === 228.5));
+    ok('every nose is a round of radius 6, one radius in from its end and one behind the nose line',
+       t.arcs.every(a => a.r === 6 && a.half > 0 && a.half < Math.PI / 2 && (Math.abs(Math.abs(a.cy) - 256) < 1e-9 || Math.abs(Math.abs(a.cx) - 506) < 1e-9)));
     ok('each round meets its straight nose tangentially (no tip to hit)', t.arcs.every(a => noses.some(s => [[s.ax, s.ay], [s.bx, s.by]].some(([x, y]) => near(Math.hypot(x - a.cx, y - a.cy), a.r) && P.ppOnArc(a, x, y)))));
-    ok('the jaws: square to the rail at the middle pockets, leaning 5 u toward the corners, each ending inside its hole', t.pockets.every(p => p.jaws.length === 2 && p.jaws.every(j =>
-       Math.hypot(j.bx - p.x, j.by - p.y) < p.r && (p.kind === 'side' ? near(j.ax, j.bx) : near(Math.hypot(j.bx - j.ax, j.by - j.ay), Math.hypot(5, 6))))));
+    ok('each jaw leaves its round tangentially and meets the hole tangentially, so the throat runs into the hole', t.pockets.every(p => p.jaws.length === 2 && p.jaws.every((j, k) => {
+        const a = p.cuts[k];
+        return near(Math.hypot(j.ax - a.cx, j.ay - a.cy), a.r) && P.ppOnArc(a, j.ax, j.ay) && near((j.ax - a.cx) * j.tx + (j.ay - a.cy) * j.ty, 0) &&
+            near(Math.hypot(j.bx - p.x, j.by - p.y), p.r) && near((j.bx - p.x) * j.tx + (j.by - p.y) * j.ty, 0);
+    })));
     ok('a ball resting against a cushion is never in a hole', long.concat(short).every(s => {
         for (let k = 0; k <= 20; k++) {
             const x = s.ax + (s.bx - s.ax) * k / 20 + s.nx * R, y = s.ay + (s.by - s.ay) * k / 20 + s.ny * R;
